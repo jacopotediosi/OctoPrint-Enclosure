@@ -1571,13 +1571,28 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             for gpio_out_pwm in list(filter(lambda item: item['output_type'] == 'pwm', self.rpi_outputs)):
                 pin = self.to_int(gpio_out_pwm['gpio_pin'])
                 self._logger.info("Setting GPIO pin %s as PWM", pin)
-                for pwm in (pwm_dict for pwm_dict in self.pwm_instances if pin in pwm_dict):
-                    self.pwm_instances.remove(pwm)
+                
+                # Stop and clear any other pwm instances on that pin
+                pwm_instances_to_remove = []
+                for pwm_instance in self.pwm_instances:
+                    if pin in pwm_instance:
+                        pwm_instance[pin].stop()
+                        pwm_instances_to_remove.append(pwm_instance)
+                for pwm_instance in pwm_instances_to_remove:
+                    self.pwm_instances.remove(pwm_instance)
+                
+                # Clear the pin
                 self.clear_channel(pin)
+                
+                # Setup new pwm on that pin
                 GPIO.setup(pin, GPIO.OUT)
                 pwm_instance = GPIO.PWM(pin, self.to_int(gpio_out_pwm['pwm_frequency']))
+                
+                # Start the pwm
                 self._logger.info("starting PWM on pin %s", pin)
-                pwm_instance.start(0)
+                pwm_instance.start(self.to_int(gpio_out_pwm['default_duty_cycle']))
+                
+                # Add the pwm to pwm_instances list
                 self.pwm_instances.append({pin: pwm_instance})
             for gpio_out_neopixel in list(
                     filter(lambda item: item['output_type'] == 'neopixel_direct', self.rpi_outputs)):
