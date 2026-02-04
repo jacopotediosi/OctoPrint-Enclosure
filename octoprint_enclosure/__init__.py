@@ -157,6 +157,9 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         self.rpi_outputs = self._settings.get(["rpi_outputs"])
         self.rpi_inputs = self._settings.get(["rpi_inputs"])
         self.notifications = self._settings.get(["notifications"])
+        # Reset volatile temp_ctr_set_value to 0 on startup (it should not be persisted)
+        for rpi_output in self.rpi_outputs:
+            rpi_output['temp_ctr_set_value'] = 0
         self.generate_temp_hum_control_status()
         self.setup_gpio()
         self.configure_gpio()
