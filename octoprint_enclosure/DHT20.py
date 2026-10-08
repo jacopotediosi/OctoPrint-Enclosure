@@ -1,5 +1,5 @@
 import time
-import smbus
+import smbus2
 import sys
 
 class DHT20Error(Exception):
@@ -16,7 +16,7 @@ else:
     sys.exit(1)
 
 
-sensor = smbus.SMBus(busNum)
+sensor = smbus2.SMBus(busNum)
 
 data = sensor.read_i2c_block_data(address,0x71,1)
 if(data[0] | 0x08) == 0:

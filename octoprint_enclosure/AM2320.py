@@ -1,4 +1,4 @@
-import smbus
+import smbus2
 import time
 
 try:
@@ -28,7 +28,7 @@ def _crc16(data):
 	return crc
 
 
-sensor = smbus.SMBus(1)
+sensor = smbus2.SMBus(1)
 
 def getTemp(bus):
 	for _ in range(3):

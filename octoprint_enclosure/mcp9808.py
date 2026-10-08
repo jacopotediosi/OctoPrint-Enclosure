@@ -1,5 +1,5 @@
 import sys
-import smbus
+import smbus2
 
 # default I2C address for device.
 MCP9808_I2CADDR_DEFAULT = 0x18
@@ -30,9 +30,9 @@ MCP9808_REG_CONFIG_ALERTMODE = 0x0001
 def main():
 	# get i2c bus and bus address if provided or use defaults
 	address = MCP9808_I2CADDR_DEFAULT
-	bus = smbus.SMBus(1)
+	bus = smbus2.SMBus(1)
 	if len(sys.argv) > 1:
-		bus = smbus.SMBus(int(sys.argv[1]))
+		bus = smbus2.SMBus(int(sys.argv[1]))
 		address = int(sys.argv[2], 16)
 
 	# MCP9808 address, default 0x18(24)

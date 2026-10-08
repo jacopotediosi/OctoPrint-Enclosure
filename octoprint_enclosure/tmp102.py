@@ -2,7 +2,7 @@ import ctypes
 import struct
 import sys
 
-import smbus
+import smbus2
 
 
 def main():
@@ -15,7 +15,7 @@ def main():
         raise ValueError("Invalid address value")
 
     # Connect to I2C bus (use 0 on original Raspberry Pi, 1 on later models)
-    bus = smbus.SMBus(1)
+    bus = smbus2.SMBus(1)
 
     # Set pointer to the temperature register
     bus.write_byte(address, 0)

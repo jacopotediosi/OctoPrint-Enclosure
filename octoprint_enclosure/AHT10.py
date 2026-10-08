@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 #i2cdetect -y 0
-import smbus
+import smbus2
 import time
 import sys
 
 if len(sys.argv) == 3:
      DEVICE = int(sys.argv[1],16)
-     bus = smbus.SMBus(int(sys.argv[2],16))
+     bus = smbus2.SMBus(int(sys.argv[2],16))
 else:
     print('-1 | -1')
     sys.exit(1)
@@ -22,7 +22,7 @@ def getAll(bus,addr=DEVICE):
     MeasureCmd = [0x33, 0x00]
     bus.write_i2c_block_data(addr, 0xAC, MeasureCmd)
     #time.sleep(0.1)
-    data = bus.read_i2c_block_data(addr,0x00)
+    data = bus.read_i2c_block_data(addr,0x00,32)
     temp = ((data[3] & 0x0F) << 16) | (data[4] << 8) | data[5]
     ctemp = ((temp*200) / 1048576) - 50
 

@@ -1,5 +1,5 @@
 import sys
-import smbus
+import smbus2
 import time
 
 if len(sys.argv) == 8:
@@ -14,7 +14,7 @@ else:
     print("fail")
     sys.exit(1)
 
-bus = smbus.SMBus(1)
+bus = smbus2.SMBus(1)
 
 data = [LED_PIN,LED_COUNT,LED_BRIGHTNESS,red,green,blue]
 

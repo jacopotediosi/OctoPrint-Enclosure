@@ -1,4 +1,4 @@
-import smbus
+import smbus2
 import time
 import sys
 
@@ -14,7 +14,7 @@ else:
     sys.exit(1)
 
 # Get I2C bus
-bus = smbus.SMBus(busNum)
+bus = smbus2.SMBus(busNum)
 
 # SI7021 address, 0x40(64)
 #		0xF5(245)	Select Relative Humidity NO HOLD master mode
