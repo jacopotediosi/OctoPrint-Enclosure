@@ -70,7 +70,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
     development_mode = False
     dummy_value = 30.0
     dummy_delta = 0.5
-    
+
     def __init__(self):
         # mqtt helper
         self.mqtt_publish = lambda *args, **kwargs: None
@@ -78,7 +78,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         self.mqtt_root_topic = "octoprint/plugins/enclosure"
         self.mqtt_sensor_topic = self.mqtt_root_topic + "/" + "enclosure"
         self.mqtt_message = "{\"temperature\": 0, \"humidity\": 0}"
-  
+
     def start_timer(self):
         """
         Function to start timer that checks enclosure temperature
@@ -140,15 +140,15 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         return -1
 
     # ~~ StartupPlugin mixin
-    def on_after_startup(self):   
+    def on_after_startup(self):
         helpers = self._plugin_manager.get_helpers("mqtt", "mqtt_publish", "mqtt_subscribe", "mqtt_unsubscribe")
-        
+
         if helpers:
             if "mqtt_publish" in helpers:
                 self.mqtt_publish = helpers["mqtt_publish"]
         else:
-            self._logger.info("mqtt helpers not found. mqtt functions won't work")       
-        
+            self._logger.info("mqtt helpers not found. mqtt functions won't work")
+
         self.pwm_instances = []
         self.event_queue = []
         self.rpi_outputs_not_changed = []
@@ -332,7 +332,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             if rpi_output['output_type'] == 'regular':
                 index = self.to_int(rpi_output['index_id'])
                 label = rpi_output['label']
-                pin = self.to_int(rpi_output['gpio_pin'])          
+                pin = self.to_int(rpi_output['gpio_pin'])
                 ActiveLow = rpi_output['active_low']
                 if rpi_output['gpio_i2c_enabled']:
                     b = self.gpio_i2c_input(rpi_output, ActiveLow)
@@ -1110,7 +1110,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 fval2 = struct.unpack('f', bytearray(data[4:8]))[0]
                 if fval2 != fval2:
                     fval2 = 0
-                
+
                 self._logger.debug("read_raw_i2c_temp(i2cbus=%s, i2caddr=%s, i2creg=%s) data == %s (%s, %s)",
                                     i2cbus, i2caddr, i2creg, data, fval1, fval2)
 
@@ -1564,7 +1564,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             for gpio_out_pwm in list(filter(lambda item: item['output_type'] == 'pwm', self.rpi_outputs)):
                 pin = self.to_int(gpio_out_pwm['gpio_pin'])
                 self._logger.info("Setting GPIO pin %s as PWM", pin)
-                
+
                 # Stop and clear any other pwm instances on that pin
                 pwm_instances_to_remove = []
                 for pwm_instance in self.pwm_instances:
@@ -1573,18 +1573,18 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                         pwm_instances_to_remove.append(pwm_instance)
                 for pwm_instance in pwm_instances_to_remove:
                     self.pwm_instances.remove(pwm_instance)
-                
+
                 # Clear the pin
                 self.clear_channel(pin)
-                
+
                 # Setup new pwm on that pin
                 GPIO.setup(pin, GPIO.OUT)
                 pwm_instance = GPIO.PWM(pin, self.to_int(gpio_out_pwm['pwm_frequency']))
-                
+
                 # Start the pwm
                 self._logger.info("starting PWM on pin %s", pin)
                 pwm_instance.start(self.to_int(gpio_out_pwm['default_duty_cycle']))
-                
+
                 # Add the pwm to pwm_instances list
                 self.pwm_instances.append({pin: pwm_instance})
             for gpio_out_neopixel in list(
@@ -1613,7 +1613,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 if (rpi_input['action_type'] == 'printer_control' and rpi_input['printer_action'] != 'filament'):
                     GPIO.add_event_detect(gpio_pin, edge, callback=self.handle_printer_action, bouncetime=200)
                     self._logger.info("Adding PRINTER CONTROL event detect on pin %s with edge: %s", gpio_pin, edge)
-            
+
             for rpi_input in list(filter(lambda item: item['input_type'] == 'temperature_sensor', self.rpi_inputs)):
                 gpio_pin = self.to_int(rpi_input['gpio_pin'])
                 if rpi_input['input_pull_resistor'] == 'input_pull_up':
@@ -1708,7 +1708,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                     if rpi_output['output_type'] == 'regular':
                         if rpi_output['gpio_i2c_enabled']:
                             val = False if rpi_input['controlled_io_set_value'] == 'low' else True
-                            self.gpio_i2c_write(rpi_output, val)    
+                            self.gpio_i2c_write(rpi_output, val)
                         else:
                             val = GPIO.LOW if rpi_input['controlled_io_set_value'] == 'low' else GPIO.HIGH
                             self.write_gpio(self.to_int(rpi_output['gpio_pin']), val)
@@ -1975,7 +1975,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                     self._logger.debug("Schedule shutdown for: %s", rpi_output["index_id"])
                     self.schedule_auto_shutdown_outputs(rpi_output, 0)
             self.run_tasks()
-        
+
         if event == Events.PRINTER_STATE_CHANGED:
             if "error" in payload["state_string"].lower():
                 self._logger.info("Detected Error in %s id: %s state: %s  will call listeners for shutdown_on_error!", event, payload["state_id"], payload["state_string"])

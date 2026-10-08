@@ -13,7 +13,7 @@ Also, be aware that upgrading from versions lower than 4.00 will **DELETE** all 
 
 Here is a list of possibilities:
 * Add temperature sensors on your enclosure or near your printer
-* Add active heaters on your enclosure and keep the temperature nice and high for large ABS 
+* Add active heaters on your enclosure and keep the temperature nice and high for large ABS
 * PWM controlled outputs
 * PWM controlled outputs based on temperature sensor
 * Active cooling for good PLA printing
@@ -172,7 +172,7 @@ You need to enable what do you want the plugin to control. Settings from plugin 
 
 There are mainly two types of configuration on the plugin, Inputs and Outputs.
 
-Outputs are meant to control THINGS (temperature, lights, locker, extra enclosure fans etc...) You can even use a PowerSwitch Tail II and completely shut down your printer after the print job is done. 
+Outputs are meant to control THINGS (temperature, lights, locker, extra enclosure fans etc...) You can even use a PowerSwitch Tail II and completely shut down your printer after the print job is done.
 
 Outputs can be set to the following types:
 
