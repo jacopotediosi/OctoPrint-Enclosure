@@ -122,10 +122,10 @@ i2cdetect -y 1
 ### Neopixel
 
 If your setup does not have pip install pip:
-`sudo apt-get install python-pip`
+`sudo apt-get install python3-pip`
 
 Install the required library:
-`sudo pip install rpi_ws281x`
+`sudo pip3 install rpi_ws281x`
 
 rpi_ws281x really needs sudo, and you need to setup up so your rpi does not ask for a password when runing a python script, so run:
 

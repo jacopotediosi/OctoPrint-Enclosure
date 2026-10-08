@@ -1,5 +1,3 @@
-# coding=utf-8
-from __future__ import absolute_import
 from octoprint.events import eventManager, Events
 from octoprint.util import RepeatedTimer
 from subprocess import Popen, PIPE
@@ -798,7 +796,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             if neopixel_dirrect:
                 # rpi_ws281x requires root, so neopixel_direct.py runs with the system python
                 script = os.path.dirname(os.path.realpath(__file__)) + "/neopixel_direct.py"
-                cmd = ["python", script]
+                cmd = ["python3", script]
             else:
                 script = os.path.dirname(os.path.realpath(__file__)) + "/neopixel_indirect.py"
                 cmd = [sys.executable, script]
@@ -1187,7 +1185,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Temperature BME280 cmd: %s", cmd)
 
-            stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+            stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
             output, errors = stdout.communicate()
 
             if self._settings.get(["debug_temperature_log"]) is True:
@@ -1213,7 +1211,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Temperature BME680 cmd: %s", cmd)
 
-            stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+            stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
             output, errors = stdout.communicate()
 
             if  self._settings.get(["debug_temperature_log"]) is True:
@@ -1257,7 +1255,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Temperature AHT10 cmd: %s", cmd)
             self._logger.debug(cmd)
-            stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+            stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
             output, errors = stdout.communicate()
             if self._settings.get(["debug_temperature_log"]) is True:
                 if len(errors) > 0:

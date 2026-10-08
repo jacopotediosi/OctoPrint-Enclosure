@@ -5,7 +5,7 @@ import time
 def GetGasReference():
     # Now run the sensor for a burn-in period, then use combination of relative humidity and gas resistance to estimate indoor air quality as a percentage.
     # print("Getting a new gas reference value")
-    readings = int(10)
+    readings = 10
     gas_reference = 0
     while True:
         sensor.get_sensor_data()
@@ -46,8 +46,8 @@ if __name__ == "__main__":
             print(ex)
             quit(-1)
 
-    hum_weighting = float(0.25)  # so hum effect is 25% of the total air quality score
-    gas_weighting = float(0.75)  # so gas effect is 75% of the total air quality score
+    hum_weighting = 0.25  # so hum effect is 25% of the total air quality score
+    gas_weighting = 0.75  # so gas effect is 75% of the total air quality score
 
     sensor.set_humidity_oversample(bme680.OS_2X)
     sensor.set_pressure_oversample(bme680.OS_2X)
@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     gas_reference = float(250000)
     hum_reference = float(40)
-    getgasreference_count = int(0)
+    getgasreference_count = 0
 
     # Calculate humidity contribution to IAQ index
     current_humidity = float(humidity)
