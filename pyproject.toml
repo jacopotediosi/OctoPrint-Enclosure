@@ -14,14 +14,14 @@ authors = [
 ]
 requires-python = ">=3.7,<4"
 dependencies = [
-    "RPi.GPIO>=0.6.5",
-    "requests>=2.7",
-    "smbus2>=0.3.0",
-    "gpiozero==1.6.2",
-    "RPi.bme280",
-    "bme680",
-    "adafruit-circuitpython-dht",
-    "Adafruit-Blinka",
+    "Adafruit-Blinka",  # for microcontroller.Pin used by DHT sensors
+    "adafruit-circuitpython-dht>=3.5.0",  # min is 3.5.0 for adafruit_dht.exit()
+    "bme680>=1.1.0",  # versions before 1.1.0 are broken
+    "gpiozero>=1.5.0,!=2.0",  # for gpiozero.CPUTemperature; versions before 1.5.0 and 2.0 are broken
+    "requests",
+    "RPi.bme280>=0.2.0",  # min is 0.2.0 for the compensation_params in sample() signature
+    "RPi.GPIO>=0.5.11",  # min is 0.5.11 for GPIO.getmode()
+    "smbus2>=0.3.0",  # min is 0.3.0 for SMBus as context manager
     "spidev",
 ]
 dynamic = [
