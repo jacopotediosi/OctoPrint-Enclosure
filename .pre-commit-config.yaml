@@ -28,12 +28,11 @@ repos:
   #   hooks:
   #     - id: standard
 
-    # TODO: enable djlint
-  # - repo: https://github.com/djlint/djLint
-  #   rev: v1.46.4
-  #   hooks:
-  #     - id: djlint-reformat-jinja
-  #     - id: djlint-jinja
+  - repo: https://github.com/djlint/djLint
+    rev: v1.46.4
+    hooks:
+      - id: djlint-reformat-jinja
+      - id: djlint-jinja
 
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.3

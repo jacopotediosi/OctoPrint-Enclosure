@@ -31,6 +31,45 @@ $(function () {
       });
     });
 
+    self.navbar_outputs = ko.pureComputed(function () {
+      return ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
+        return (["regular", "gcode_output", "shell_output"].indexOf(item.output_type()) >= 0 && item.show_on_navbar());
+      });
+    });
+
+    self.navbar_temperature_sensors = ko.pureComputed(function () {
+      return ko.utils.arrayFilter(self.rpi_inputs_temperature_sensors(), function (item) {
+        return (item.temp_sensor_navbar());
+      });
+    });
+
+    self.tab_temperature_table_rows = ko.pureComputed(function () {
+      var rows = [];
+      self.rpi_inputs_temperature_sensors().forEach(function (sensor) {
+        var controls = self.linkedTemperatureControl(sensor.index_id())();
+        var rowspan = Math.max(controls.length, 1);
+        if (controls.length === 0) {
+          rows.push({sensor: sensor, control: null, first: true, rowspan: rowspan});
+        }
+        controls.forEach(function (control, index) {
+          rows.push({sensor: sensor, control: control, first: index === 0, rowspan: rowspan});
+        });
+      });
+      return rows;
+    });
+
+    self.tab_outputs = ko.pureComputed(function () {
+      return ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
+        return (!item.hide_btn_ui());
+      });
+    });
+
+    self.tab_filament_sensors = ko.pureComputed(function () {
+      return ko.utils.arrayFilter(self.rpi_inputs(), function (item) {
+        return (item.input_type() === "gpio" && item.action_type() === "printer_control" && item.printer_action() === "filament");
+      });
+    });
+
     self.settings_temperature_sensors = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs(), function (item) {
         return (item.input_type() === "temperature_sensor");
@@ -87,37 +126,10 @@ $(function () {
       });
     };
 
-    self.calculateRowSpan = function(index_id){
-      span = self.linkedTemperatureControl(index_id())().length
-      return span == 0 ? 1 : span;
-    };
-
     self.hasAnySensorWithHumidity = function(){
       return_value = false;
       self.rpi_inputs_temperature_sensors().forEach(function (sensor) {
         if (self.humidityCapableSensor(sensor.temp_sensor_type())) {
-          return_value = true;
-          return false;
-        }
-      });
-      return return_value;
-    };
-
-    self.hasAnyNavbarOutput = function(){
-      return_value = false;
-      self.rpi_outputs().forEach(function (output) {
-        if ((output.output_type()=="regular" || output.output_type()=="gcode_output") && output.show_on_navbar()) {
-          return_value = true;
-          return false;
-        }
-      });
-      return return_value;
-    };
-
-    self.hasAnyNavbarTemperature = function(){
-      return_value = false;
-      self.rpi_inputs_temperature_sensors().forEach(function (sensor) {
-        if (sensor.temp_sensor_navbar()) {
           return_value = true;
           return false;
         }

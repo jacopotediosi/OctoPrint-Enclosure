@@ -51,3 +51,8 @@ include = [
     "octoprint_enclosure",
     "octoprint_enclosure.*",
 ]
+
+[tool.djlint]
+ignore = [
+    "H021", # inline styles are tolerated
+]
