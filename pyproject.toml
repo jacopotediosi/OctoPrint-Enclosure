@@ -1,0 +1,49 @@
+[build-system]
+requires = [
+    "setuptools>=68",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "OctoPrint-Enclosure"
+version = "4.13.2"
+description = "Awesome plugin to control everything that you ever wanted on your enclosure"
+authors = [
+    { name = "Vitor Henrique", email = "vitormhenrique@gmail.com" },
+]
+requires-python = ">=3.7,<4"
+dependencies = [
+    "RPi.GPIO>=0.6.5",
+    "requests>=2.7",
+    "smbus2>=0.3.0",
+    "gpiozero==1.6.2",
+    "RPi.bme280",
+    "bme680",
+]
+dynamic = [
+    "license",
+]
+
+[project.entry-points."octoprint.plugin"]
+enclosure = "octoprint_enclosure"
+
+[project.urls]
+Homepage = "https://github.com/jacopotediosi/OctoPrint-Enclosure"
+
+[project.optional-dependencies]
+develop = [
+    "go-task-bin",
+]
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = [
+    "octoprint_enclosure",
+    "octoprint_enclosure.*",
+]
