@@ -1,10 +1,7 @@
 from gpiozero import CPUTemperature
 
-import ctypes
-import struct
-import sys
 
 class PiTemp:
-    def getTemp(self):
+    def get_temp(self):
         temp = CPUTemperature()
-        return '{0:0.1f}'.format(temp.temperature)
+        return f"{temp.temperature:0.1f}"

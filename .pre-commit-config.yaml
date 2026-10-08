@@ -7,13 +7,11 @@ repos:
       - id: check-yaml
       - id: check-merge-conflict
 
-  # TODO: enable ruff
-  # - repo: https://github.com/astral-sh/ruff-pre-commit
-  #   rev: v0.16.10
-  #   hooks:
-  #     - id: ruff-check
-  #       args: [--target-version=py37]
-  #     - id: ruff-format
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
 
   # TODO: enable ty
   #- repo: https://github.com/astral-sh/ty-pre-commit

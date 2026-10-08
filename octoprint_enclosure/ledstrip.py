@@ -1,4 +1,5 @@
-"""
+"""Open-Smart RGB LED Strip driver for the Raspberry Pi.
+
 copyright 2017 Tim Richardson, github profile: https://github.com/GeekyTim
 
 This file is part of https://github.com/GeekyTim/Open-Smart-RGB-LED-Strip-Driver-for-Raspberry-Pi
@@ -55,7 +56,8 @@ The following methods are public:
 """
 
 import time
-import RPi.GPIO as GPIO
+
+from RPi import GPIO
 
 
 class LEDStrip:
@@ -75,14 +77,14 @@ class LEDStrip:
         time.sleep(self.__delay)
 
     def __send32zero(self):
-        for x in range(32):
+        for _ in range(32):
             GPIO.output(self.__data, False)
             self.__sendclock()
 
     def __senddata(self, dx):
         self.__send32zero()
-        for x in range(32):
-            if ((dx & 0x80000000) != 0):
+        for _ in range(32):
+            if (dx & 0x80000000) != 0:
                 GPIO.output(self.__data, True)
             else:
                 GPIO.output(self.__data, False)
@@ -92,9 +94,9 @@ class LEDStrip:
 
     def __getcode(self, dat):
         tmp = 0
-        if ((dat & 0x80) == 0):
+        if (dat & 0x80) == 0:
             tmp |= 0x02
-        if ((dat & 0x40) == 0):
+        if (dat & 0x40) == 0:
             tmp |= 0x01
         return tmp
 
@@ -126,17 +128,17 @@ class LEDStrip:
     def setcolourblue(self):
         self.setcolourrgb(0, 0, 255)
 
-    def setcolourhex(self, hex):
-        print('Hex')
+    def setcolourhex(self, hex_string):
+        print("Hex")
         try:
-            hexcolour = int(hex, 16)
+            hexcolour = int(hex_string, 16)
             red = int((hexcolour & 255 * 255 * 255) / (255 * 255))
             green = int((hexcolour & 255 * 255) / 255)
             blue = hexcolour & 255
             self.setcolourrgb(red, green, blue)
-        except:
+        except Exception:
             hexcolour = 0
-            print("Error converting Hex input (%s) a colour." % hex)
+            print(f"Error converting Hex input ({hex_string}) a colour.")
 
     def cleanup(self):
         self.setcolouroff()

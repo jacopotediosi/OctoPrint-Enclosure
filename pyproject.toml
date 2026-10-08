@@ -18,7 +18,7 @@ dependencies = [
     "adafruit-circuitpython-dht>=3.5.0",  # min is 3.5.0 for adafruit_dht.exit()
     "bme680>=1.1.0",  # versions before 1.1.0 are broken
     "gpiozero>=1.5.0,!=2.0",  # for gpiozero.CPUTemperature; versions before 1.5.0 and 2.0 are broken
-    "requests",
+    "requests>=2.4.0",  # min is 2.4.0 for the (connect, read) timeout tuple
     "RPi.bme280>=0.2.0",  # min is 0.2.0 for the compensation_params in sample() signature
     "RPi.GPIO>=0.5.11",  # min is 0.5.11 for GPIO.getmode()
     "smbus2>=0.3.0",  # min is 0.3.0 for SMBus as context manager
@@ -50,6 +50,57 @@ include-package-data = true
 include = [
     "octoprint_enclosure",
     "octoprint_enclosure.*",
+]
+
+[tool.ruff]
+line-length = 120
+fix = true
+
+[tool.ruff.lint]
+select = [
+    "ALL",
+]
+# TODO: reduce the ignore list
+ignore = [
+    "ANN001", # missing-type-function-argument
+    "ANN002", # missing-type-args
+    "ANN003", # missing-type-kwargs
+    "ANN201", # missing-return-type-undocumented-public-function
+    "ANN202", # missing-return-type-private-function
+    "ANN204", # missing-return-type-special-method
+    "ANN205", # missing-return-type-static-method
+    "ARG002", # unused-method-argument
+    "ARG005", # unused-lambda-argument
+    "BLE001", # blind-except
+    "C901", # complex-structure
+    "CPY001", # missing-copyright-notice
+    "D100", # undocumented-public-module
+    "D101", # undocumented-public-class
+    "D102", # undocumented-public-method
+    "D103", # undocumented-public-function
+    "D104", # undocumented-public-package
+    "D107", # undocumented-public-init
+    "D203", # incorrect-blank-line-before-class
+    "D213", # multi-line-summary-second-line
+    "DTZ005", # call-datetime-now-without-tzinfo
+    "DTZ007", # call-datetime-strptime-without-zone
+    "EM101", # raw-string-in-exception
+    "FBT002", # boolean-default-value-positional-argument
+    "FBT003", # boolean-positional-value-in-call
+    "N999", # invalid-module-name
+    "PERF203", # try-except-in-loop
+    "PLR0912", # too-many-branches
+    "PLR0913", # too-many-arguments
+    "PLR0915", # too-many-statements
+    "PLR0917", # too-many-positional-arguments
+    "PLR2004", # magic-value-comparison
+    "RUF012", # mutable-class-default
+    "S602", # subprocess-popen-with-shell-equals-true
+    "S603", # subprocess-without-shell-equals-true
+    "S607", # start-process-with-partial-path
+    "SLF001", # private-member-access
+    "T201", # print
+    "TRY003", # raise-vanilla-args
 ]
 
 [tool.djlint]

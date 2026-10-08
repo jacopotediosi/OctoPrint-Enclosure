@@ -1,6 +1,6 @@
-from rpi_ws281x import *
 import sys
-import time
+
+from rpi_ws281x import Adafruit_NeoPixel, Color
 
 LED_INVERT = False
 LED_FREQ_HZ = 800000

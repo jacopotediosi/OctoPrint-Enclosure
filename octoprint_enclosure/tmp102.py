@@ -11,7 +11,7 @@ def main():
     if len(sys.argv) >= 2:
         address = int(sys.argv[1], 0)
 
-    if not 0x48 <= address <= 0x4b:
+    if not 0x48 <= address <= 0x4B:
         raise ValueError("Invalid address value")
 
     # Connect to I2C bus (use 0 on original Raspberry Pi, 1 on later models)
@@ -33,7 +33,7 @@ def main():
     temp = temp >> 4
 
     # Convert to 2 byte twos compliment negative if negative
-    if ((temp & 0x800) != 0):
+    if (temp & 0x800) != 0:
         temp |= 0xF800
 
     # Convert into a signed number
@@ -42,7 +42,8 @@ def main():
     # Divide by 16 to get value in celsius
     temp /= 16.0
 
-    print('{0:0.1f}'.format(temp))
+    print(f"{temp:0.1f}")
+
 
 if __name__ == "__main__":
     main()

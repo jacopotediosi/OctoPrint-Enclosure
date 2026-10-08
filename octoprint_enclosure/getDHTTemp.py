@@ -1,14 +1,11 @@
 import sys
 import time
+
 import adafruit_dht
 from microcontroller import Pin
 
 # Parse command line parameters.
-sensor_args =   {
-                    '11': adafruit_dht.DHT11,
-                    '22': adafruit_dht.DHT22,
-                    '2302': adafruit_dht.DHT22
-                }
+sensor_args = {"11": adafruit_dht.DHT11, "22": adafruit_dht.DHT22, "2302": adafruit_dht.DHT22}
 
 if len(sys.argv) == 3 and sys.argv[1] in sensor_args:
     sensor = sensor_args[sys.argv[1]]
@@ -28,18 +25,18 @@ while retry_count <= max_retries:
         temperature = dht_dev.temperature
 
         if humidity is not None and temperature is not None:
-            print('{0:0.1f} | {1:0.1f}'.format(temperature, humidity))
+            print(f"{temperature:0.1f} | {humidity:0.1f}")
             sys.exit(1)
-    except RuntimeError as e:
+    except RuntimeError:
         time.sleep(2)
         retry_count += 1
         continue
-    except Exception as e:
+    except Exception:
         dht_dev.exit()
-        raise e
+        raise
 
     time.sleep(1)
     retry_count += 1
 
-print('-1 | -1')
+print("-1 | -1")
 sys.exit(1)
