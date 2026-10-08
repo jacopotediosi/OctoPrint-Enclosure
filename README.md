@@ -49,17 +49,12 @@ Wire the sensor following the wiring diagram on the pictures on thingiverse; you
 
 For DHT11 and DHT22 sensors, don't forget to connect a 4.7K - 10K resistor from the data pin to VCC. Also, be aware that DHT sensors some times can not work reliably on linux, this is a limitation of reading DHT sensors from Linux--there's no guarantee the program will be given enough priority and time by the Linux kernel to reliably read the sensor. Another common issue is the power supply. you need a constant and good 3.3V, sometimes a underpowered raspberry pi will not have a solid 3.3V power supply, so you could try powering the sensor with 5V and using a level shifter on the read pin.
 
-You need to install the Adafruit library to use the temperature sensor on Raspberry Pi. Recent versions of this plugin have moved to supporting the CircuitPython-based library on Python3 installed below.
-
-Open a raspberry pi terminal and type:
+The plugin reads these sensors through the CircuitPython-based Adafruit library, which is installed automatically together with the plugin. The library also needs the `libgpiod2` system package; open a raspberry pi terminal and type:
 
 ```
-pip3 install adafruit-circuitpython-dht
 sudo apt-get update
 sudo apt-get install libgpiod2 -y
 ```
-
-This will install all requirements of the library.
 
 You can test the library by using the sample code from https://learn.adafruit.com/dht-humidity-sensing-on-raspberry-pi-with-gdocs-logging/python-setup.
 
@@ -112,10 +107,10 @@ sudo raspi-config
 * Use the right arrow to select the button
 * Select yes when it asks to reboot
 
-Install some packages (on raspberry pi system python not octoprint virtual environment):
+To find the sensor address, install `i2c-tools`:
 
 ```
-sudo apt-get install i2c-tools python-pip python-smbus
+sudo apt-get install i2c-tools
 ```
 
 Find the address of the sensor:

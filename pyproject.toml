@@ -20,6 +20,9 @@ dependencies = [
     "gpiozero==1.6.2",
     "RPi.bme280",
     "bme680",
+    "adafruit-circuitpython-dht",
+    "Adafruit-Blinka",
+    "spidev",
 ]
 dynamic = [
     "license",

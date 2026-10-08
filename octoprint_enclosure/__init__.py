@@ -796,28 +796,28 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 address = 0
 
             if neopixel_dirrect:
-                script = os.path.dirname(os.path.realpath(__file__)) + "/neopixel_direct.py "
+                # rpi_ws281x requires root, so neopixel_direct.py runs with the system python
+                script = os.path.dirname(os.path.realpath(__file__)) + "/neopixel_direct.py"
+                cmd = ["python", script]
             else:
-                script = os.path.dirname(os.path.realpath(__file__)) + "/neopixel_indirect.py "
+                script = os.path.dirname(os.path.realpath(__file__)) + "/neopixel_indirect.py"
+                cmd = [sys.executable, script]
 
             if self._settings.get(["use_sudo"]):
-                sudo_str = "sudo "
-            else:
-                sudo_str = ""
+                cmd.insert(0, "sudo")
 
-            cmd = sudo_str + "python " + script + str(led_pin) + " " + str(led_count) + " " + str(
-                led_brightness) + " " + str(red) + " " + str(green) + " " + str(blue) + " "
+            cmd += [str(led_pin), str(led_count), str(led_brightness), str(red), str(green), str(blue)]
 
             if neopixel_dirrect:
                 dma = self._settings.get(["neopixel_dma"]) or 10
-                cmd = cmd + str(dma)
+                cmd.append(str(dma))
             else:
-                cmd = cmd + str(address)
+                cmd.append(str(address))
 
                 if queue_id is not None:
                     self._logger.debug("running scheduled queue id %s", queue_id)
                 self._logger.debug("Sending neopixel cmd: %s", cmd)
-            Popen(cmd, shell=True)
+            Popen(cmd)
             if queue_id is not None:
                 self.stop_queue_item(queue_id)
         except Exception as ex:
@@ -1127,7 +1127,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
     def read_mcp_temp(self, address, i2cbus):
         try:
             script = os.path.dirname(os.path.realpath(__file__)) + "/mcp9808.py"
-            args = ["python", script, str(i2cbus), str(address)]
+            args = [sys.executable, script, str(i2cbus), str(address)]
             if self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Temperature MCP9808 cmd: %s", " ".join(args))
             proc = Popen(args, stdout=PIPE)
@@ -1142,15 +1142,13 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
     def read_dht_temp(self, sensor, pin):
         try:
-            script = os.path.dirname(os.path.realpath(__file__)) + "/getDHTTemp.py "
+            script = os.path.dirname(os.path.realpath(__file__)) + "/getDHTTemp.py"
+            cmd = [sys.executable, script, str(sensor), str(pin)]
             if self._settings.get(["use_sudo"]):
-                sudo_str = "sudo "
-            else:
-                sudo_str = ""
-            cmd = sudo_str + "python3 " + script + str(sensor) + " " + str(pin)
+                cmd.insert(0, "sudo")
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Temperature dht cmd: %s", cmd)
-            stdout = (Popen(cmd, shell=True, stdout=PIPE).stdout).read()
+            stdout = (Popen(cmd, stdout=PIPE).stdout).read()
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Dht result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
@@ -1163,15 +1161,13 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
     def read_dht20_temp(self, address, i2cbus):
         try:
-            script = os.path.dirname(os.path.realpath(__file__)) + "/DHT20.py "
+            script = os.path.dirname(os.path.realpath(__file__)) + "/DHT20.py"
+            cmd = [sys.executable, script, str(address), str(i2cbus)]
             if self._settings.get(["use_sudo"]):
-                sudo_str = "sudo "
-            else:
-                sudo_str = ""
-            cmd = sudo_str + "python " + script + str(address) + " " + str(i2cbus)
+                cmd.insert(0, "sudo")
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Temperature DHT20 cmd: %s", cmd)
-            stdout = (Popen(cmd, shell=True, stdout=PIPE).stdout).read()
+            stdout = (Popen(cmd, stdout=PIPE).stdout).read()
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("DHT20 result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
@@ -1235,15 +1231,13 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
     def read_am2320_temp(self):
         try:
-            script = os.path.dirname(os.path.realpath(__file__)) + "/AM2320.py "
+            script = os.path.dirname(os.path.realpath(__file__)) + "/AM2320.py"
+            cmd = [sys.executable, script] # sensor has fixed address 0x5C
             if self._settings.get(["use_sudo"]):
-                sudo_str = "sudo "
-            else:
-                sudo_str = ""
-            cmd = sudo_str + "python " + script # sensor has fixed address 0x5C
+                cmd.insert(0, "sudo")
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Temperature AM2320 cmd: %s", cmd)
-            stdout = (Popen(cmd, shell=True, stdout=PIPE).stdout).read()
+            stdout = (Popen(cmd, stdout=PIPE).stdout).read()
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("AM2320 result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
@@ -1296,15 +1290,13 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
     def read_si7021_temp(self, address, i2cbus):
         try:
-            script = os.path.dirname(os.path.realpath(__file__)) + "/SI7021.py "
+            script = os.path.dirname(os.path.realpath(__file__)) + "/SI7021.py"
+            cmd = [sys.executable, script, str(address), str(i2cbus)]
             if self._settings.get(["use_sudo"]):
-                sudo_str = "sudo "
-            else:
-                sudo_str = ""
-            cmd = sudo_str + "python " + script + str(address) + " " + str(i2cbus)
+                cmd.insert(0, "sudo")
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Temperature SI7021 cmd: %s", cmd)
-            stdout = (Popen(cmd, shell=True, stdout=PIPE).stdout).read()
+            stdout = (Popen(cmd, stdout=PIPE).stdout).read()
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("SI7021 result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
@@ -1344,7 +1336,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
     def read_tmp102_temp(self, address):
         try:
             script = os.path.dirname(os.path.realpath(__file__)) + "/tmp102.py"
-            args = ["python", script, str(address)]
+            args = [sys.executable, script, str(address)]
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Temperature TMP102 cmd: %s", " ".join(args))
             proc = Popen(args, stdout=PIPE)
@@ -1360,7 +1352,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
     def read_max31855_temp(self, address):
         try:
             script = os.path.dirname(os.path.realpath(__file__)) + "/max31855.py"
-            args = ["python", script, str(address)]
+            args = [sys.executable, script, str(address)]
             if  self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Temperature MAX31855 cmd: %s", " ".join(args))
             proc = Popen(args, stdout=PIPE)
