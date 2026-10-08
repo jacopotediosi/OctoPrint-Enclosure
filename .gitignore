@@ -1,4 +1,14 @@
-venv
-.vscode
-*egg-info*
 *.pyc
+*.swp
+.idea
+*.iml
+build
+dist
+*.egg*
+.DS_Store
+*.zip
+__pycache__
+venv
+.venv
+.vscode
+.ruff_cache
