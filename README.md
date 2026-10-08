@@ -30,7 +30,7 @@ Check pictures on thingiverse: http://www.thingiverse.com/thing:2245493
 
 ## Installation
 
-Install the plugin using the Plugin Manager bundled with OctoPrint, you can search for the Enclosure plugin or just use the url: https://github.com/vitormhenrique/OctoPrint-Enclosure/archive/master.zip.
+Install the plugin using the Plugin Manager bundled with OctoPrint, you can search for the Enclosure plugin or just use the url: https://github.com/jacopotediosi/OctoPrint-Enclosure/archive/master.zip.
 
 ## Hardware
 
