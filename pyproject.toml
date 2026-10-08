@@ -9,6 +9,7 @@ name = "OctoPrint-Enclosure"
 version = "4.13.2"
 description = "Awesome plugin to control everything that you ever wanted on your enclosure"
 authors = [
+    { name = "Jacopo Tediosi", email = "jacopotediosi@gmail.com" },
     { name = "Vitor Henrique", email = "vitormhenrique@gmail.com" },
 ]
 requires-python = ">=3.7,<4"
