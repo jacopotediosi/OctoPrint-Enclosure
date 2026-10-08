@@ -36,7 +36,7 @@ Install the plugin using the Plugin Manager bundled with OctoPrint, you can sear
 
 This plugin support many hardware temperature sensors, led, relays, heater...
 
-Here are detailled instructions on how to setup them.
+Here are detailed instructions on how to setup them.
 
 ### Temperature sensors
 
@@ -127,7 +127,7 @@ If your setup does not have pip install pip:
 Install the required library:
 `sudo pip3 install rpi_ws281x`
 
-rpi_ws281x really needs sudo, and you need to setup up so your rpi does not ask for a password when runing a python script, so run:
+rpi_ws281x really needs sudo, and you need to setup up so your rpi does not ask for a password when running a python script, so run:
 
 `sudo visudo`
 
@@ -178,7 +178,7 @@ Outputs can be set to the following types:
 
 * Regular GPIO
 * PWM GPIO
-* Neopixel Control via Microcontroler
+* Neopixel Control via Microcontroller
 * Neopixel Control directly from raspberry pi
 * Temperature and Humidity Control
 * Temperature Alarm

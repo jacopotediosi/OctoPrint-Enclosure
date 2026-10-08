@@ -3,7 +3,7 @@
 #include "Wire.h"
 #include <Adafruit_NeoPixel.h>
 
-//define DEBUG //Uncoment this line to get debug information of the Serial port.
+//define DEBUG //Uncomment this line to get debug information of the Serial port.
 
 #ifdef DEBUG
  #define DEBUG_PRINT(x)     Serial.print (x)
@@ -76,7 +76,7 @@ void setup() {
 	#ifdef DEBUG
     Serial.begin(115200);
     while (!Serial);
-    Serial.println("Debuging...");
+    Serial.println("Debugging...");
 	#endif
   Wire.onReceive(receiveEvent);
 }

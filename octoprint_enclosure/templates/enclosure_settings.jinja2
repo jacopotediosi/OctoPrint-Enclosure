@@ -116,7 +116,7 @@
         <label class="checkbox">
           <input type="checkbox" data-bind="checked: pwm_temperature_linked"> {{ _('Link PWM to Temperature') }}
         </label>
-        <span class="help-inline">Link PWM ouput to temperature. PWM output will be interpolated between the point from duty A, temperature A -> duty
+        <span class="help-inline">Link PWM output to temperature. PWM output will be interpolated between the point from duty A, temperature A -> duty
           B, temperature B. This output will automatically start when a print starts and will default to the default
           duty cycle when print is complete.
         </span>
@@ -208,7 +208,7 @@
         <div class="controls">
           <input type="text" class="input-block-level" data-bind="value: startup_time">
           <span class="help-inline">Time delay in seconds to turn on GPIO when print starts OR exact time that the event should happen, note that
-            events will only be scheduled after a print starts, time should be formated as HH:MM on a 24 hours format, don't
+            events will only be scheduled after a print starts, time should be formatted as HH:MM on a 24 hours format, don't
             forget to check timezone of your Raspberry Pi.</span>
         </div>
       </div>
@@ -241,7 +241,7 @@
         <div class="controls">
           <input type="text" class="input-block-level" data-bind="value: shutdown_time">
           <span class="help-inline">Time delay in seconds to turn off GPIO when print starts OR exact time that the event should happen, note that
-            events will only be scheduled after a print starts, time should be formated as HH:MM on a 24 hours format, don't
+            events will only be scheduled after a print starts, time should be formatted as HH:MM on a 24 hours format, don't
             forget to check timezone of your raspberry pi.</span>
           <span class="label label-important">Attention</span>
           <span> Hour schedule does not work with
@@ -366,7 +366,7 @@
         <select data-bind="options: $root.settings_temperature_sensors, optionsText: 'label',
                       optionsValue: 'index_id', value: $data.linked_temp_sensor">
         </select>
-        <span class="help-inline">Temperature sensor responsible for geting the value to be used. Configured on the input side of the plugin.</span>
+        <span class="help-inline">Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.</span>
       </div>
     </div>
     <!-- /ko -->
@@ -377,7 +377,7 @@
         <select data-bind="options: $root.settings_hum_sensors, optionsText: 'label',
                       optionsValue: 'index_id', value: $data.linked_temp_sensor">
         </select>
-        <span class="help-inline">Temperature sensor responsible for geting the value to be used. Configured on the input side of the plugin.</span>
+        <span class="help-inline">Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.</span>
       </div>
     </div>
     <!-- /ko -->
@@ -423,7 +423,7 @@
       <label class="control-label">{{ _('Maximum Temperature') }}</label>
       <div class="controls">
         <input type="text" class="input-block-level" data-bind="value: temp_ctr_max_temp">
-        <span class="help-inline">Maximun temperature that the enclosure should reach, if this temperature is hit, the heater will be disabled until
+        <span class="help-inline">Maximum temperature that the enclosure should reach, if this temperature is hit, the heater will be disabled until
           it's set temperature is set again.</span>
       </div>
     </div>
@@ -764,14 +764,14 @@
           <span class="help-inline">
             <span class="label label-info">Info:</span> PRINTER actions when a condition is met, that can be a filament sensor, button, etc. Actions can
             be Pause \ Resume \ Cancel a printer_control job, change the filament or disable Temperature Control. You can
-            use the "change filament" action and set up the input GPIO acording to your sensor, for example, if your filament
+            use the "change filament" action and set up the input GPIO according to your sensor, for example, if your filament
             sensor connects to ground when detects the end of the filament, you should choose PULL UP resistors and detect
             the event on the falling edge.</span>
           <!-- /ko -->
           <!-- ko if: ($data.action_type() == "output_control")  -->
           <span class="help-inline">
             <span class="label label-info">Info:</span> Action will control GPIO outputs when a condition is met, for example detect a press of a button.
-            You can use this to control any previous configured OUTPUTS, basically beeing able to control your lights / fan
+            You can use this to control any previous configured OUTPUTS, basically being able to control your lights / fan
             / printer using mechanical buttons buttons instead of the octoprint interface. You can only control REGULAR outputs.
           </span>
           <!-- /ko -->
@@ -1008,7 +1008,7 @@
         <label class="control-label">{{ _('Event Name') }}</label>
         <div class="controls">
           <input type="text" class="input-block-level" data-bind="value: settingsViewModel.settings.plugins.enclosure.notification_event_name">
-          <span class="help-inline">Event name that was configured on the maker chanel of IFTTT, don't use space between the words</span>
+          <span class="help-inline">Event name that was configured on the maker channel of IFTTT, don't use space between the words</span>
         </div>
       </div>
       <div class="control-group">

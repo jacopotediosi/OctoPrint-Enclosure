@@ -42,7 +42,7 @@ def main():
 	bus.write_i2c_block_data(address, MCP9808_REG_CONFIG, config)
 
 	# MCP9808 address, default 0x18(24)
-	# select resolution rgister, 0x08(8)
+	# select resolution register, 0x08(8)
 	# resolution = +0.0625 / C, 0x03(03)
 	bus.write_byte_data(address, MCP9808_REG_RESOLUTION, 0x03)
 

@@ -373,7 +373,7 @@ $(function () {
 
       self.settingsViewModel.settings.plugins.enclosure.rpi_outputs.push({
         index_id: ko.observable(nextIndex),
-        label: ko.observable("Ouput " + nextIndex),
+        label: ko.observable("Output " + nextIndex),
         output_type: ko.observable("regular"),
         shell_script: ko.observable(""),
         gpio_pin: ko.observable(0),

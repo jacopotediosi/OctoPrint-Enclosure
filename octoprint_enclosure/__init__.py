@@ -710,7 +710,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
         return jsonify(success=True)
 
-    # DEPREACTION END
+    # DEPRECATION END
 
 
     # GPIO over i2c
@@ -1991,22 +1991,22 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 task['thread'].start()
 
     def schedule_auto_shutdown_outputs(self, rpi_output, shutdown_delay_seconds):
-        sufix = 'auto_shutdown'
+        suffix = 'auto_shutdown'
         if rpi_output['output_type'] == 'regular':
             value = True if rpi_output['active_low'] else False
-            self.add_regular_output_to_queue(shutdown_delay_seconds, rpi_output, value, sufix)
+            self.add_regular_output_to_queue(shutdown_delay_seconds, rpi_output, value, suffix)
         if rpi_output['output_type'] == 'ledstrip':
             self.ledstrip_set_rgb(rpi_output)
         if rpi_output['output_type'] == 'pwm' and not rpi_output['pwm_temperature_linked']:
             value = 0
-            self.add_pwm_output_to_queue(shutdown_delay_seconds, rpi_output, value, sufix)
+            self.add_pwm_output_to_queue(shutdown_delay_seconds, rpi_output, value, suffix)
         if rpi_output['output_type'] == 'pwm' and rpi_output['pwm_temperature_linked']:
-            self.schedule_pwm_duty_on_queue(shutdown_delay_seconds, rpi_output, 0, sufix)
+            self.schedule_pwm_duty_on_queue(shutdown_delay_seconds, rpi_output, 0, suffix)
         if (rpi_output['output_type'] == 'neopixel_indirect' or rpi_output['output_type'] == 'neopixel_direct'):
-            self.add_neopixel_output_to_queue(rpi_output, shutdown_delay_seconds, 0, 0, 0, sufix)
+            self.add_neopixel_output_to_queue(rpi_output, shutdown_delay_seconds, 0, 0, 0, suffix)
         if rpi_output['output_type'] == 'temp_hum_control':
             value = 0
-            self.add_temperature_output_temperature_queue(shutdown_delay_seconds, rpi_output, value, sufix)
+            self.add_temperature_output_temperature_queue(shutdown_delay_seconds, rpi_output, value, suffix)
         self._logger.debug("Events scheduled to run %s", self.event_queue)
 
     def ledstrip_set_rgb(self, rpi_output, rgb=None):
@@ -2050,21 +2050,21 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                     rpi_output['temp_ctr_set_value'] = rpi_output['temp_ctr_default_value']
 
     def schedule_auto_startup_outputs(self, rpi_output, delay_seconds):
-        sufix = 'auto_startup'
+        suffix = 'auto_startup'
         if rpi_output['output_type'] == 'regular':
             value = False if rpi_output['active_low'] else True
-            self.add_regular_output_to_queue(delay_seconds, rpi_output, value, sufix)
+            self.add_regular_output_to_queue(delay_seconds, rpi_output, value, suffix)
         if rpi_output['output_type'] == 'ledstrip':
             self.ledstrip_set_rgb(rpi_output)
         if rpi_output['output_type'] == 'pwm' and not rpi_output['pwm_temperature_linked']:
             value = self.to_int(rpi_output['default_duty_cycle'])
-            self.add_pwm_output_to_queue(delay_seconds, rpi_output, value, sufix)
+            self.add_pwm_output_to_queue(delay_seconds, rpi_output, value, suffix)
         if (rpi_output['output_type'] == 'neopixel_indirect' or rpi_output['output_type'] == 'neopixel_direct'):
             red, green, blue = self.get_color_from_rgb(rpi_output['default_neopixel_color'])
-            self.add_neopixel_output_to_queue(rpi_output, delay_seconds, red, green, blue, sufix)
+            self.add_neopixel_output_to_queue(rpi_output, delay_seconds, red, green, blue, suffix)
         if rpi_output['output_type'] == 'temp_hum_control':
             value = rpi_output['temp_ctr_default_value']
-            self.add_temperature_output_temperature_queue(delay_seconds, rpi_output, value, sufix)
+            self.add_temperature_output_temperature_queue(delay_seconds, rpi_output, value, suffix)
         self._logger.debug("Events scheduled to run %s", self.event_queue)
 
     def get_color_from_rgb(self, stringColor):
@@ -2088,7 +2088,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
         return delay_seconds
 
-    def add_neopixel_output_to_queue(self, rpi_output, delay_seconds, red, green, blue, sufix):
+    def add_neopixel_output_to_queue(self, rpi_output, delay_seconds, red, green, blue, suffix):
         gpio_pin = rpi_output['gpio_pin']
         ledCount = rpi_output['neopixel_count']
         ledBrightness = rpi_output['neopixel_brightness']
@@ -2096,7 +2096,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         neopixel_direct = rpi_output['output_type'] == 'neopixel_direct'
         index_id = self.to_int(rpi_output['index_id'])
 
-        queue_id = '{0!s}_{1!s}'.format(index_id, sufix)
+        queue_id = '{0!s}_{1!s}'.format(index_id, suffix)
 
         self._logger.debug("Scheduling neopixel output id %s for on %s delay_seconds", queue_id, delay_seconds)
 
@@ -2106,8 +2106,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
         self.event_queue.append(dict(queue_id=queue_id, thread=thread))
 
-    def add_pwm_output_to_queue(self, delay_seconds, rpi_output, value, sufix):
-        queue_id = '{0!s}_{1!s}'.format(rpi_output['index_id'], sufix)
+    def add_pwm_output_to_queue(self, delay_seconds, rpi_output, value, suffix):
+        queue_id = '{0!s}_{1!s}'.format(rpi_output['index_id'], suffix)
 
         self._logger.debug("Scheduling pwm output id %s for on %s delay_seconds", queue_id, delay_seconds)
 
@@ -2116,8 +2116,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
         self.event_queue.append(dict(queue_id=queue_id, thread=thread))
 
-    def schedule_pwm_duty_on_queue(self, delay_seconds, rpi_output, value, sufix):
-        queue_id = '{0!s}_{1!s}_{2!s}'.format(rpi_output['index_id'], "pwm_linked_temp", sufix)
+    def schedule_pwm_duty_on_queue(self, delay_seconds, rpi_output, value, suffix):
+        queue_id = '{0!s}_{1!s}_{2!s}'.format(rpi_output['index_id'], "pwm_linked_temp", suffix)
         thread = threading.Timer(delay_seconds, self.set_pwm_duty_cycle, args=[rpi_output, value, queue_id])
 
         self._logger.debug("Scheduling pwm linked temp output id %s on %s delay_seconds", queue_id, delay_seconds)
@@ -2129,8 +2129,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         if queue_id is not None:
             self.stop_queue_item(queue_id)
 
-    def add_regular_output_to_queue(self, delay_seconds, rpi_output, value, sufix):
-        queue_id = '{0!s}_{1!s}'.format(rpi_output['index_id'], sufix)
+    def add_regular_output_to_queue(self, delay_seconds, rpi_output, value, suffix):
+        queue_id = '{0!s}_{1!s}'.format(rpi_output['index_id'], suffix)
 
         self._logger.debug("Scheduling regular output id %s on %s delay_seconds", queue_id, delay_seconds)
 
@@ -2143,8 +2143,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
         self.event_queue.append(dict(queue_id=queue_id, thread=thread))
 
-    def add_temperature_output_temperature_queue(self, delay_seconds, rpi_output, value, sufix):
-        queue_id = '{0!s}_{1!s}'.format(rpi_output['index_id'], sufix)
+    def add_temperature_output_temperature_queue(self, delay_seconds, rpi_output, value, suffix):
+        queue_id = '{0!s}_{1!s}'.format(rpi_output['index_id'], suffix)
         self._logger.debug("Scheduling temperature control id %s on %s delay_seconds", queue_id, delay_seconds)
 
         thread = threading.Timer(delay_seconds, self.write_temperature_to_output,
