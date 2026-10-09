@@ -515,29 +515,9 @@ class EnclosurePlugin(
         if "blue" not in data:
             return make_response("missing blue attribute", 406)
 
-        red = data["red"]
-        green = data["green"]
-        blue = data["blue"]
-
         for rpi_output in self.rpi_outputs:
             if identifier == self.to_int(rpi_output["index_id"]):
-                led_count = rpi_output["neopixel_count"]
-                led_brightness = rpi_output["neopixel_brightness"]
-                address = rpi_output["microcontroller_address"]
-
-                neopixel_dirrect = rpi_output["output_type"] == "neopixel_direct"
-
-                self.send_neopixel_command(
-                    self.to_int(rpi_output["gpio_pin"]),
-                    led_count,
-                    led_brightness,
-                    red,
-                    green,
-                    blue,
-                    address,
-                    neopixel_dirrect,
-                    identifier,
-                )
+                self.send_neopixel_command(rpi_output, data["red"], data["green"], data["blue"])
 
         return make_response("", 204)
 
@@ -641,43 +621,23 @@ class EnclosurePlugin(
                 output["gpio_i2c_register"],
             )
 
-    def send_neopixel_command(
-        self,
-        led_pin,
-        led_count,
-        led_brightness,
-        red,
-        green,
-        blue,
-        address,
-        neopixel_dirrect,
-        index_id,
-        queue_id=None,
-    ):
+    def send_neopixel_command(self, output, red, green, blue, queue_id=None):
         """Send neopixel command.
 
         Args:
-            led_pin (int): GPIO number.
-            led_count (int): Number of LEDs.
-            led_brightness (int): Brightness from 0 to 255.
+            output (dict): NeoPixel output whose color is being set.
             red (int): Red value from 0 to 255.
             green (int): Green value from 0 to 255.
             blue (int): Blue value from 0 to 255.
-            address (int): I2C address of the microcontroller.
-            neopixel_dirrect (bool): True to drive the LEDs from the Pi GPIO, False to use the I2C microcontroller.
-            index_id (int): Index of the output whose color is being set.
             queue_id (str, optional): Scheduled queue item to remove after sending the command.
 
         """
         try:
-            for rpi_output in self.rpi_outputs:
-                if self.to_int(index_id) == self.to_int(rpi_output["index_id"]):
-                    rpi_output["neopixel_color"] = f"rgb({red},{green},{blue})"
+            output["neopixel_color"] = f"rgb({red},{green},{blue})"
 
-            if address == "":
-                address = 0
+            neopixel_direct = output["output_type"] == "neopixel_direct"
 
-            if neopixel_dirrect:
+            if neopixel_direct:
                 # rpi_ws281x requires root, so neopixel_direct.py runs with the system python
                 script = str(SCRIPTS_DIR / "neopixel_direct.py")
                 cmd = ["python3", script]
@@ -688,13 +648,20 @@ class EnclosurePlugin(
             if self._settings.get(["use_sudo"]):
                 cmd.insert(0, "sudo")
 
-            cmd += [str(led_pin), str(led_count), str(led_brightness), str(red), str(green), str(blue)]
+            cmd += [
+                str(self.to_int(output["gpio_pin"])),
+                str(output["neopixel_count"]),
+                str(output["neopixel_brightness"]),
+                str(red),
+                str(green),
+                str(blue),
+            ]
 
-            if neopixel_dirrect:
+            if neopixel_direct:
                 dma = self._settings.get(["neopixel_dma"]) or 10
                 cmd.append(str(dma))
             else:
-                cmd.append(str(address))
+                cmd.append(str(output["microcontroller_address"] or 0))
 
                 if queue_id is not None:
                     self._logger.debug("running scheduled queue id %s", queue_id)
@@ -703,7 +670,7 @@ class EnclosurePlugin(
             if queue_id is not None:
                 self.stop_queue_item(queue_id)
         except Exception:
-            self._logger.exception("Error sending neopixel command for output %s", index_id)
+            self._logger.exception("Error sending neopixel command for output %s", output["index_id"])
 
     def check_enclosure_temp(self):
         try:
@@ -2000,22 +1967,7 @@ class EnclosurePlugin(
                     self.write_pwm(gpio, value)
                 if rpi_output["output_type"] == "neopixel_indirect" or rpi_output["output_type"] == "neopixel_direct":
                     red, green, blue = self.get_color_from_rgb(rpi_output["default_neopixel_color"])
-                    led_count = rpi_output["neopixel_count"]
-                    led_brightness = rpi_output["neopixel_brightness"]
-                    address = rpi_output["microcontroller_address"]
-                    index_id = self.to_int(rpi_output["index_id"])
-                    neopixel_direct = rpi_output["output_type"] == "neopixel_direct"
-                    self.send_neopixel_command(
-                        self.to_int(rpi_output["gpio_pin"]),
-                        led_count,
-                        led_brightness,
-                        red,
-                        green,
-                        blue,
-                        address,
-                        neopixel_direct,
-                        index_id,
-                    )
+                    self.send_neopixel_command(rpi_output, red, green, blue)
                 if rpi_output["output_type"] == "temp_hum_control":
                     rpi_output["temp_ctr_set_value"] = rpi_output["temp_ctr_default_value"]
 
@@ -2059,21 +2011,14 @@ class EnclosurePlugin(
         return (shut_down_date_time - datetime.now()).total_seconds()
 
     def add_neopixel_output_to_queue(self, rpi_output, delay_seconds, red, green, blue, suffix):
-        gpio_pin = rpi_output["gpio_pin"]
-        led_count = rpi_output["neopixel_count"]
-        led_brightness = rpi_output["neopixel_brightness"]
-        address = rpi_output["microcontroller_address"]
-        neopixel_direct = rpi_output["output_type"] == "neopixel_direct"
-        index_id = self.to_int(rpi_output["index_id"])
-
-        queue_id = f"{index_id}_{suffix}"
+        queue_id = f"{self.to_int(rpi_output['index_id'])}_{suffix}"
 
         self._logger.debug("Scheduling neopixel output id %s for on %s delay_seconds", queue_id, delay_seconds)
 
         thread = threading.Timer(
             delay_seconds,
             self.send_neopixel_command,
-            args=[gpio_pin, led_count, led_brightness, red, green, blue, address, neopixel_direct, index_id, queue_id],
+            args=[rpi_output, red, green, blue, queue_id],
         )
 
         self.event_queue.append({"queue_id": queue_id, "thread": thread})
@@ -2297,26 +2242,7 @@ class EnclosurePlugin(
                     red = self.get_gcode_value(cmd, "R")
                     green = self.get_gcode_value(cmd, "G")
                     blue = self.get_gcode_value(cmd, "B")
-
-                    led_count = output["neopixel_count"]
-                    led_brightness = output["neopixel_brightness"]
-                    address = output["microcontroller_address"]
-
-                    index_id = self.to_int(output["index_id"])
-
-                    neopixel_direct = output["output_type"] == "neopixel_direct"
-
-                    self.send_neopixel_command(
-                        self.to_int(output["gpio_pin"]),
-                        led_count,
-                        led_brightness,
-                        red,
-                        green,
-                        blue,
-                        address,
-                        neopixel_direct,
-                        index_id,
-                    )
+                    self.send_neopixel_command(output, red, green, blue)
                     comm_instance._log(f"Setting NEOPIXEL output {index_id} to red: {red} green: {green} blue: {blue}")
                     return
                 if output["output_type"] == "temp_hum_control":
