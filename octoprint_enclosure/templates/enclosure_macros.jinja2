@@ -1,0 +1,55 @@
+{% macro text_control_group(value_binding, label, help="", disabled=false) %}
+    <div class="control-group">
+        <label class="control-label">{{ label }}</label>
+        <div class="controls">
+            <input type="text"
+                   class="input-block-level"
+                   data-bind="value: {{ value_binding }}"
+                   {% if disabled %}disabled{% endif %}>
+            {% if help %}<span class="help-inline">{{ help }}</span>{% endif %}
+            {% if caller is defined %}{{ caller() }}{% endif %}
+        </div>
+    </div>
+{% endmacro %}
+{% macro select_control_group(value_binding, label, options, help="") %}
+    <div class="control-group">
+        <label class="control-label">{{ label }}</label>
+        <div class="controls">
+            <select data-bind="{% if options is string %}options: {{ options }}, optionsText: 'label', optionsValue: 'index_id', {% endif %}value: {{ value_binding }}">
+                {% if options is not string %}
+                    {% for value, text in options %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
+                {% endif %}
+            </select>
+            {% if help %}<span class="help-inline">{{ help }}</span>{% endif %}
+            {% if caller is defined %}{{ caller() }}{% endif %}
+        </div>
+    </div>
+{% endmacro %}
+{% macro checkbox_control_group(checked_binding, label, help="") %}
+    <div class="control-group">
+        <div class="controls">
+            <label class="checkbox">
+                <input type="checkbox" data-bind="checked: {{ checked_binding }}">
+                {{ label }}
+            </label>
+            {% if help %}<span class="help-inline">{{ help }}</span>{% endif %}
+            {% if caller is defined %}{{ caller() }}{% endif %}
+        </div>
+    </div>
+{% endmacro %}
+{% macro radio_control_group(checked_binding, label, choices) %}
+    <div class="control-group">
+        <label class="control-label">{{ label }}</label>
+        {% for value, text in choices %}
+            <div class="controls">
+                <label class="radio">
+                    <input type="radio"
+                           value="{{ value }}"
+                           data-bind="checked: {{ checked_binding }}, attr: {name: '{{ checked_binding }}_' + $index()}">
+                    {{ text }}
+                </label>
+            </div>
+        {% endfor %}
+        {% if caller is defined %}{{ caller() }}{% endif %}
+    </div>
+{% endmacro %}
