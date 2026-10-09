@@ -288,7 +288,9 @@ $(function () {
       if (data.is_msg) {
         new PNotify({
           title: "Enclosure",
+          title_escape: true,
           text: data.msg,
+          text_escape: true,
           type: data.msg_type
         });
       }
@@ -374,14 +376,18 @@ $(function () {
           .fail(function () {
             new PNotify({
               title: "Enclosure",
+              title_escape: true,
               text: "Error setting temperature",
+              text_escape: true,
               type: "error"
             });
           });
       }else{
         new PNotify({
           title: "Enclosure",
+          title_escape: true,
           text: "Invalid set temperature",
+          text_escape: true,
           type: "error"
         });
       }
@@ -511,7 +517,9 @@ $(function () {
         .done(function () {
           new PNotify({
             title: "Enclosure",
+            title_escape: true,
             text: "GPIO Mode cleared successfully",
+            text_escape: true,
             type: "success"
           });
         });
@@ -566,7 +574,9 @@ $(function () {
         item.new_duty_cycle("")
         new PNotify({
           title: "Enclosure",
+          title_escape: true,
           text: "Duty Cycle value needs to be between 0 and 100!",
+          text_escape: true,
           type: "error"
         });
       } else {
@@ -594,7 +604,9 @@ $(function () {
       if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255 || isNaN(r) || isNaN(g) || isNaN(b)) {
         new PNotify({
           title: "Enclosure",
+          title_escape: true,
           text: "Color needs to follow the format rgb(value_red,value_green,value_blue)!",
+          text_escape: true,
           type: "error"
         });
       } else {
@@ -619,7 +631,9 @@ $(function () {
       if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255 || isNaN(r) || isNaN(g) || isNaN(b)) {
         new PNotify({
           title: "Enclosure",
+          title_escape: true,
           text: "Color needs to follow the format rgb(value_red,value_green,value_blue)!",
+          text_escape: true,
           type: "error"
         });
       } else {
