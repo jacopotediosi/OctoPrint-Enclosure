@@ -1,20 +1,12 @@
 import contextlib
+import struct
 import time
 
 import smbus2
 
-try:
-    import struct
-except ImportError:
-    import ustruct as struct
-
 
 class AM2320Error(Exception):
     """Base class for exception."""
-
-
-class AM2320DeviceNotFoundError(AM2320Error, ValueError):
-    """Device not found."""
 
 
 class AM2320ReadError(AM2320Error, RuntimeError):

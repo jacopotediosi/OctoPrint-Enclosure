@@ -106,17 +106,7 @@ $(function () {
       });
     });
 
-    self.use_sudo = ko.observable();
-    self.gcode_control = ko.observable();
-    self.neopixel_dma = ko.observable();
     self.debug = ko.observable();
-    self.debug_temperature_log = ko.observable();
-    self.use_board_pin_number = ko.observable();
-    self.filament_sensor_gcode = ko.observable();
-    self.notification_provider = ko.observable();
-    self.notification_event_name = ko.observable();
-    self.notification_api_key = ko.observable();
-    self.notifications = ko.observableArray([]);
 
     self.humidityCapableSensor = function(sensor){
       if (['11', '20', '22', '2302', 'bme280', 'bme680', 'am2320', 'aht10' , 'si7021', 'hum_raw_i2c', 'temp_raw_i2c'].indexOf(sensor) >= 0){
@@ -320,17 +310,7 @@ $(function () {
     self.bindFromSettings = function(){
       self.rpi_outputs(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs());
       self.rpi_inputs(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs());
-      self.use_sudo(self.settingsViewModel.settings.plugins.enclosure.use_sudo());
-      self.gcode_control(self.settingsViewModel.settings.plugins.enclosure.gcode_control());
-      self.neopixel_dma(self.settingsViewModel.settings.plugins.enclosure.neopixel_dma());
       self.debug(self.settingsViewModel.settings.plugins.enclosure.debug());
-      self.debug_temperature_log(self.settingsViewModel.settings.plugins.enclosure.debug_temperature_log());
-      self.use_board_pin_number(self.settingsViewModel.settings.plugins.enclosure.use_board_pin_number());
-      self.filament_sensor_gcode(self.settingsViewModel.settings.plugins.enclosure.filament_sensor_gcode());
-      self.notification_provider(self.settingsViewModel.settings.plugins.enclosure.notification_provider());
-      self.notification_event_name(self.settingsViewModel.settings.plugins.enclosure.notification_event_name());
-      self.notification_api_key(self.settingsViewModel.settings.plugins.enclosure.notification_api_key());
-      self.notifications(self.settingsViewModel.settings.plugins.enclosure.notifications());
     };
 
     self.onBeforeBinding = function () {
@@ -351,12 +331,6 @@ $(function () {
 
     self.onSettingsHidden = function () {
       self.settingsOpen = false;
-    };
-
-    self.getRegularOutputs = function () {
-      return self.rpi_outputs().filter(function (rpi_outputs) {
-        return rpi_outputs.output_type == 'regular';
-      });
     };
 
     self.setTemperature = function (item, form) {

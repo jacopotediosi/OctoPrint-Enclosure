@@ -32,27 +32,6 @@ Gnd   Gnd
 +5v   Vcc
 DAT   Din
 CLK   Cin
-
-Place this file in the same directory as your code.
-In your code, import the file:
-    from ledstrip import LEDStrip
-
-Create a new LED Strip which uses your chosen pins (CLK and DAT) with, e.g.:
-    CLK = 17
-    DAT = 18
-    strip = LEDStrip(CLK, DAT)
-
-Set the colour of the LED strip with
-    strip.setcolor(red, green, blue):
-
-The following methods are public:
-    setcolourrgb(r, g, b) - Sets the LED strip to colour rgb where r, g, b are in the range 0 to 255
-    setcolourwhite() - Sets the strip to white
-    setcolourred() - Sets the strip to Red
-    setcolourgreen() - Sets the strip to Green
-    setcolourblue() - Sets the strip to Blue
-    setcolouroff() - Turns the strip off
-    setcolourhex('hex') - Sets the LED strip to the hex colour 'hex' in range '000000' to 'FFFFFF'
 """
 
 import time
@@ -112,34 +91,3 @@ class LEDStrip:
         dx |= red
 
         self.__senddata(dx)
-
-    def setcolourwhite(self):
-        self.setcolourrgb(255, 255, 255)
-
-    def setcolouroff(self):
-        self.setcolourrgb(0, 0, 0)
-
-    def setcolourred(self):
-        self.setcolourrgb(255, 0, 0)
-
-    def setcolourgreen(self):
-        self.setcolourrgb(0, 255, 0)
-
-    def setcolourblue(self):
-        self.setcolourrgb(0, 0, 255)
-
-    def setcolourhex(self, hex_string):
-        print("Hex")
-        try:
-            hexcolour = int(hex_string, 16)
-            red = int((hexcolour & 255 * 255 * 255) / (255 * 255))
-            green = int((hexcolour & 255 * 255) / 255)
-            blue = hexcolour & 255
-            self.setcolourrgb(red, green, blue)
-        except Exception:
-            hexcolour = 0
-            print(f"Error converting Hex input ({hex_string}) a colour.")
-
-    def cleanup(self):
-        self.setcolouroff()
-        GPIO.cleanup()

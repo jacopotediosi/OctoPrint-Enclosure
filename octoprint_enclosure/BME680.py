@@ -17,24 +17,6 @@ def get_gas_reference():
             return gas_reference / readings
 
 
-def calculate_iaq(score):
-    iaq_text = "Air quality is "
-    score = float((100 - score) * 5)
-    if score >= 301:
-        iaq_text = iaq_text + "Hazardous"
-    elif score >= 201 and score <= 300:
-        iaq_text = iaq_text + "Very Unhealthy"
-    elif score >= 176 and score <= 200:
-        iaq_text = iaq_text + "Unhealthy"
-    elif score >= 151 and score <= 175:
-        iaq_text = iaq_text + "Unhealthy for Sensitive Groups"
-    elif score >= 51 and score <= 150:
-        iaq_text = iaq_text + "Moderate"
-    elif score >= 00 and score <= 50:
-        iaq_text = iaq_text + "Good"
-    return iaq_text
-
-
 if __name__ == "__main__":
     try:
         sensor = bme680.BME680(bme680.I2C_ADDR_PRIMARY)
@@ -44,9 +26,6 @@ if __name__ == "__main__":
         except Exception as ex:
             print(ex)
             sys.exit(-1)
-
-    hum_weighting = 0.25  # so hum effect is 25% of the total air quality score
-    gas_weighting = 0.75  # so gas effect is 75% of the total air quality score
 
     sensor.set_humidity_oversample(bme680.OS_2X)
     sensor.set_pressure_oversample(bme680.OS_2X)
@@ -62,9 +41,7 @@ if __name__ == "__main__":
     sensor.select_gas_heater_profile(0)
     sensor.set_gas_status(bme680.ENABLE_GAS_MEAS)
 
-    gas_reference = float(250000)
     hum_reference = float(40)
-    getgasreference_count = 0
 
     # Calculate humidity contribution to IAQ index
     current_humidity = float(humidity)

@@ -230,7 +230,10 @@ class EnclosurePlugin(
             self._settings.set(["rpi_inputs"], [])
             self.rpi_inputs = self._settings.get(["rpi_inputs"])
 
-    # Scan all configured inputs and outputs and return the pin value
+    # ~~ Blueprintplugin mixin
+    def is_blueprint_csrf_protected(self):
+        return True
+
     @octoprint.plugin.BlueprintPlugin.route("/ReadPin/<int:identifier>", methods=["GET"])
     def read_single_pin(self, identifier):
         resp = []
@@ -283,10 +286,6 @@ class EnclosurePlugin(
                 val = "GPIO pin not initialized."
             resp.append({"Configured_As": configured_as, "GPIO_Pin": pin, "Active_Low": active_low, "State": val})
         return jsonify(resp)
-
-    # ~~ Blueprintplugin mixin
-    def is_blueprint_csrf_protected(self):
-        return True
 
     @octoprint.plugin.BlueprintPlugin.route("/inputs", methods=["GET"])
     def get_inputs(self):
