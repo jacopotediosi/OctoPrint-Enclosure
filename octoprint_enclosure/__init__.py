@@ -1,6 +1,5 @@
 import contextlib
 import copy
-import inspect
 import math
 import struct
 import sys
@@ -597,8 +596,12 @@ class EnclosurePlugin(
             if active_low is None and state:
                 return state
 
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception(
+                "Error reading on i2c address %s, reg %s",
+                output["gpio_i2c_address"],
+                output["gpio_i2c_register_status"],
+            )
 
         return (not state) if active_low else state
 
@@ -631,14 +634,11 @@ class EnclosurePlugin(
             if queue_id is not None:
                 self.stop_queue_item(queue_id)
 
-        except Exception as ex:
-            self._logger.warning(
-                "An exception of type %s occurred on %s when writing on i2c address %s, reg %s. Arguments:\n%r",
-                type(ex).__name__,
-                inspect.currentframe().f_code.co_name,
+        except Exception:
+            self._logger.exception(
+                "Error writing on i2c address %s, reg %s",
                 output["gpio_i2c_address"],
                 output["gpio_i2c_register"],
-                ex.args,
             )
 
     def send_neopixel_command(
@@ -702,8 +702,8 @@ class EnclosurePlugin(
             Popen(cmd)
             if queue_id is not None:
                 self.stop_queue_item(queue_id)
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error sending neopixel command for output %s", index_id)
 
     def check_enclosure_temp(self):
         try:
@@ -737,8 +737,8 @@ class EnclosurePlugin(
                     self.mqtt_sensor_topic = self.mqtt_root_topic + "/" + sensor["label"]
                     self.mqtt_message = {"temperature": temp, "humidity": hum}
                     self.mqtt_publish(self.mqtt_sensor_topic, self.mqtt_message)
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error checking enclosure temperature")
 
     def toggle_output(self, output_index, first_run=False):
         for output in [item for item in self.rpi_outputs if item["index_id"] == output_index]:
@@ -895,8 +895,8 @@ class EnclosurePlugin(
                     "rpi_output_temp_hum_ctrl": temp_control_status,
                 },
             )
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error sending outputs status to the UI")
 
     def update_ui_inputs(self):
         try:
@@ -911,8 +911,8 @@ class EnclosurePlugin(
                     value = sensor["filament_sensor_enabled"]
                     sensor_status.append({"index_id": index, "filament_sensor_enabled": value})
             self._plugin_manager.send_plugin_message(self._identifier, {"filament_sensor_status": sensor_status})
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error sending input status to the UI")
 
     def get_sensor_data(self, sensor):
         try:
@@ -969,8 +969,8 @@ class EnclosurePlugin(
                 temp = None
                 hum = None
                 airquality = 0
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error reading sensor %s", sensor["label"])
         else:
             if temp != -1 and hum != -1 and airquality != -1:
                 temp = (
@@ -1051,15 +1051,8 @@ class EnclosurePlugin(
 
                 return (fval1, fval2)
 
-        except Exception as ex:
-            self._logger.warning(
-                "An exception of type %s occurred on %s when reading on i2c address %s, reg %s. Arguments:\n%r",
-                type(ex).__name__,
-                inspect.currentframe().f_code.co_name,
-                i2caddr,
-                i2creg,
-                ex.args,
-            )
+        except Exception:
+            self._logger.exception("Error reading on i2c address %s, reg %s", i2caddr, i2creg)
             return str(-1)
 
     def read_mcp_temp(self, address, i2cbus):
@@ -1073,9 +1066,8 @@ class EnclosurePlugin(
             if self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("MCP9808 result: %s", stdout)
             return self.to_float(stdout.decode("utf-8").strip())
-        except Exception as ex:
-            self._logger.info("Failed to execute python scripts, try disabling use SUDO on advanced section.")
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Failed to read MCP9808 sensor")
             return 0
 
     def read_dht_temp(self, sensor, pin):
@@ -1091,11 +1083,8 @@ class EnclosurePlugin(
                 self._logger.debug("Dht result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
-        except Exception as ex:
-            self._logger.info(
-                "Failed to execute python scripts, try disabling use SUDO on advanced section of the plugin.",
-            )
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Failed to read DHT sensor, try disabling Use SUDO in the advanced options")
             return (0, 0)
 
     def read_dht20_temp(self, address, i2cbus):
@@ -1111,11 +1100,8 @@ class EnclosurePlugin(
                 self._logger.debug("DHT20 result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
-        except Exception as ex:
-            self._logger.info(
-                "Failed to execute python scripts, try disabling use SUDO on advanced section of the plugin.",
-            )
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Failed to read DHT20 sensor, try disabling Use SUDO in the advanced options")
             return (0, 0)
 
     def read_bme280_temp(self, address):
@@ -1138,11 +1124,8 @@ class EnclosurePlugin(
 
             temp, hum = output.split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
-        except Exception as ex:
-            self._logger.info(
-                "Failed to execute python scripts, try disabling use SUDO on advanced section of the plugin.",
-            )
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Failed to read BME280 sensor, try disabling Use SUDO in the advanced options")
             return (0, 0)
 
     def read_bme680_temp(self, address):
@@ -1164,11 +1147,8 @@ class EnclosurePlugin(
                     self._logger.debug("BME680 result: %s", output)
             temp, hum, airq = output.split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()), self.to_float(airq.strip()))
-        except Exception as ex:
-            self._logger.info(
-                "Failed to execute python scripts, try disabling use SUDO on advanced section of the plugin.",
-            )
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Failed to read BME680 sensor, try disabling Use SUDO in the advanced options")
             return (0, 0, 0)
 
     def read_am2320_temp(self):
@@ -1184,11 +1164,8 @@ class EnclosurePlugin(
                 self._logger.debug("AM2320 result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
-        except Exception as ex:
-            self._logger.info(
-                "Failed to execute python scripts, try disabling use SUDO on advanced section of the plugin.",
-            )
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Failed to read AM2320 sensor, try disabling Use SUDO in the advanced options")
             return (0, 0)
 
     def read_aht10_temp(self, address, i2cbus):
@@ -1208,20 +1185,16 @@ class EnclosurePlugin(
                     self._logger.debug("AHT10 result: %s", output)
             temp, hum = output.split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
-        except Exception as ex:
-            self._logger.info(
-                "Failed to execute python scripts, try disabling use SUDO on advanced section of the plugin.",
-            )
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Failed to read AHT10 sensor, try disabling Use SUDO in the advanced options")
             return (0, 0)
 
     def read_rpi_temp(self):
         try:
             pitemp = PiTemp()
             temp = pitemp.get_temp()
-        except Exception as ex:
-            self._logger.info("Failed to get pi cpu temperature")
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Failed to read Raspberry Pi CPU temperature")
             return 0
         else:
             if self._settings.get(["debug_temperature_log"]) is True:
@@ -1241,11 +1214,8 @@ class EnclosurePlugin(
                 self._logger.debug("SI7021 result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
-        except Exception as ex:
-            self._logger.info(
-                "Failed to execute python scripts, try disabling use SUDO on advanced section of the plugin.",
-            )
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Failed to read SI7021 sensor, try disabling Use SUDO in the advanced options")
             return (0, 0)
 
     def read_18b20_temp(self, serial_number):
@@ -1284,9 +1254,8 @@ class EnclosurePlugin(
             if self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("TMP102 result: %s", stdout)
             return self.to_float(stdout.decode("utf-8").strip())
-        except Exception as ex:
-            self._logger.info("Failed to execute python scripts, try disabling use SUDO on advanced section.")
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Failed to read TMP102 sensor")
             return 0
 
     def read_max31855_temp(self, address):
@@ -1300,9 +1269,8 @@ class EnclosurePlugin(
             if self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("MAX31855 result: %s", stdout)
             return self.to_float(stdout.decode("utf-8").strip())
-        except Exception as ex:
-            self._logger.info("Failed to execute python scripts, try disabling use SUDO on advanced section.")
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Failed to read MAX31855 sensor")
             return 0
 
     def handle_pwm_linked_temperature(self):
@@ -1338,8 +1306,8 @@ class EnclosurePlugin(
 
                 self.write_pwm(gpio_pin, self.constrain(calculated_duty, 0, 100))
 
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error handling temperature linked PWM outputs")
 
     def get_linked_temp_sensor_data(self, linked_id):
         try:
@@ -1423,17 +1391,8 @@ class EnclosurePlugin(
                     for control_status in self.temp_hum_control_status:
                         if control_status["index_id"] == temp_hum_control["index_id"]:
                             control_status["status"] = current_status
-        except Exception as ex:
-            self.log_error(ex)
-
-    def log_error(self, ex):
-        self._logger.warning(
-            "An exception of type %s occurred on %s. Arguments:\n%r",
-            type(ex).__name__,
-            inspect.currentframe().f_back.f_code.co_name,
-            ex.args,
-            exc_info=ex,
-        )
+        except Exception:
+            self._logger.exception("Error handling temperature/humidity control")
 
     def setup_gpio(self):
         try:
@@ -1475,8 +1434,8 @@ class EnclosurePlugin(
                     {"is_msg": True, "msg": warn_msg, "msg_type": "error"},
                 )
             GPIO.setwarnings(False)
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error setting up GPIO mode")
 
     def clear_gpio(self):
         try:
@@ -1502,15 +1461,15 @@ class EnclosurePlugin(
                 with contextlib.suppress(Exception):
                     GPIO.remove_event_detect(self.to_int(gpio_in["gpio_pin"]))
                 GPIO.cleanup(self.to_int(gpio_in["gpio_pin"]))
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error clearing GPIO")
 
     def clear_channel(self, channel):
         try:
             GPIO.cleanup(self.to_int(channel))
             self._logger.debug("Clearing channel %s", channel)
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error clearing channel %s", channel)
 
     def generate_temp_hum_control_status(self):
         self.temp_hum_control_status = [
@@ -1597,8 +1556,8 @@ class EnclosurePlugin(
                 else:
                     pull_resistor = GPIO.PUD_OFF
                 GPIO.setup(gpio_pin, GPIO.IN, pull_up_down=pull_resistor)
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error configuring GPIO")
 
     def handle_filamment_detection(self, channel):
         try:
@@ -1641,8 +1600,8 @@ class EnclosurePlugin(
                                 self.send_notification(msg)
                     else:
                         self._logger.info("Prevented end of filament detection, filament sensor timeout not elapsed.")
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error handling filament detection on channel %s", channel)
 
     def start_filament_detection(self):
         self.stop_filament_detection()
@@ -1674,8 +1633,8 @@ class EnclosurePlugin(
                         callback=self.handle_filamment_detection,
                         bouncetime=200,
                     )
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error starting filament detection")
 
     def stop_filament_detection(self):
         try:
@@ -1691,15 +1650,15 @@ class EnclosurePlugin(
                 ),
             ):
                 GPIO.remove_event_detect(self.to_int(filament_sensor["gpio_pin"]))
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error stopping filament detection")
 
     def cancel_all_events_on_queue(self):
         for task in self.event_queue:
             try:
                 task["thread"].cancel()
             except Exception:
-                self._logger.warning("Failed to stop task %s.", task)
+                self._logger.exception("Failed to stop task %s", task)
 
     def handle_initial_gpio_control(self):
         try:
@@ -1722,8 +1681,8 @@ class EnclosurePlugin(
                         else:
                             val = GPIO.LOW if rpi_input["controlled_io_set_value"] == "low" else GPIO.HIGH
                             self.write_gpio(self.to_int(rpi_output["gpio_pin"]), val)
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error handling initial GPIO control")
 
     def shell_command(self, command):
         try:
@@ -1732,8 +1691,8 @@ class EnclosurePlugin(
                 self._identifier,
                 {"is_msg": True, "msg": stdout, "msg_type": "success"},
             )
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Could not execute shell script: %s", command)
             self._plugin_manager.send_plugin_message(
                 self._identifier,
                 {"is_msg": True, "msg": "Could not execute shell script", "msg_type": "error"},
@@ -1787,8 +1746,8 @@ class EnclosurePlugin(
                     if rpi_output["output_type"] == "shell_output":
                         command = rpi_output["shell_script"]
                         self.shell_command(command)
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error handling GPIO control on channel %s", channel)
 
     def send_gcode_command(self, command):
         for line in command.split("\n"):
@@ -1847,8 +1806,8 @@ class EnclosurePlugin(
                                 + str(rpi_input["label"])
                             )
                             self.send_notification(msg)
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error handling printer action on channel %s", channel)
 
     def write_gpio(self, gpio, value, queue_id=None):
         try:
@@ -1859,14 +1818,8 @@ class EnclosurePlugin(
             self.update_ui()
             if queue_id is not None:
                 self.stop_queue_item(queue_id)
-        except Exception as ex:
-            self._logger.warning(
-                "An exception of type %s occurred on %s when writing on pin %s. Arguments:\n%r",
-                type(ex).__name__,
-                inspect.currentframe().f_code.co_name,
-                gpio,
-                ex.args,
-            )
+        except Exception:
+            self._logger.exception("Error writing on pin %s", gpio)
 
     def write_pwm(self, gpio, pwm_value, queue_id=None):
         try:
@@ -1885,8 +1838,8 @@ class EnclosurePlugin(
                     if queue_id is not None:
                         self.stop_queue_item(queue_id)
                     break
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error writing PWM on pin %s", gpio)
 
     def get_output_list(self):
         return [
@@ -1921,8 +1874,8 @@ class EnclosurePlugin(
                         self._logger.info("Error: Could not parse server response. Event not sent")
                     for err in j["errors"]:
                         self._logger.info("Error: %s", err["message"])
-        except Exception as ex:
-            self.log_error(ex)
+        except Exception:
+            self._logger.exception("Error sending notification")
 
     def ifttt_notification(self, message, event, api_key):
         url = f"https://maker.ifttt.com/trigger/{event}/with/key/{api_key}/"
@@ -2220,13 +2173,8 @@ class EnclosurePlugin(
             if queue_id is not None:
                 self.stop_queue_item(queue_id)
 
-        except Exception as ex:
-            self._logger.warning(
-                "An exception of type %s occurred on %s. Arguments:\n%r",
-                type(ex).__name__,
-                inspect.currentframe().f_code.co_name,
-                ex.args,
-            )
+        except Exception:
+            self._logger.exception("Error setting temperature on output %s", rpi_output_index)
 
     def get_startup_delay_from_output(self, rpi_output):
         start_up_time = rpi_output["startup_time"]
