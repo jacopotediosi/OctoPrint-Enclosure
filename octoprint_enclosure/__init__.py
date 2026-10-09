@@ -2486,6 +2486,9 @@ class EnclosurePlugin(
             },
         ]
 
+    def is_template_autoescaped(self):
+        return True
+
     # ~~ AssetPlugin mixin
     def get_assets(self):
         return {
