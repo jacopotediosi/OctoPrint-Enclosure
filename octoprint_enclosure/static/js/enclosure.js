@@ -106,8 +106,6 @@ $(function () {
       });
     });
 
-    self.debug = ko.observable();
-
     self.humidityCapableSensor = function (sensor) {
       return ['11', '20', '22', '2302', 'bme280', 'bme680', 'am2320', 'aht10', 'si7021', 'hum_raw_i2c', 'temp_raw_i2c'].indexOf(sensor) >= 0;
     };
@@ -290,7 +288,6 @@ $(function () {
     self.bindFromSettings = function(){
       self.rpi_outputs(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs());
       self.rpi_inputs(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs());
-      self.debug(self.settingsViewModel.settings.plugins.enclosure.debug());
     };
 
     self.onBeforeBinding = function () {

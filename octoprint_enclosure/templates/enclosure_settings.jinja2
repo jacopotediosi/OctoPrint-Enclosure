@@ -386,7 +386,7 @@
         {% endcall %}
         {{ text_control_group("neopixel_dma", _("Neopixel DMA Channel"), "DMA channel used on direct control of neopixel.") }}
         {{ checkbox_control_group("debug", _("Enable debug info"), "Log additional information on octoprint log to help trouble shoot the plugin") }}
-        <div data-bind="if: $root.debug()">
+        <div data-bind="if: debug()">
             {{ checkbox_control_group("debug_temperature_log", _("Enable temperature debug info"), "Log additional temperature readings on octoprint log to help trouble shoot the plugin") }}
         </div>
         {{ checkbox_control_group("use_board_pin_number", _("Use Board Pin #"), "Use BOARD pin numbers instead of BCM pin numbers") }}
