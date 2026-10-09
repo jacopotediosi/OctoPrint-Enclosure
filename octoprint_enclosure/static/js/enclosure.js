@@ -108,24 +108,14 @@ $(function () {
 
     self.debug = ko.observable();
 
-    self.humidityCapableSensor = function(sensor){
-      if (['11', '20', '22', '2302', 'bme280', 'bme680', 'am2320', 'aht10' , 'si7021', 'hum_raw_i2c', 'temp_raw_i2c'].indexOf(sensor) >= 0){
-        return true;
-      }
-      return false;
+    self.humidityCapableSensor = function (sensor) {
+      return ['11', '20', '22', '2302', 'bme280', 'bme680', 'am2320', 'aht10', 'si7021', 'hum_raw_i2c', 'temp_raw_i2c'].indexOf(sensor) >= 0;
     };
 
-    self.isRegularOutput = function(index_id){
-      return_value = false;
-      if (typeof index_id != 'undefined'){
-        self.settingsViewModel.settings.plugins.enclosure.rpi_outputs().forEach(function (output) {
-          if (output.index_id() == index_id && output.output_type() == "regular") {
-            return_value = true;
-            return false;
-          }
-        });
-      }
-      return return_value;
+    self.isRegularOutput = function (index_id) {
+      return self.settingsViewModel.settings.plugins.enclosure.rpi_outputs().some(function (output) {
+        return output.index_id() == index_id && output.output_type() == "regular";
+      });
     };
 
     self.linkedTemperatureControl = function(sensor_index){
@@ -140,26 +130,16 @@ $(function () {
       });
     };
 
-    self.hasAnySensorWithHumidity = function(){
-      return_value = false;
-      self.rpi_inputs_temperature_sensors().forEach(function (sensor) {
-        if (self.humidityCapableSensor(sensor.temp_sensor_type())) {
-          return_value = true;
-          return false;
-        }
+    self.hasAnySensorWithHumidity = function () {
+      return self.rpi_inputs_temperature_sensors().some(function (sensor) {
+        return self.humidityCapableSensor(sensor.temp_sensor_type());
       });
-      return return_value;
     };
 
-    self.hasAnyTemperatureControl = function(){
-      return_value = false
-      self.rpi_outputs().forEach(function (output) {
-        if (output.output_type()=="temp_hum_control") {
-          return_value = true
-          return false;
-        }
+    self.hasAnyTemperatureControl = function () {
+      return self.rpi_outputs().some(function (output) {
+        return output.output_type() == "temp_hum_control";
       });
-      return return_value;
     };
 
     self.onDataUpdaterPluginMessage = function (plugin, data) {
