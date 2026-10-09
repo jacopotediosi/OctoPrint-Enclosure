@@ -286,6 +286,9 @@ class EnclosurePlugin(
         return Response(json.dumps(resp), mimetype="application/json")
 
     # ~~ Blueprintplugin mixin
+    def is_blueprint_csrf_protected(self):
+        return True
+
     @octoprint.plugin.BlueprintPlugin.route("/inputs", methods=["GET"])
     def get_inputs(self):
         inputs = []
