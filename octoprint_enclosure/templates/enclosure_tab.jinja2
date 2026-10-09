@@ -36,7 +36,7 @@
                 <td class="humidity_actual"
                     data-bind="visible: first && $root.hasAnySensorWithHumidity() && !$root.humidityCapableSensor(sensor.temp_sensor_type()), attr: {rowspan: rowspan}">N/A</td>
                 <th class="temp_hum_control"
-                    data-bind="visible: $root.hasAnyTemperatureControl(), html: control && control.label(), attr: {title: control && control.label()}">
+                    data-bind="visible: $root.hasAnyTemperatureControl(), text: control && control.label(), attr: {title: control && control.label()}">
                 </th>
                 <td class="temperature_target"
                     data-bind="visible: $root.hasAnyTemperatureControl(), with: control">
@@ -82,7 +82,7 @@
     <div style="margin-bottom: 20px">
         <div data-bind="if: output_type() == 'regular'">
             <h4>
-                <span data-bind="html: label"></span>
+                <span data-bind="text: label"></span>
                 <span class="badge">regular gpio</span>
                 <span class="badge help-inline"
                       data-bind="text: gpio_status() ? 'on' : 'off', css: {'badge-success': gpio_status(), 'badge-important': !gpio_status()}"></span>
@@ -95,7 +95,7 @@
         </div>
         <div data-bind="if: output_type() == 'ledstrip'">
             <h4>
-                <span data-bind="html: label"></span>
+                <span data-bind="text: label"></span>
                 <span class="badge">ledstrip</span>
             </h4>
             <div class="input-append ledstrip-div">
@@ -112,7 +112,7 @@
         </div>
         <div data-bind="if: output_type() == 'gcode_output'">
             <h4>
-                <span data-bind="html: label"></span>
+                <span data-bind="text: label"></span>
                 <span class="badge">gcode output</span>
             </h4>
             <div>
@@ -123,7 +123,7 @@
         </div>
         <div data-bind="if: output_type() == 'shell_output'">
             <h4>
-                <span data-bind="html: label"></span>
+                <span data-bind="text: label"></span>
                 <span class="badge">Shell Script</span>
             </h4>
             <div>
@@ -134,7 +134,7 @@
         </div>
         <div data-bind="if: output_type() == 'pwm'">
             <h4>
-                <span data-bind="html: label"></span>
+                <span data-bind="text: label"></span>
                 <span class="badge">pwm</span>
             </h4>
             <div class="input-append">
@@ -150,7 +150,7 @@
         </div>
         <div data-bind="if: output_type() == 'neopixel_direct' || output_type() == 'neopixel_indirect'">
             <h4>
-                <span data-bind="html: label"></span>
+                <span data-bind="text: label"></span>
                 <span class="badge">neopixel</span>
             </h4>
             <div class="input-append neopixel-div">
@@ -167,7 +167,7 @@
         </div>
         <div data-bind="if: output_type() == 'temp_hum_control'">
             <h4>
-                <span data-bind="html: label"></span>
+                <span data-bind="text: label"></span>
                 <span class="badge">temperature control</span>
                 <span class="badge badge-warning"
                       data-bind="visible: temp_ctr_type() == 'heater'">Heater</span>
@@ -206,7 +206,7 @@
 </div>
 <div data-bind="foreach: $root.tab_filament_sensors()">
     <h4>
-        <span data-bind="html: label"></span>
+        <span data-bind="text: label"></span>
         <span class="badge">filament sensor</span>
         <a href="#"
            data-bind="visible: $root.isUser(), click: $root.switchFilamentSensor, css: {'fa-toggle-on': filament_sensor_enabled(), 'fa-toggle-off': !filament_sensor_enabled()}, attr: {title: filament_sensor_enabled() ? 'Disable Filament Sensor' : 'Enable Filament Sensor'}"

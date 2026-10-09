@@ -10,7 +10,7 @@
     data-bind="foreach: $root.navbar_temperature_sensors()">
     <li>
         <a>
-            <span data-bind="html: label"></span>
+            <span data-bind="text: label"></span>
             <span>
                 <span data-bind="text: temp_sensor_temp, attr: {title: temp_sensor_temp}"></span>
                 <span class="add-on" data-bind="text: use_fahrenheit() ? '°F' : '°C'"></span>

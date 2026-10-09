@@ -9,7 +9,7 @@
 <ul class="dropdown-menu" data-bind="foreach: $root.navbar_outputs()">
     <li data-bind="if: output_type() == 'regular'">
         <a href="#" data-bind="click: $root.handleIO">
-            <span data-bind="html: label"></span>
+            <span data-bind="text: label"></span>
             <span class="badge help-inline"
                   data-bind="text: gpio_status() ? 'on' : 'off', css: {'badge-success': gpio_status(), 'badge-important': !gpio_status()}"></span>
         </a>
@@ -17,13 +17,13 @@
     <li data-bind="if: output_type() == 'gcode_output', css: {disabled: !$root.isOperational()}">
         <a href="#"
            data-bind="click: $root.isOperational() ? $root.handleGcode : function () {}">
-            <span data-bind="html: label"></span>
+            <span data-bind="text: label"></span>
             <span class="badge" data-bind="css: {'badge-info': $root.isOperational()}">gcode</span>
         </a>
     </li>
     <li data-bind="if: output_type() == 'shell_output'">
         <a href="#" data-bind="click: $root.handleShellOutput">
-            <span data-bind="html: label"></span>
+            <span data-bind="text: label"></span>
             <span class="badge badge-info">shell</span>
         </a>
     </li>
