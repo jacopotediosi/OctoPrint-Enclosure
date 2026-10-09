@@ -48,7 +48,7 @@
                                    min="0"
                                    max="999"
                                    class="input-mini input-nospin"
-                                   data-bind="enable: $root.isUser(), value: temp_ctr_new_set_value, valueUpdate: 'input', attr: {placeholder:$root.getCleanTemperature(temp_ctr_set_value()), id: 'temp_control_' + index_id()}">
+                                   data-bind="enable: $root.isUser(), value: temp_ctr_new_set_value, valueUpdate: 'input', attr: {placeholder:$root.getCleanTemperature(temp_ctr_set_value())}">
                             <span class="add-on"
                                   data-bind="text: temp_ctr_type() == 'dehumidifier' ? '%' : ($parent.sensor.use_fahrenheit() ? '°F' : '°C')"></span>
                         </div>
@@ -67,8 +67,7 @@
                             </button>
                             <ul class="dropdown-menu">
                                 <li>
-                                    <a href="#"
-                                       data-bind="enable: $root.isUser(), click: $root.turnOffHeater">{{ _("Off") }}</a>
+                                    <a href="#" data-bind="click: $root.turnOffHeater">{{ _("Off") }}</a>
                                 </li>
                             </ul>
                         </div>

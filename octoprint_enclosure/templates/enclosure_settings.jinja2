@@ -6,9 +6,11 @@
 <p>Example of possible outputs are GPIO pins, neopixel LED's, temperature control or sending gcode to the printer.</p>
 <form class="form-horizontal">
     <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.rpi_outputs">
-        <!-- <div class="controls">
-    <h5>IO <span data-bind="text: $index"> </span></h5>
-  </div> -->
+        <!--
+            <div class="controls">
+                <h5>IO <span data-bind="text: $index"> </span></h5>
+            </div>
+        -->
         <div class="control-group">
             <label class="control-label">{{ _("Output Type") }}</label>
             <div class="controls">
@@ -121,7 +123,7 @@
                           data-bind="visible: output_type() != 'neopixel_indirect'">GPIO number that will be controlled.</span>
                     <span class="help-inline"
                           data-bind="visible: output_type() == 'neopixel_indirect'">
-                        <span class="label label-danger">Attention</span> Neopixel requires a microcontroller (ex: arduino)
+                        <span class="label label-important">Attention</span> Neopixel requires a microcontroller (ex: arduino)
                         connected to I2C bus. This is the pin on the
                         microcontroller that is connected to the Neopixel.
                     </span>
@@ -227,7 +229,7 @@
                         </div>
                     </div>
                 </div>
-                <div data-bind="if: $data.auto_startup, attr: {id: 'auto_startupField_' + $index() }">
+                <div data-bind="if: $data.auto_startup">
                     <div class="control-group">
                         <label class="control-label">{{ _("Startup Delay / Hour") }}</label>
                         <div class="controls">
@@ -260,20 +262,18 @@
                         <span class="help-inline">Choose if output should turn off automatically when print is canceled or fails</span>
                     </div>
                 </div>
-                <div data-bind="attr: {id: 'auto_shutdownField_' + $index() }">
-                    <div class="control-group">
-                        <label class="control-label">{{ _("Shutdown Delay / Hour") }}</label>
-                        <div class="controls">
-                            <input type="text"
-                                   class="input-block-level"
-                                   data-bind="value: shutdown_time">
-                            <span class="help-inline">Time delay in seconds to turn off GPIO when print starts OR exact time that the event should happen, note that
-                                events will only be scheduled after a print starts, time should be formatted as HH:MM on a 24 hours format, don't
-                            forget to check timezone of your raspberry pi.</span>
-                            <span class="label label-important">Attention</span>
-                            <span> Hour schedule does not work with
-                                <b>Link PWM to Temperature</b> option</span>
-                        </div>
+                <div class="control-group">
+                    <label class="control-label">{{ _("Shutdown Delay / Hour") }}</label>
+                    <div class="controls">
+                        <input type="text"
+                               class="input-block-level"
+                               data-bind="value: shutdown_time">
+                        <span class="help-inline">Time delay in seconds to turn off GPIO when print starts OR exact time that the event should happen, note that
+                            events will only be scheduled after a print starts, time should be formatted as HH:MM on a 24 hours format, don't
+                        forget to check timezone of your raspberry pi.</span>
+                        <span class="label label-important">Attention</span>
+                        <span> Hour schedule does not work with
+                            <b>Link PWM to Temperature</b> option</span>
                     </div>
                 </div>
             </div>
@@ -311,65 +311,64 @@
         </div>
         <div data-bind="if: gpio_i2c_enabled()">
             <div class="control-group">
-                <label class="control-label" for="settings-enclosure-gpio-i2c-bus">{{ _("I2C Bus") }}</label>
+                <label class="control-label"
+                       data-bind="attr: {'for': 'settings-enclosure-output-gpio-i2c-bus-' + $index() }">{{ _("I2C Bus") }}</label>
                 <div class="controls">
                     <input type="text"
                            class="input-block-level"
-                           data-bind="value: gpio_i2c_bus"
-                           id="settings-enclosure-gpio-i2c-bus">
+                           data-bind="value: gpio_i2c_bus, attr: {id: 'settings-enclosure-output-gpio-i2c-bus-' + $index() }">
                     <span class="help-inline">This value should remain 1 unless you've used dtoverlay=i2c-gpio or you are using another bus.
                     </span>
                 </div>
             </div>
             <div class="control-group">
-                <label class="control-label" for="settings-enclosure-gpio-i2c-addr">{{ _("I2C Address") }}</label>
+                <label class="control-label"
+                       data-bind="attr: {'for': 'settings-enclosure-output-gpio-i2c-address-' + $index() }">{{ _("I2C Address") }}</label>
                 <div class="controls">
                     <input type="text"
                            class="input-block-level"
-                           data-bind="value: gpio_i2c_address"
-                           id="settings-enclosure-gpio-i2c-addr">
+                           data-bind="value: gpio_i2c_address, attr: {id: 'settings-enclosure-output-gpio-i2c-address-' + $index() }">
                     <span class="help-inline">I2C address in HEX value, you can find it by running
                         <code>i2cdetect -y 1</code> on your Raspberry Pi</span>
                 </div>
             </div>
             <div class="control-group">
-                <label class="control-label" for="settings-enclosure-gpio-i2c-reg">{{ _("I2C Register") }}</label>
+                <label class="control-label"
+                       data-bind="attr: {'for': 'settings-enclosure-output-gpio-i2c-register-' + $index() }">{{ _("I2C Register") }}</label>
                 <div class="controls">
                     <input type="text"
                            class="input-block-level"
-                           data-bind="value: gpio_i2c_register"
-                           id="settings-enclosure-gpio-i2c-reg">
+                           data-bind="value: gpio_i2c_register, attr: {id: 'settings-enclosure-output-gpio-i2c-register-' + $index() }">
                     <span class="help-inline">I2C register in HEX value</span>
                 </div>
             </div>
             <div class="control-group">
-                <label class="control-label" for="settings-enclosure-gpio-i2c-data-on">{{ _("I2C ON data") }}</label>
+                <label class="control-label"
+                       data-bind="attr: {'for': 'settings-enclosure-output-gpio-i2c-data-on-' + $index() }">{{ _("I2C ON data") }}</label>
                 <div class="controls">
                     <input type="text"
                            class="input-block-level"
-                           data-bind="value: gpio_i2c_data_on"
-                           id="settings-enclosure-gpio-i2c-data-on">
+                           data-bind="value: gpio_i2c_data_on, attr: {id: 'settings-enclosure-output-gpio-i2c-data-on-' + $index() }">
                     <span class="help-inline">I2C data to write in HEX value when ON</span>
                 </div>
             </div>
             <div class="control-group">
-                <label class="control-label" for="settings-enclosure-gpio-i2c-data-off">{{ _("I2C OFF data") }}</label>
+                <label class="control-label"
+                       data-bind="attr: {'for': 'settings-enclosure-output-gpio-i2c-data-off-' + $index() }">{{ _("I2C OFF data") }}</label>
                 <div class="controls">
                     <input type="text"
                            class="input-block-level"
-                           data-bind="value: gpio_i2c_data_off"
-                           id="settings-enclosure-gpio-i2c-data-off">
+                           data-bind="value: gpio_i2c_data_off, attr: {id: 'settings-enclosure-output-gpio-i2c-data-off-' + $index() }">
                     <span class="help-inline">I2C data to write in HEX value when OFF</span>
                 </div>
             </div>
             <div class="control-group">
                 <label class="control-label"
-                       for="settings-enclosure-gpio-i2c-reg-read">{{ _("I2C Register (read status)") }}</label>
+                       data-bind="attr: {'for': 'settings-enclosure-output-gpio-i2c-register-status-' + $index() }">{{ _("I2C Register (read status)") }}</label>
                 <div class="controls">
                     <input type="text"
                            class="input-block-level"
-                           data-bind="value: gpio_i2c_register_status"
-                           id="settings-enclosure-gpio-i2c-reg-read">
+                           data-bind="value: gpio_i2c_register_status, attr: {id: 'settings-enclosure-output-gpio-i2c-register-status-' + $index() }">
                     <span class="help-inline">I2C register for reading gpio state in HEX value</span>
                 </div>
             </div>
@@ -425,8 +424,7 @@
                     <label class="radio">
                         <input type="radio"
                                value="heater"
-                               name="optradio"
-                               data-bind="checked: temp_ctr_type">
+                               data-bind="checked: temp_ctr_type, attr: {name: 'temp_ctr_type_' + $index() }">
                         {{ _("Heater") }}
                     </label>
                 </div>
@@ -434,8 +432,7 @@
                     <label class="radio">
                         <input type="radio"
                                value="cooler"
-                               name="optradio"
-                               data-bind="checked: temp_ctr_type">
+                               data-bind="checked: temp_ctr_type, attr: {name: 'temp_ctr_type_' + $index() }">
                         {{ _("Cooler") }}
                     </label>
                 </div>
@@ -443,8 +440,7 @@
                     <label class="radio">
                         <input type="radio"
                                value="dehumidifier"
-                               name="optradio"
-                               data-bind="checked: temp_ctr_type">
+                               data-bind="checked: temp_ctr_type, attr: {name: 'temp_ctr_type_' + $index() }">
                         {{ _("Dehumidifier") }}
                     </label>
                 </div>
@@ -482,7 +478,7 @@
                 </div>
             </div>
         </div>
-        <div data-bind="if: output_type() == 'temperature_alarm', attr: {id: 'temp_controlled_' + $index() }">
+        <div data-bind="if: output_type() == 'temperature_alarm'">
             <div class="control-group">
                 <label class="control-label">{{ _("Set Temperature") }}</label>
                 <div class="controls">
@@ -533,11 +529,12 @@
         </div>
         <div data-bind="if: output_type() == 'neopixel_indirect'">
             <div class="control-group">
-                <label class="control-label" for="settings-enclosure-dhtPin">{{ _("Microcontroller Address") }}</label>
+                <label class="control-label"
+                       data-bind="attr: {'for': 'settings-enclosure-output-microcontroller-address-' + $index() }">{{ _("Microcontroller Address") }}</label>
                 <div class="controls">
                     <input type="text"
                            class="input-block-level"
-                           data-bind="value: microcontroller_address">
+                           data-bind="value: microcontroller_address, attr: {id: 'settings-enclosure-output-microcontroller-address-' + $index() }">
                     <span class="help-inline">Microcontroller address in HEX value, you can find it by running
                         <code>i2cdetect -y 1</code> on your Raspberry Pi</span>
                 </div>
@@ -599,9 +596,12 @@
         </div>
         <div data-bind="if: output_type() == 'gcode_output'">
             <div class="control-group">
-                <label class="control-label" for="settings-enclosure-filament-sensor">{{ _("Gcode") }}</label>
+                <label class="control-label"
+                       data-bind="attr: {'for': 'settings-enclosure-output-gcode-' + $index() }">{{ _("Gcode") }}</label>
                 <div class="controls">
-                    <textarea rows="4" class="block" data-bind="value: gcode"></textarea>
+                    <textarea rows="4"
+                              class="block"
+                              data-bind="value: gcode, attr: {id: 'settings-enclosure-output-gcode-' + $index() }"></textarea>
                     <span class="help-inline">GCODE that will be sent to the printer. You should add
                         <code>ENTER</code> on the end of every line sent to the printer</span>
                 </div>
@@ -670,12 +670,12 @@
                 </div>
             </div>
         </div>
-        <div id="temperature_reading_content"
-             data-bind="if: input_type() == 'temperature_sensor'">
+        <div data-bind="if: input_type() == 'temperature_sensor'">
             <div class="control-group">
-                <label class="control-label" for="settings-enclosure-dhtModel">{{ _("Sensor Type") }}</label>
+                <label class="control-label"
+                       data-bind="attr: {'for': 'settings-enclosure-input-sensor-type-' + $index() }">{{ _("Sensor Type") }}</label>
                 <div class="controls">
-                    <select data-bind="value: temp_sensor_type">
+                    <select data-bind="value: temp_sensor_type, attr: {id: 'settings-enclosure-input-sensor-type-' + $index() }">
                         <option value="">Select Sensor</option>
                         <option value="11">DHT11</option>
                         <option value="20">DHT20</option>
@@ -697,58 +697,59 @@
                     <span class="help-inline">
                         <span class="label label-important">Attention</span> You need to install and configure the necessary libraries for the temperature sensor, check
                         the documentation on
-                        <a href=" https://github.com/jacopotediosi/OctoPrint-Enclosure">github</a> page</span>
+                        <a href="https://github.com/jacopotediosi/OctoPrint-Enclosure">github</a> page</span>
                 </div>
             </div>
             <div data-bind="if: temp_sensor_type() == 'temp_raw_i2c' || temp_sensor_type() == 'hum_raw_i2c'">
                 <div class="control-group">
-                    <label class="control-label" for="settings-enclosure-temp-i2c-bus">{{ _("I2C Bus") }}</label>
+                    <label class="control-label"
+                           data-bind="attr: {'for': 'settings-enclosure-input-temp-i2c-bus-' + $index() }">{{ _("I2C Bus") }}</label>
                     <div class="controls">
                         <input type="text"
                                class="input-block-level"
-                               data-bind="value: temp_i2c_bus"
-                               id="settings-enclosure-temp-i2c-bus">
+                               data-bind="value: temp_i2c_bus, attr: {id: 'settings-enclosure-input-temp-i2c-bus-' + $index() }">
                         <span class="help-inline">This value should remain 1 unless you've used dtoverlay=i2c-gpio or you are using another bus.
                         </span>
                     </div>
                 </div>
                 <div class="control-group">
-                    <label class="control-label" for="settings-enclosure-temp-i2c-addr">{{ _("I2C Address") }}</label>
+                    <label class="control-label"
+                           data-bind="attr: {'for': 'settings-enclosure-input-temp-i2c-address-' + $index() }">{{ _("I2C Address") }}</label>
                     <div class="controls">
                         <input type="text"
                                class="input-block-level"
-                               data-bind="value: temp_i2c_address"
-                               id="settings-enclosure-temp-i2c-addr">
+                               data-bind="value: temp_i2c_address, attr: {id: 'settings-enclosure-input-temp-i2c-address-' + $index() }">
                         <span class="help-inline">I2C address in HEX value, you can find it by running
                             <code>i2cdetect -y 1</code> on your Raspberry Pi</span>
                     </div>
                 </div>
                 <div class="control-group">
-                    <label class="control-label" for="settings-enclosure-temp-i2c-reg">{{ _("I2C Register") }}</label>
+                    <label class="control-label"
+                           data-bind="attr: {'for': 'settings-enclosure-input-temp-i2c-register-' + $index() }">{{ _("I2C Register") }}</label>
                     <div class="controls">
                         <input type="text"
                                class="input-block-level"
-                               data-bind="value: temp_i2c_register"
-                               id="settings-enclosure-temp-i2c-reg">
+                               data-bind="value: temp_i2c_register, attr: {id: 'settings-enclosure-input-temp-i2c-register-' + $index() }">
                         <span class="help-inline">I2C register in HEX value</span>
                     </div>
                 </div>
             </div>
             <div data-bind="if: temp_sensor_type() == '18b20'">
                 <div class="control-group">
-                    <label class="control-label" for="settings-enclosure-dhtPin">{{ _("Sensor Pin") }}</label>
+                    <label class="control-label"
+                           data-bind="attr: {'for': 'settings-enclosure-input-ds18b20-pin-' + $index() }">{{ _("Sensor Pin") }}</label>
                     <div class="controls">
                         <input type="text"
                                class="input-block-level"
-                               data-bind="value: gpio_pin"
-                               value="4">
+                               data-bind="value: gpio_pin, attr: {id: 'settings-enclosure-input-ds18b20-pin-' + $index() }">
                         <span class="help-inline">GPIO pin for temperature sensor, recommended to use 4 as DS18B20 has default support to pin #4 (BCM)</span>
                     </div>
                 </div>
-                <div class"control-group">
-                    <label class="control-label" for="settings-enclosure-dhtPin">{{ _("Input Pull Resistor") }}</label>
+                <div class="control-group">
+                    <label class="control-label"
+                           data-bind="attr: {'for': 'settings-enclosure-input-ds18b20-pull-resistor-' + $index() }">{{ _("Input Pull Resistor") }}</label>
                     <div class="controls">
-                        <select data-bind="value: input_pull_resistor">
+                        <select data-bind="value: input_pull_resistor, attr: {id: 'settings-enclosure-input-ds18b20-pull-resistor-' + $index() }">
                             <option value="" selected="selected">None</option>
                             <option value="input_pull_up">Input Pullup</option>
                         </select>
@@ -756,12 +757,12 @@
                     </div>
                 </div>
                 <div class="control-group">
-                    <label class="control-label" for="settings-enclosure-dhtPin">{{ _("DS18B20 Serial") }}</label>
+                    <label class="control-label"
+                           data-bind="attr: {'for': 'settings-enclosure-input-ds18b20-serial-' + $index() }">{{ _("DS18B20 Serial") }}</label>
                     <div class="controls">
                         <input type="text"
                                class="input-block-level"
-                               data-bind="value: ds18b20_serial"
-                               value="">
+                               data-bind="value: ds18b20_serial, attr: {id: 'settings-enclosure-input-ds18b20-serial-' + $index() }">
                         <span class="help-inline">DS18B20 serial value, needs to be used to have support for multiple sensors, read documentation on github page
                         for more information.  The serial is typically in the form of 28-0123456789ab.</span>
                     </div>
@@ -769,45 +770,51 @@
             </div>
             <div data-bind="if: temp_sensor_type() == 'si7021' || temp_sensor_type() == '20' || temp_sensor_type() == 'bme280' || temp_sensor_type() == 'am2320' || temp_sensor_type() == 'aht10' || temp_sensor_type() == 'tmp102' || temp_sensor_type() == 'mcp9808'">
                 <div class="control-group">
-                    <label class="control-label" for="settings-enclosure-dhtPin">{{ _("Sensor Pin") }}</label>
+                    <label class="control-label"
+                           data-bind="attr: {'for': 'settings-enclosure-input-i2c-sensor-pin-' + $index() }">{{ _("Sensor Pin") }}</label>
                     <div class="controls">
                         <input type="text"
                                class="input-block-level"
                                value="SCL / SDA"
-                               disabled="true">
+                               disabled="true"
+                               data-bind="attr: {id: 'settings-enclosure-input-i2c-sensor-pin-' + $index() }">
                         <span class="help-inline">GPIO pin for temperature sensor need to connect the sensor to I2C. SCL Clock to GPIO 3 (SCL) and SDA Data to GPIO
                             2 (SDA)
                         </span>
                     </div>
                 </div>
                 <div class="control-group">
-                    <label class="control-label" for="settings-enclosure-dhtPin">{{ _("Sensor Address") }}</label>
+                    <label class="control-label"
+                           data-bind="attr: {'for': 'settings-enclosure-input-i2c-sensor-address-' + $index() }">{{ _("Sensor Address") }}</label>
                     <div class="controls">
                         <input type="text"
                                class="input-block-level"
-                               data-bind="value: temp_sensor_address">
+                               data-bind="value: temp_sensor_address, attr: {id: 'settings-enclosure-input-i2c-sensor-address-' + $index() }">
                         <span class="help-inline">Sensor address in HEX value, you can find it by running
                             <code>i2cdetect -y 1</code> on your Raspberry Pi</span>
                     </div>
                 </div>
                 <div class="control-group">
-                    <label class="control-label" for="settings-enclosure-dhtPin">{{ _("i2c Bus") }}</label>
+                    <label class="control-label"
+                           data-bind="attr: {'for': 'settings-enclosure-input-i2c-sensor-bus-' + $index() }">{{ _("i2c Bus") }}</label>
                     <div class="controls">
                         <input type="text"
                                class="input-block-level"
-                               data-bind="value: temp_sensor_i2cbus">
+                               data-bind="value: temp_sensor_i2cbus, attr: {id: 'settings-enclosure-input-i2c-sensor-bus-' + $index() }">
                         <span class="help-inline">This value should remain 1 unless you've used dtoverlay=i2c-gpio.</span>
                     </div>
                 </div>
             </div>
             <div data-bind="if: temp_sensor_type() == 'max31855'">
                 <div class="control-group">
-                    <label class="control-label" for="settings-enclosure-dhtPin">{{ _("Sensor Pin") }}</label>
+                    <label class="control-label"
+                           data-bind="attr: {'for': 'settings-enclosure-input-max31855-pin-' + $index() }">{{ _("Sensor Pin") }}</label>
                     <div class="controls">
                         <input type="text"
                                class="input-block-level"
                                value="MISO / SCLK"
-                               disabled="true">
+                               disabled="true"
+                               data-bind="attr: {id: 'settings-enclosure-input-max31855-pin-' + $index() }">
                         <span class="help-inline">GPIO pin for temperature sensor need to connect the sensor to SPI. Serial Clock to GPIO 1 (SCLK) and Master In/Slave Out Data to GPIO
                             9 (MISO)
                         </span>
@@ -815,9 +822,9 @@
                 </div>
                 <div class="control-group">
                     <label class="control-label"
-                           for="settings-enclosure-dhtPin">{{ _("Sensor Address (CE Select)") }}</label>
+                           data-bind="attr: {'for': 'settings-enclosure-input-max31855-address-' + $index() }">{{ _("Sensor Address (CE Select)") }}</label>
                     <div class="controls">
-                        <select data-bind="value: temp_sensor_address">
+                        <select data-bind="value: temp_sensor_address, attr: {id: 'settings-enclosure-input-max31855-address-' + $index() }">
                             <option value="">Select CE</option>
                             <option value="0">CE0</option>
                             <option value="1">CE1</option>
@@ -828,9 +835,12 @@
             </div>
             <div data-bind="ifnot: temp_sensor_type() == 'rpi' || temp_sensor_type() == '18b20' || temp_sensor_type() == 'si7021' || temp_sensor_type() == 'bme280' || temp_sensor_type() == 'am2320' || temp_sensor_type() == 'tmp102' || temp_sensor_type() == 'max31855' || temp_sensor_type() == 'mcp9808' || temp_sensor_type() == 'temp_raw_i2c' || temp_sensor_type() == 'hum_raw_i2c'">
                 <div class="control-group">
-                    <label class="control-label" for="settings-enclosure-dhtPin">{{ _("Sensor Pin") }}</label>
+                    <label class="control-label"
+                           data-bind="attr: {'for': 'settings-enclosure-input-sensor-pin-' + $index() }">{{ _("Sensor Pin") }}</label>
                     <div class="controls">
-                        <input type="text" class="input-block-level" data-bind="value: gpio_pin">
+                        <input type="text"
+                               class="input-block-level"
+                               data-bind="value: gpio_pin, attr: {id: 'settings-enclosure-input-sensor-pin-' + $index() }">
                         <span class="help-inline">GPIO pin for temperature sensor, recommended to use 4 as DS18B20 only works on pin 4</span>
                     </div>
                 </div>
@@ -876,37 +886,38 @@
                     </div>
                 </div>
             </div>
-            <div data-bind="attr: {id: 'input_io_' + $index() }">
-                <div class="control-group">
-                    <label class="control-label" for="settings-enclosure-io1">{{ _("Input IO Number") }}</label>
-                    <div class="controls">
-                        <input type="text" class="input-block-level" data-bind="value: gpio_pin">
-                        <span class="help-inline">Input GPIO that will detect the event that should trigger the action. For example if you have a filament sensor
-                            you put the GPIO pin that the sensor is connected. This can also be a press of a button or any other signal that
-                        you want to detect. You can not use GPIO 4 here if you are using temperature sensor DS18B20</span>
-                    </div>
+            <div class="control-group">
+                <label class="control-label"
+                       data-bind="attr: {'for': 'settings-enclosure-input-gpio-pin-' + $index() }">{{ _("Input IO Number") }}</label>
+                <div class="controls">
+                    <input type="text"
+                           class="input-block-level"
+                           data-bind="value: gpio_pin, attr: {id: 'settings-enclosure-input-gpio-pin-' + $index() }">
+                    <span class="help-inline">Input GPIO that will detect the event that should trigger the action. For example if you have a filament sensor
+                        you put the GPIO pin that the sensor is connected. This can also be a press of a button or any other signal that
+                    you want to detect. You can not use GPIO 4 here if you are using temperature sensor DS18B20</span>
                 </div>
-                <div class="control-group">
-                    <label class="control-label">Input Pull Resistor</label>
-                    <div class="controls">
-                        <select data-bind="value: input_pull_resistor">
-                            <option value="input_pull_up">Input Pullup</option>
-                            <option value="input_pull_down">Input Pulldown</option>
-                        </select>
-                        <span class="help-inline">Choose what type of pull resistors that you want on the output. If your signal is active low, that means it should
-                        run the action when receive a low signal (ground), you should choose PULL UP resistors.</span>
-                    </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Input Pull Resistor</label>
+                <div class="controls">
+                    <select data-bind="value: input_pull_resistor">
+                        <option value="input_pull_up">Input Pullup</option>
+                        <option value="input_pull_down">Input Pulldown</option>
+                    </select>
+                    <span class="help-inline">Choose what type of pull resistors that you want on the output. If your signal is active low, that means it should
+                    run the action when receive a low signal (ground), you should choose PULL UP resistors.</span>
                 </div>
-                <div class="control-group">
-                    <label class="control-label">Event Trigger</label>
-                    <div class="controls">
-                        <select data-bind="value: edge">
-                            <option value="rise">Rise</option>
-                            <option value="fall">Fall</option>
-                        </select>
-                        <span class="help-inline">Do you want to trigger the event on the rise or falling edge? If you signal is active low, that means it should run
-                        the action when it receives a low signal (ground), you should choose FALLING EDGE.</span>
-                    </div>
+            </div>
+            <div class="control-group">
+                <label class="control-label">Event Trigger</label>
+                <div class="controls">
+                    <select data-bind="value: edge">
+                        <option value="rise">Rise</option>
+                        <option value="fall">Fall</option>
+                    </select>
+                    <span class="help-inline">Do you want to trigger the event on the rise or falling edge? If you signal is active low, that means it should run
+                    the action when it receives a low signal (ground), you should choose FALLING EDGE.</span>
                 </div>
             </div>
             <div data-bind="if: action_type() == 'output_control'">
@@ -1048,7 +1059,7 @@
                     {{ _("Enable gcode control") }}
                 </label>
                 <span class="help-inline">Use gcode to control outputs, check the documentation on
-                    <a href=" https://github.com/jacopotediosi/OctoPrint-Enclosure">github</a> page</span>
+                    <a href="https://github.com/jacopotediosi/OctoPrint-Enclosure">github</a> page</span>
             </div>
         </div>
         <div class="control-group">
