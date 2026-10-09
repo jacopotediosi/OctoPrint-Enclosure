@@ -1849,38 +1849,25 @@ class EnclosurePlugin(
         ]
 
     def send_notification(self, message):
-        try:
-            provider = self._settings.get(["notification_provider"])
-            if provider == "ifttt":
-                event = self._settings.get(["notification_event_name"])
-                api_key = self._settings.get(["notification_api_key"])
-                self._logger.debug("Sending notification to: %s with msg: %s with key: %s", provider, message, api_key)
-                try:
-                    res = self.ifttt_notification(message, event, api_key)
-                except requests.exceptions.ConnectionError:
-                    self._logger.info("Error: Could not connect to IFTTT")
-                except requests.exceptions.HTTPError:
-                    self._logger.info("Error: Received invalid response")
-                except requests.exceptions.Timeout:
-                    self._logger.info("Error: Request timed out")
-                except requests.exceptions.TooManyRedirects:
-                    self._logger.info("Error: Too many redirects")
-                except requests.exceptions.RequestException as reqe:
-                    self._logger.info("Error: %s", reqe)
-                if res.status_code != requests.codes["ok"]:
-                    try:
-                        j = res.json()
-                    except ValueError:
-                        self._logger.info("Error: Could not parse server response. Event not sent")
-                    for err in j["errors"]:
-                        self._logger.info("Error: %s", err["message"])
-        except Exception:
-            self._logger.exception("Error sending notification")
+        provider = self._settings.get(["notification_provider"])
+        if provider == "ifttt":
+            self.ifttt_notification(message)
 
-    def ifttt_notification(self, message, event, api_key):
-        url = f"https://maker.ifttt.com/trigger/{event}/with/key/{api_key}/"
-        payload = {"value1": message}
-        return requests.post(url, data=payload, timeout=(3.05, 7))
+    def ifttt_notification(self, message):
+        event = self._settings.get(["notification_event_name"])
+        api_key = self._settings.get(["notification_api_key"])
+        self._logger.debug("Sending IFTTT notification for event %s: %s", event, message)
+        try:
+            response = requests.post(
+                f"https://maker.ifttt.com/trigger/{event}/with/key/{api_key}/",
+                data={"value1": message},
+                timeout=(3.05, 7),
+            )
+        except requests.exceptions.RequestException as ex:
+            self._logger.warning("Could not send IFTTT notification: %s", type(ex).__name__)
+            return
+        if not response.ok:
+            self._logger.warning("IFTTT rejected the notification (HTTP %s): %s", response.status_code, response.text)
 
     # ~~ EventPlugin mixin
     def on_event(self, event, payload):
@@ -1945,7 +1932,7 @@ class EnclosurePlugin(
                     file_name = Path(payload["path"]).name
                     elapsed_time_in_seconds = payload["time"]
                     elapsed_time = octoprint.util.get_formatted_timedelta(timedelta(seconds=elapsed_time_in_seconds))
-                    msg = "Print job finished: " + file_name + "finished printing in " + file_name, elapsed_time
+                    msg = f"Print job finished: {file_name} printed in {elapsed_time}"
                     self.send_notification(msg)
 
         if event in (Events.ERROR, Events.DISCONNECTED):
