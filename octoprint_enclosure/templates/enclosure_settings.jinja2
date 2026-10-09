@@ -563,10 +563,9 @@
             <div class="control-group">
                 <label class="control-label">{{ _("Color") }}</label>
                 <div class="controls">
-                    <input type="text"
+                    <input type="color"
                            class="input-block-level"
-                           data-bind="value: default_ledstrip_color, attr: {name: 'colorpicker' } , click: $root.showColorPicker()">
-                    <span class="help-inline">Value needs to follow the format rgb(value_red,value_green,value_blue) where values should be between 0 and 255</span>
+                           data-bind="rgbColor: default_ledstrip_color">
                 </div>
             </div>
         </div>
@@ -592,10 +591,9 @@
             <div class="control-group">
                 <label class="control-label">{{ _("Default Color") }}</label>
                 <div class="controls">
-                    <input type="text"
+                    <input type="color"
                            class="input-block-level"
-                           data-bind="value: default_neopixel_color, attr: {name: 'colorpicker' } , click: $root.showColorPicker()">
-                    <span class="help-inline">Value needs to follow the format rgb(value_red,value_green,value_blue) where values should be between 0 and 255</span>
+                           data-bind="rgbColor: default_neopixel_color">
                 </div>
             </div>
         </div>

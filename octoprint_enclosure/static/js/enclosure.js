@@ -1,4 +1,28 @@
 $(function () {
+  function rgbToHex(rgb) {
+    var match = /^\s*rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)\s*$/.exec(rgb || "");
+    if (!match) return "#000000";
+    return "#" + match.slice(1).map(function (component) {
+      return ("0" + Math.min(parseInt(component, 10), 255).toString(16)).slice(-2);
+    }).join("");
+  }
+
+  function hexToRgb(hex) {
+    var value = parseInt(hex.slice(1), 16);
+    return "rgb(" + ((value >> 16) & 255) + "," + ((value >> 8) & 255) + "," + (value & 255) + ")";
+  }
+
+  ko.bindingHandlers.rgbColor = {
+    init: function (element, valueAccessor) {
+      ko.utils.registerEventHandler(element, "change", function () {
+        valueAccessor()(hexToRgb(element.value));
+      });
+    },
+    update: function (element, valueAccessor, allBindings) {
+      element.value = rgbToHex(ko.unwrap(valueAccessor()) || ko.unwrap(allBindings.get("rgbColorPlaceholder")));
+    }
+  };
+
   function EnclosureViewModel(parameters) {
     var self = this;
 
@@ -323,14 +347,7 @@ $(function () {
       self.settingsOpen = true;
     };
 
-    self.showColorPicker = function () {
-      $('[name=colorpicker]').colorpicker({
-        format: 'rgb'
-      });
-    }
-
     self.onSettingsHidden = function () {
-      self.showColorPicker();
       self.settingsOpen = false;
     };
 
@@ -648,7 +665,7 @@ $(function () {
     self.handleNeopixel = function (item) {
 
       var index = item.index_id() ;
-      var or_tempStr = item.new_neopixel_color();
+      var or_tempStr = item.new_neopixel_color() || item.neopixel_color();
       var tempStr = or_tempStr.replace("rgb(", "");
 
       var r = parseInt(tempStr.substring(0, tempStr.indexOf(",")));
@@ -684,7 +701,7 @@ $(function () {
 
     self.handleLedstripColor = function (item) {
       var index = item.index_id() ;
-      var or_tempStr = item.new_ledstrip_color();
+      var or_tempStr = item.new_ledstrip_color() || item.ledstrip_color();
       var tempStr = or_tempStr.replace("rgb(", "");
 
       var r = parseInt(tempStr.substring(0, tempStr.indexOf(",")));

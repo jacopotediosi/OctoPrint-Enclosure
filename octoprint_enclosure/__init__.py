@@ -1004,6 +1004,7 @@ class EnclosurePlugin(
             regular_status = []
             pwm_status = []
             neopixel_status = []
+            ledstrip_status = []
             temp_control_status = []
             for output in self.rpi_outputs:
                 index = self.to_int(output["index_id"])
@@ -1032,6 +1033,11 @@ class EnclosurePlugin(
                     neopixel_status.append(
                         {"index_id": index, "color": val, "auto_startup": startup, "auto_shutdown": shutdown},
                     )
+                if output["output_type"] == "ledstrip":
+                    val = output["ledstrip_color"]
+                    ledstrip_status.append(
+                        {"index_id": index, "color": val, "auto_startup": startup, "auto_shutdown": shutdown},
+                    )
                 if output["output_type"] == "pwm":
                     for pwm in self.pwm_instances:
                         if pin in pwm:
@@ -1054,6 +1060,7 @@ class EnclosurePlugin(
                     "rpi_output_regular": regular_status,
                     "rpi_output_pwm": pwm_status,
                     "rpi_output_neopixel": neopixel_status,
+                    "rpi_output_ledstrip": ledstrip_status,
                     "rpi_output_temp_hum_ctrl": temp_control_status,
                 },
             )
@@ -2214,6 +2221,7 @@ class EnclosurePlugin(
 
             self._logger.info("LEDSTRIP set rgb color: %s, %s, %s", red, green, blue)
             ledstrip.setcolourrgb(self.to_int(red), self.to_int(green), self.to_int(blue))
+            rpi_output["ledstrip_color"] = f"rgb({red},{green},{blue})"
 
     def start_outpus_with_server(self):
         for rpi_output in self.rpi_outputs:
@@ -2270,6 +2278,8 @@ class EnclosurePlugin(
         self._logger.debug("Events scheduled to run %s", self.event_queue)
 
     def get_color_from_rgb(self, string_color):
+        if not string_color:
+            return 0, 0, 0
         string_color = string_color.replace("rgb(", "")
         red = string_color[: string_color.index(",")]
         string_color = string_color[string_color.index(",") + 1 :]
@@ -2479,8 +2489,8 @@ class EnclosurePlugin(
     # ~~ AssetPlugin mixin
     def get_assets(self):
         return {
-            "js": ["js/enclosure.js", "js/bootstrap-colorpicker.min.js"],
-            "css": ["css/bootstrap-colorpicker.css", "css/enclosure.css"],
+            "js": ["js/enclosure.js"],
+            "css": ["css/enclosure.css"],
         }
 
     # ~~ Softwareupdate hook

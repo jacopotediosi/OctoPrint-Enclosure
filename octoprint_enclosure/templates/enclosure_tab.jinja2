@@ -99,9 +99,9 @@
                 <span class="badge">ledstrip</span>
             </h4>
             <div class="input-append ledstrip-div">
-                <input type="text"
+                <input type="color"
                        class="input-block-level"
-                       data-bind="click: $root.showColorPicker(), value: new_ledstrip_color, valueUpdate: 'input', attr: {placeholder:ledstrip_color, name: 'colorpicker'}">
+                       data-bind="rgbColor: new_ledstrip_color, rgbColorPlaceholder: ledstrip_color">
                 <button type="submit"
                         class="btn btn-input-inc"
                         title="Set Color"
@@ -154,9 +154,9 @@
                 <span class="badge">neopixel</span>
             </h4>
             <div class="input-append neopixel-div">
-                <input type="text"
+                <input type="color"
                        class="input-block-level"
-                       data-bind="click: $root.showColorPicker(), value: new_neopixel_color, valueUpdate: 'input', attr: {placeholder:neopixel_color, name: 'colorpicker'}">
+                       data-bind="rgbColor: new_neopixel_color, rgbColorPlaceholder: neopixel_color">
                 <button type="submit"
                         class="btn btn-input-inc"
                         title="Set Color"
