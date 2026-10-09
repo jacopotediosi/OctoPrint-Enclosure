@@ -1935,21 +1935,10 @@ class EnclosurePlugin(
                     msg = f"Print job finished: {file_name} printed in {elapsed_time}"
                     self.send_notification(msg)
 
-        if event in (Events.ERROR, Events.DISCONNECTED):
-            self._logger.info("Detected Error or Disconnect in %s will call listeners for shutdown_on_error!", event)
-            for rpi_output in self.rpi_outputs:
-                if rpi_output["shutdown_on_error"]:
-                    self._logger.debug("Schedule shutdown for: %s", rpi_output["index_id"])
-                    self.schedule_auto_shutdown_outputs(rpi_output, 0)
-            self.run_tasks()
-
-        if event == Events.PRINTER_STATE_CHANGED and "error" in payload["state_string"].lower():
-            self._logger.info(
-                "Detected Error in %s id: %s state: %s  will call listeners for shutdown_on_error!",
-                event,
-                payload["state_id"],
-                payload["state_string"],
-            )
+        if event in (Events.ERROR, Events.DISCONNECTED) or (
+            event == Events.PRINTER_STATE_CHANGED and "error" in payload["state_string"].lower()
+        ):
+            self._logger.info("Detected %s, shutting down outputs with shutdown_on_error", event)
             for rpi_output in self.rpi_outputs:
                 if rpi_output["shutdown_on_error"]:
                     self._logger.debug("Schedule shutdown for: %s", rpi_output["index_id"])
