@@ -365,26 +365,19 @@ $(function () {
       }
 
       if(self.isNumeric(newSetTemperature)){
-        var request = {set_temperature:newSetTemperature, index_id:item.index_id()};
-
-        $.ajax({
-          url: self.buildPluginUrl("/setEnclosureTempHum"),
-          type: "GET",
-          dataType: "json",
-          data: request,
-          success: function (data) {
+        OctoPrint.patchJson(self.buildPluginUrl("temperature/" + item.index_id()), {temperature: parseFloat(newSetTemperature)})
+          .done(function () {
             item.temp_ctr_new_set_value("");
             item.temp_ctr_set_value(newSetTemperature);
             self.getUpdateUI();
-          },
-          error: function (textStatus, errorThrown) {
+          })
+          .fail(function () {
             new PNotify({
               title: "Enclosure",
               text: "Error setting temperature",
               type: "error"
             });
-        }
-        });
+          });
       }else{
         new PNotify({
           title: "Enclosure",
@@ -507,131 +500,61 @@ $(function () {
     };
 
     self.turnOffHeater = function (item) {
-      var request = { set_temperature: 0, index_id: item.index_id() };
-      $.ajax({
-        url: self.buildPluginUrl("/setEnclosureTempHum"),
-        type: "GET",
-        dataType: "json",
-        data: request,
-        success: function (data) {
+      OctoPrint.patchJson(self.buildPluginUrl("temperature/" + item.index_id()), {temperature: 0})
+        .done(function () {
           self.getUpdateUI();
-        }
-      });
+        });
     };
 
     self.clearGPIOMode = function () {
-      $.ajax({
-        url: self.buildPluginUrl("/clearGPIOMode"),
-        type: "GET",
-        dataType: "json",
-        success: function (data) {
+      OctoPrint.post(self.buildPluginUrl("clear-gpio"))
+        .done(function () {
           new PNotify({
             title: "Enclosure",
             text: "GPIO Mode cleared successfully",
             type: "success"
           });
-        }
-      });
+        });
     };
 
     self.getUpdateUI = function () {
-      $.ajax({
-        url: self.buildPluginUrl("/updateUI"),
-        type: "GET"
-      });
+      OctoPrint.post(self.buildPluginUrl("update"));
     };
 
     self.handleIO = function (item, form) {
-
-      var request = {
-        "status": !item.gpio_status(),
-        "index_id": item.index_id()
-      };
-
-      $.ajax({
-        type: "GET",
-        dataType: "json",
-        data: request,
-        url: self.buildPluginUrl("/setIO"),
-        success: function (data) {
+      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), {status: !item.gpio_status()})
+        .done(function () {
           self.getUpdateUI();
-        }
-      });
+        });
     };
 
     self.handleGcode = function (item, form) {
-      var request = {
-        "index_id": item.index_id()
-      };
-
-      $.ajax({
-        type: "GET",
-        dataType: "json",
-        data: request,
-        url: self.buildPluginUrl("/sendGcodeCommand")
-      });
+      OctoPrint.post(self.buildPluginUrl("gcode/" + item.index_id()));
     };
 
     self.handleShellOutput = function (item, form) {
-      var request = {
-        "index_id": item.index_id()
-      };
-
-      $.ajax({
-        type: "GET",
-        dataType: "json",
-        data: request,
-        url: self.buildPluginUrl("/sendShellCommand")
-      });
+      OctoPrint.post(self.buildPluginUrl("shell/" + item.index_id()));
     };
 
     self.switchAutoStartUp = function (item) {
-
-      var request = {
-        "status": !item.auto_startup(),
-        "index_id": item.index_id()
-      };
-      $.ajax({
-        type: "GET",
-        dataType: "json",
-        data: request,
-        url: self.buildPluginUrl("/setAutoStartUp"),
-        success: function (data) {
+      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id() + "/auto-startup"), {status: !item.auto_startup()})
+        .done(function () {
           self.getUpdateUI();
-        }
-      });
+        });
     };
 
     self.switchAutoShutdown = function (item) {
-      var request = {
-        "status": !item.auto_shutdown(),
-        "index_id": item.index_id()
-      };
-      $.ajax({
-        type: "GET",
-        dataType: "json",
-        data: request,
-        url: self.buildPluginUrl("/setAutoShutdown"),
-        success: function (data) {
+      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id() + "/auto-shutdown"), {status: !item.auto_shutdown()})
+        .done(function () {
           self.getUpdateUI();
-        }
-      });
+        });
     };
 
     self.switchFilamentSensor = function (item) {
-      var request = {
-        "status": !item.filament_sensor_enabled(),
-        "index_id": item.index_id()
-      };
-      $.ajax({
-        type: "GET",
-        dataType: "json",
-        data: request,
-        url: self.buildPluginUrl("/setFilamentSensor"),
-        success: function (data) {
+      OctoPrint.patchJson(self.buildPluginUrl("filament/" + item.index_id()), {status: !item.filament_sensor_enabled()})
+        .done(function () {
           self.getUpdateUI();
-        }
-      });
+        });
     };
 
     self.handlePWM = function (item) {
@@ -647,18 +570,12 @@ $(function () {
           type: "error"
         });
       } else {
-        var request = { new_duty_cycle: pwm_value, index_id: item.index_id() };
-        $.ajax({
-          type: "GET",
-          dataType: "json",
-          data: request,
-          url: self.buildPluginUrl("/setPWM"),
-          success: function (data) {
+        OctoPrint.patchJson(self.buildPluginUrl("pwm/" + item.index_id()), {duty_cycle: pwm_value})
+          .done(function () {
             item.new_duty_cycle("");
             item.duty_cycle(pwm_value);
             self.getUpdateUI();
-          }
-        });
+          });
       }
     };
 
@@ -681,21 +598,11 @@ $(function () {
           type: "error"
         });
       } else {
-        $.ajax({
-          type: "GET",
-          dataType: "json",
-          data: {
-            "index_id": index,
-            "red": r,
-            "green": g,
-            "blue": b
-          },
-          url: self.buildPluginUrl("/setNeopixel"),
-          success: function (data) {
+        OctoPrint.patchJson(self.buildPluginUrl("neopixel/" + index), {red: r, green: g, blue: b})
+          .done(function () {
             item.new_neopixel_color("");
             self.getUpdateUI();
-          }
-        });
+          });
       }
     };
 
@@ -716,19 +623,11 @@ $(function () {
           type: "error"
         });
       } else {
-        $.ajax({
-          type: "GET",
-          dataType: "json",
-          data: {
-            "index_id": index,
-            "rgb": or_tempStr
-          },
-          url: self.buildPluginUrl("/setLedstripColor"),
-          success: function (data) {
+        OctoPrint.patchJson(self.buildPluginUrl("rgb-led/" + index), {rgb: or_tempStr})
+          .done(function () {
             item.new_ledstrip_color("");
             self.getUpdateUI();
-          }
-        });
+          });
       }
     };
 
@@ -737,7 +636,7 @@ $(function () {
     };
 
     self.buildPluginUrl = function (path) {
-      return window.PLUGIN_BASEURL + self.pluginName + path;
+      return OctoPrint.getBlueprintUrl(self.pluginName) + path;
     };
   }
 
