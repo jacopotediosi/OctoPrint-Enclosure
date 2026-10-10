@@ -20,6 +20,7 @@ from RPi import GPIO
 from smbus2 import SMBus
 from werkzeug.exceptions import BadRequest
 
+from .core.migrations import migrate_settings
 from .getPiTemp import PiTemp
 from .ledstrip import LEDStrip
 
@@ -174,60 +175,7 @@ class EnclosurePlugin(
         return 10
 
     def on_settings_migrate(self, target, current=None):
-        self._logger.warning(
-            "######### current settings version %s target settings version %s #########",
-            current,
-            target,
-        )
-        self._logger.info("#########        Current settings        #########")
-        self._logger.info("rpi_outputs: %s", self.rpi_outputs)
-        self._logger.info("rpi_inputs: %s", self.rpi_inputs)
-        self._logger.info("#########        End Current Settings        #########")
-        if current >= 4 and target == 10:
-            self._logger.warning("######### migrating settings to v10 #########")
-            old_outputs = self._settings.get(["rpi_outputs"])
-            old_inputs = self._settings.get(["rpi_inputs"])
-            for rpi_output in old_outputs:
-                if "shutdown_on_failed" not in rpi_output:
-                    rpi_output["shutdown_on_failed"] = False
-                if "shell_script" not in rpi_output:
-                    rpi_output["shell_script"] = ""
-                if "gpio_i2c_enabled" not in rpi_output:
-                    rpi_output["gpio_i2c_enabled"] = False
-                if "gpio_i2c_bus" not in rpi_output:
-                    rpi_output["gpio_i2c_bus"] = 1
-                if "gpio_i2c_address" not in rpi_output:
-                    rpi_output["gpio_i2c_address"] = 1
-                if "gpio_i2c_register" not in rpi_output:
-                    rpi_output["gpio_i2c_register"] = 1
-                if "gpio_i2c_data_on" not in rpi_output:
-                    rpi_output["gpio_i2c_data_on"] = 1
-                if "gpio_i2c_data_off" not in rpi_output:
-                    rpi_output["gpio_i2c_data_off"] = 0
-                if "gpio_i2c_register_status" not in rpi_output:
-                    rpi_output["gpio_i2c_register_status"] = 1
-                if "shutdown_on_error" not in rpi_output:
-                    rpi_output["shutdown_on_error"] = False
-            self._settings.set(["rpi_outputs"], old_outputs)
-
-            old_inputs = self._settings.get(["rpi_inputs"])
-            for rpi_input in old_inputs:
-                if "temp_i2c_bus" not in rpi_input:
-                    rpi_input["temp_i2c_bus"] = 1
-                if "temp_i2c_address" not in rpi_input:
-                    rpi_input["temp_i2c_address"] = 1
-                if "temp_i2c_register" not in rpi_input:
-                    rpi_input["temp_i2c_register"] = 1
-                if "show_graph_temp" not in rpi_input:
-                    rpi_input["show_graph_temp"] = False
-                if "show_graph_humidity" not in rpi_input:
-                    rpi_input["show_graph_humidity"] = False
-            self._settings.set(["rpi_inputs"], old_inputs)
-        else:
-            self._logger.warning("######### settings not compatible #########")
-            self._settings.set(["rpi_outputs"], [])
-            self._settings.set(["rpi_inputs"], [])
-            self.rpi_inputs = self._settings.get(["rpi_inputs"])
+        migrate_settings(target, current, self._settings, self._logger)
 
     # ~~ Blueprintplugin mixin
     def is_blueprint_csrf_protected(self):
