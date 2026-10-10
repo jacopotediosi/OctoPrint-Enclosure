@@ -11,7 +11,6 @@ from subprocess import PIPE, Popen, run
 
 import octoprint.plugin
 import octoprint.util
-import requests
 from flask import jsonify, make_response, request
 from octoprint.events import Events
 from octoprint.server.util.flask import restricted_access
@@ -24,6 +23,7 @@ from .core import Settings
 from .core.migrations import migrate_settings
 from .getPiTemp import PiTemp
 from .ledstrip import LEDStrip
+from .notifications import Notifications, NotificationType
 
 # Directory containing the sensor scripts run as subprocesses
 SCRIPTS_DIR = Path(__file__).resolve().parent
@@ -67,7 +67,6 @@ class EnclosurePlugin(
     rpi_inputs = []
     waiting_temperature = []
     rpi_outputs_not_changed = []
-    notifications = []
     pwm_instances = []
     event_queue = []
     temp_hum_control_status = []
@@ -88,6 +87,7 @@ class EnclosurePlugin(
 
     def initialize(self):
         self._enclosure_settings = Settings(self._settings)
+        self._notifications = Notifications(self._enclosure_settings, self._logger)
 
     def start_timer(self):
         """Start the timer that checks the enclosure temperature."""
@@ -162,7 +162,6 @@ class EnclosurePlugin(
         self.rpi_outputs_not_changed = []
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
         self.rpi_inputs = self._enclosure_settings.rpi_inputs
-        self.notifications = self._enclosure_settings.notifications
         # Reset volatile temp_ctr_set_value to 0 on startup (it should not be persisted)
         for rpi_output in self.rpi_outputs:
             rpi_output["temp_ctr_set_value"] = 0
@@ -923,13 +922,10 @@ class EnclosurePlugin(
                         else:
                             val = GPIO.LOW if temperature_alarm["controlled_io_set_value"] == "low" else GPIO.HIGH
                             self.write_gpio(self.to_int(rpi_controlled_output["gpio_pin"]), val)
-                        for notification in self.notifications:
-                            if notification["temperatureAction"]:
-                                msg = (
-                                    "Temperature action: enclosure temperature exceed "
-                                    + temperature_alarm["alarm_set_temp"]
-                                )
-                                self.send_notification(msg)
+                        self._notifications.send(
+                            NotificationType.TEMPERATURE_ACTION,
+                            f"Temperature action: enclosure temperature exceed {temperature_alarm['alarm_set_temp']}",
+                        )
 
     def read_dummy_temp(self):
         current_value = self.dummy_value
@@ -1512,10 +1508,10 @@ class EnclosurePlugin(
                                 self._printer.commands(line.strip())
                                 self._logger.info("Sending GCODE command: %s", line.strip())
                                 time.sleep(0.2)
-                        for notification in self.notifications:
-                            if notification["filamentChange"]:
-                                msg = "Filament change action caused by sensor: " + str(filament_sensor["label"])
-                                self.send_notification(msg)
+                        self._notifications.send(
+                            NotificationType.FILAMENT_CHANGE,
+                            f"Filament change action caused by sensor: {filament_sensor['label']}",
+                        )
                     else:
                         self._logger.info("Prevented end of filament detection, filament sensor timeout not elapsed.")
         except Exception:
@@ -1640,27 +1636,17 @@ class EnclosurePlugin(
                             self.gpio_i2c_write(rpi_output, val)
                         else:
                             self.write_gpio(self.to_int(rpi_output["gpio_pin"]), val)
-                        for notification in self.notifications:
-                            if notification["gpioAction"]:
-                                msg = (
-                                    "GPIO control action caused by input "
-                                    + str(rpi_input["label"])
-                                    + ". Setting GPIO"
-                                    + str(rpi_input["controlled_io"])
-                                    + " to: "
-                                    + str(rpi_input["controlled_io_set_value"])
-                                )
-                                self.send_notification(msg)
+                        self._notifications.send(
+                            NotificationType.GPIO_ACTION,
+                            f"GPIO control action caused by input {rpi_input['label']}. "
+                            f"Setting GPIO{rpi_input['controlled_io']} to: {rpi_input['controlled_io_set_value']}",
+                        )
                     if rpi_output["output_type"] == "gcode_output":
                         self.send_gcode_command(rpi_output["gcode"])
-                        for notification in self.notifications:
-                            if notification["gpioAction"]:
-                                msg = (
-                                    "GPIO control action caused by input "
-                                    + str(rpi_input["label"])
-                                    + ". Sending GCODE command"
-                                )
-                                self.send_notification(msg)
+                        self._notifications.send(
+                            NotificationType.GPIO_ACTION,
+                            f"GPIO control action caused by input {rpi_input['label']}. Sending GCODE command",
+                        )
                     if rpi_output["output_type"] == "shell_output":
                         command = rpi_output["shell_script"]
                         self.shell_command(command)
@@ -1715,15 +1701,10 @@ class EnclosurePlugin(
                             if rpi_output["auto_shutdown"] and rpi_output["output_type"] == "temp_hum_control":
                                 rpi_output["temp_ctr_set_value"] = 0
                         self.handle_temp_hum_control()
-                    for notification in self.notifications:
-                        if notification["printer_action"]:
-                            msg = (
-                                "Printer action: "
-                                + rpi_input["printer_action"]
-                                + " caused by input: "
-                                + str(rpi_input["label"])
-                            )
-                            self.send_notification(msg)
+                    self._notifications.send(
+                        NotificationType.PRINTER_ACTION,
+                        f"Printer action: {rpi_input['printer_action']} caused by input: {rpi_input['label']}",
+                    )
         except Exception:
             self._logger.exception("Error handling printer action on channel %s", channel)
 
@@ -1765,27 +1746,6 @@ class EnclosurePlugin(
             for rpi_output in self.rpi_outputs
             if rpi_output["output_type"] == "regular"
         ]
-
-    def send_notification(self, message):
-        provider = self._enclosure_settings.notification_provider
-        if provider == "ifttt":
-            self.ifttt_notification(message)
-
-    def ifttt_notification(self, message):
-        event = self._enclosure_settings.notification_event_name
-        api_key = self._enclosure_settings.notification_api_key
-        self._logger.debug("Sending IFTTT notification for event %s: %s", event, message)
-        try:
-            response = requests.post(
-                f"https://maker.ifttt.com/trigger/{event}/with/key/{api_key}/",
-                data={"value1": message},
-                timeout=(3.05, 7),
-            )
-        except requests.exceptions.RequestException as ex:
-            self._logger.warning("Could not send IFTTT notification: %s", type(ex).__name__)
-            return
-        if not response.ok:
-            self._logger.warning("IFTTT rejected the notification (HTTP %s): %s", response.status_code, response.text)
 
     # ~~ EventPlugin mixin
     def on_event(self, event, payload):
@@ -1845,13 +1805,12 @@ class EnclosurePlugin(
             self.run_tasks()
 
         if event == Events.PRINT_DONE:
-            for notification in self.notifications:
-                if notification["printFinish"]:
-                    file_name = Path(payload["path"]).name
-                    elapsed_time_in_seconds = payload["time"]
-                    elapsed_time = octoprint.util.get_formatted_timedelta(timedelta(seconds=elapsed_time_in_seconds))
-                    msg = f"Print job finished: {file_name} printed in {elapsed_time}"
-                    self.send_notification(msg)
+            file_name = Path(payload["path"]).name
+            elapsed_time = octoprint.util.get_formatted_timedelta(timedelta(seconds=payload["time"]))
+            self._notifications.send(
+                NotificationType.PRINT_FINISH,
+                f"Print job finished: {file_name} printed in {elapsed_time}",
+            )
 
         if event in (Events.ERROR, Events.DISCONNECTED) or (
             event == Events.PRINTER_STATE_CHANGED and "error" in payload["state_string"].lower()
@@ -2066,7 +2025,6 @@ class EnclosurePlugin(
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
         self.rpi_inputs = self._enclosure_settings.rpi_inputs
-        self.notifications = self._enclosure_settings.notifications
         outputs_after_save = self.get_output_list()
 
         common_pins = list(set(outputs_before_save) & set(outputs_after_save))
@@ -2111,15 +2069,7 @@ class EnclosurePlugin(
             "notification_provider": "",
             "notification_api_key": "",
             "notification_event_name": "printer_event",
-            "notifications": [
-                {
-                    "printFinish": True,
-                    "filamentChange": True,
-                    "printer_action": True,
-                    "temperatureAction": True,
-                    "gpioAction": True,
-                },
-            ],
+            "notifications": [{notification_type.value: True for notification_type in NotificationType}],
         }
 
     # ~~ TemplatePlugin

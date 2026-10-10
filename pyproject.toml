@@ -23,6 +23,7 @@ dependencies = [
     "RPi.GPIO>=0.5.11",  # min is 0.5.11 for GPIO.getmode()
     "smbus2>=0.3.0",  # min is 0.3.0 for SMBus as context manager
     "spidev",
+    "typing_extensions>=4.4",  # min is 4.4 for typing_extensions.override
 ]
 dynamic = [
     "license",
