@@ -407,7 +407,7 @@
                     <code>ENTER</code> to the end of every line sent to the printer</span>
             </div>
         </div>
-        {{ select_control_group("notification_provider", _("Notification Provider"), [("disabled", "Disabled"), ("ifttt", "IFTTT")]) }}
+        {{ select_control_group("notification_provider", _("Notification Provider"), [("", "Disabled"), ("ifttt", "IFTTT")]) }}
         <div data-bind="if: notification_provider() == 'ifttt'">
             {{ text_control_group("notification_event_name", _("Event Name"), "Event name that was configured on the maker channel of IFTTT, don't use space between the words") }}
             {{ text_control_group("notification_api_key", _("IFTTT API KEY")) }}

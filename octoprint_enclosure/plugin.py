@@ -20,6 +20,7 @@ from RPi import GPIO
 from smbus2 import SMBus
 from werkzeug.exceptions import BadRequest
 
+from .core import Settings
 from .core.migrations import migrate_settings
 from .getPiTemp import PiTemp
 from .ledstrip import LEDStrip
@@ -84,6 +85,9 @@ class EnclosurePlugin(
         self.mqtt_root_topic = "octoprint/plugins/enclosure"
         self.mqtt_sensor_topic = self.mqtt_root_topic + "/" + "enclosure"
         self.mqtt_message = '{"temperature": 0, "humidity": 0}'
+
+    def initialize(self):
+        self._enclosure_settings = Settings(self._settings)
 
     def start_timer(self):
         """Start the timer that checks the enclosure temperature."""
@@ -156,9 +160,9 @@ class EnclosurePlugin(
         self.pwm_instances = []
         self.event_queue = []
         self.rpi_outputs_not_changed = []
-        self.rpi_outputs = self._settings.get(["rpi_outputs"])
-        self.rpi_inputs = self._settings.get(["rpi_inputs"])
-        self.notifications = self._settings.get(["notifications"])
+        self.rpi_outputs = self._enclosure_settings.rpi_outputs
+        self.rpi_inputs = self._enclosure_settings.rpi_inputs
+        self.notifications = self._enclosure_settings.notifications
         # Reset volatile temp_ctr_set_value to 0 on startup (it should not be persisted)
         for rpi_output in self.rpi_outputs:
             rpi_output["temp_ctr_set_value"] = 0
@@ -293,7 +297,7 @@ class EnclosurePlugin(
             if identifier == self.to_int(sensor["index_id"]):
                 sensor["filament_sensor_enabled"] = value
                 self._logger.info("Setting filament sensor for input %s to : %s", str(identifier), value)
-        self._settings.set(["rpi_inputs"], self.rpi_inputs)
+        self._enclosure_settings.rpi_inputs = self.rpi_inputs
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/outputs", methods=["GET"])
@@ -373,7 +377,7 @@ class EnclosurePlugin(
             if identifier == self.to_int(output["index_id"]):
                 output["auto_startup"] = value
                 self._logger.info("Setting auto startup for output %s to : %s", str(identifier), value)
-        self._settings.set(["rpi_outputs"], self.rpi_outputs)
+        self._enclosure_settings.rpi_outputs = self.rpi_outputs
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:identifier>/auto-shutdown", methods=["PATCH"])
@@ -400,7 +404,7 @@ class EnclosurePlugin(
             if identifier == self.to_int(output["index_id"]):
                 output["auto_shutdown"] = value
                 self._logger.info("Setting auto shutdown for output %s to : %s", str(identifier), value)
-        self._settings.set(["rpi_outputs"], self.rpi_outputs)
+        self._enclosure_settings.rpi_outputs = self.rpi_outputs
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/pwm/<int:identifier>", methods=["PATCH"])
@@ -593,7 +597,7 @@ class EnclosurePlugin(
                 script = str(SCRIPTS_DIR / "neopixel_indirect.py")
                 cmd = [sys.executable, script]
 
-            if self._settings.get(["use_sudo"]):
+            if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
 
             cmd += [
@@ -606,8 +610,7 @@ class EnclosurePlugin(
             ]
 
             if neopixel_direct:
-                dma = self._settings.get(["neopixel_dma"]) or 10
-                cmd.append(str(dma))
+                cmd.append(str(self._enclosure_settings.neopixel_dma))
             else:
                 cmd.append(str(output["microcontroller_address"] or 0))
 
@@ -625,7 +628,7 @@ class EnclosurePlugin(
             sensor_data = []
             for sensor in list(filter(lambda item: item["input_type"] == "temperature_sensor", self.rpi_inputs)):
                 temp, hum, airquality = self.get_sensor_data(sensor)
-                if self._settings.get(["debug_temperature_log"]) is True:
+                if self._enclosure_settings.debug_temperature_log:
                     self._logger.debug(
                         "Sensor %s Temperature: %s humidity %s Airquality %s",
                         sensor["label"],
@@ -974,11 +977,11 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "mcp9808.py")
             args = [sys.executable, script, str(i2cbus), str(address)]
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("Temperature MCP9808 cmd: %s", " ".join(args))
             proc = Popen(args, stdout=PIPE)
             stdout, _ = proc.communicate()
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("MCP9808 result: %s", stdout)
             return self.to_float(stdout.decode("utf-8").strip())
         except Exception:
@@ -989,12 +992,12 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "getDHTTemp.py")
             cmd = [sys.executable, script, str(sensor), str(pin)]
-            if self._settings.get(["use_sudo"]):
+            if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("Temperature dht cmd: %s", cmd)
             stdout = (Popen(cmd, stdout=PIPE).stdout).read()
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("Dht result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
@@ -1006,12 +1009,12 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "DHT20.py")
             cmd = [sys.executable, script, str(address), str(i2cbus)]
-            if self._settings.get(["use_sudo"]):
+            if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("Temperature DHT20 cmd: %s", cmd)
             stdout = (Popen(cmd, stdout=PIPE).stdout).read()
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("DHT20 result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
@@ -1023,15 +1026,15 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "BME280.py")
             cmd = [sys.executable, script, str(address)]
-            if self._settings.get(["use_sudo"]):
+            if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("Temperature BME280 cmd: %s", cmd)
 
             stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
             output, errors = stdout.communicate()
 
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 if len(errors) > 0:
                     self._logger.error("BME280 error: %s", errors)
                 else:
@@ -1047,15 +1050,15 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "BME680.py")
             cmd = [sys.executable, script, str(address)]
-            if self._settings.get(["use_sudo"]):
+            if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("Temperature BME680 cmd: %s", cmd)
 
             stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
             output, errors = stdout.communicate()
 
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 if len(errors) > 0:
                     self._logger.error("BME680 error: %s", errors)
                 else:
@@ -1070,12 +1073,12 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "AM2320.py")
             cmd = [sys.executable, script]  # sensor has fixed address 0x5C
-            if self._settings.get(["use_sudo"]):
+            if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("Temperature AM2320 cmd: %s", cmd)
             stdout = (Popen(cmd, stdout=PIPE).stdout).read()
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("AM2320 result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
@@ -1087,13 +1090,13 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "AHT10.py")
             cmd = [sys.executable, script, str(address), str(i2cbus)]
-            if self._settings.get(["use_sudo"]):
+            if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("Temperature AHT10 cmd: %s", cmd)
             stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
             output, errors = stdout.communicate()
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 if len(errors) > 0:
                     self._logger.error("AHT10 error: %s", errors)
                 else:
@@ -1112,7 +1115,7 @@ class EnclosurePlugin(
             self._logger.exception("Failed to read Raspberry Pi CPU temperature")
             return 0
         else:
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("Pi CPU result: %s", temp)
             return temp
 
@@ -1120,12 +1123,12 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "SI7021.py")
             cmd = [sys.executable, script, str(address), str(i2cbus)]
-            if self._settings.get(["use_sudo"]):
+            if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("Temperature SI7021 cmd: %s", cmd)
             stdout = (Popen(cmd, stdout=PIPE).stdout).read()
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("SI7021 result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
@@ -1146,7 +1149,7 @@ class EnclosurePlugin(
         if equals_pos != -1:
             temp_string = lines[1][equals_pos + 2 :]
             temp_c = float(temp_string) / 1000.0
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("DS18B20 result: %s", temp_c)
             return f"{temp_c:0.1f}"
         return 0
@@ -1162,11 +1165,11 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "tmp102.py")
             args = [sys.executable, script, str(address)]
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("Temperature TMP102 cmd: %s", " ".join(args))
             proc = Popen(args, stdout=PIPE)
             stdout, _ = proc.communicate()
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("TMP102 result: %s", stdout)
             return self.to_float(stdout.decode("utf-8").strip())
         except Exception:
@@ -1177,11 +1180,11 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "max31855.py")
             args = [sys.executable, script, str(address)]
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("Temperature MAX31855 cmd: %s", " ".join(args))
             proc = Popen(args, stdout=PIPE)
             stdout, _ = proc.communicate()
-            if self._settings.get(["debug_temperature_log"]) is True:
+            if self._enclosure_settings.debug_temperature_log:
                 self._logger.debug("MAX31855 result: %s", stdout)
             return self.to_float(stdout.decode("utf-8").strip())
         except Exception:
@@ -1312,7 +1315,7 @@ class EnclosurePlugin(
     def setup_gpio(self):
         try:
             current_mode = GPIO.getmode()
-            set_mode = GPIO.BOARD if self._settings.get(["use_board_pin_number"]) else GPIO.BCM
+            set_mode = GPIO.BOARD if self._enclosure_settings.use_board_pin_number else GPIO.BCM
             if current_mode is None:
                 outputs = list(
                     filter(
@@ -1337,7 +1340,7 @@ class EnclosurePlugin(
             elif current_mode != set_mode:
                 GPIO.setmode(current_mode)
                 tempstr = "BOARD" if current_mode == GPIO.BOARD else "BCM"
-                self._settings.set(["use_board_pin_number"], current_mode == GPIO.BOARD)
+                self._enclosure_settings.use_board_pin_number = current_mode == GPIO.BOARD
                 warn_msg = (
                     "GPIO mode was configured before, GPIO mode will be forced to use: "
                     + tempstr
@@ -1504,7 +1507,7 @@ class EnclosurePlugin(
                         for item in self.last_filament_end_detected:
                             if item["index_id"] == filament_sensor["index_id"]:
                                 item["time"] = time_now
-                        for line in self._settings.get(["filament_sensor_gcode"]).split("\n"):
+                        for line in self._enclosure_settings.filament_sensor_gcode.split("\n"):
                             if line:
                                 self._printer.commands(line.strip())
                                 self._logger.info("Sending GCODE command: %s", line.strip())
@@ -1764,13 +1767,13 @@ class EnclosurePlugin(
         ]
 
     def send_notification(self, message):
-        provider = self._settings.get(["notification_provider"])
+        provider = self._enclosure_settings.notification_provider
         if provider == "ifttt":
             self.ifttt_notification(message)
 
     def ifttt_notification(self, message):
-        event = self._settings.get(["notification_event_name"])
-        api_key = self._settings.get(["notification_api_key"])
+        event = self._enclosure_settings.notification_event_name
+        api_key = self._enclosure_settings.notification_api_key
         self._logger.debug("Sending IFTTT notification for event %s: %s", event, message)
         try:
             response = requests.post(
@@ -2061,9 +2064,9 @@ class EnclosurePlugin(
     def on_settings_save(self, data):
         outputs_before_save = self.get_output_list()
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
-        self.rpi_outputs = self._settings.get(["rpi_outputs"])
-        self.rpi_inputs = self._settings.get(["rpi_inputs"])
-        self.notifications = self._settings.get(["notifications"])
+        self.rpi_outputs = self._enclosure_settings.rpi_outputs
+        self.rpi_inputs = self._enclosure_settings.rpi_inputs
+        self.notifications = self._enclosure_settings.notifications
         outputs_after_save = self.get_output_list()
 
         common_pins = list(set(outputs_before_save) & set(outputs_after_save))
@@ -2105,7 +2108,7 @@ class EnclosurePlugin(
             "gcode_control": False,
             "debug_temperature_log": False,
             "use_board_pin_number": False,
-            "notification_provider": "disabled",
+            "notification_provider": "",
             "notification_api_key": "",
             "notification_event_name": "printer_event",
             "notifications": [
@@ -2161,7 +2164,7 @@ class EnclosurePlugin(
         }
 
     def hook_gcode_queuing(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
-        if self._settings.get(["gcode_control"]) is False:
+        if not self._enclosure_settings.gcode_control:
             return
 
         if cmd.strip().startswith("ENC"):
