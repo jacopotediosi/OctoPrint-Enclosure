@@ -21,15 +21,6 @@ class Settings:
         self.write_lock = threading.RLock()
 
     ##########
-    ### Debug
-    ##########
-
-    @property
-    def debug_temperature_log(self) -> bool:
-        """Whether every sensor reading is logged."""
-        return bool(self._settings.get_boolean(["debug_temperature_log"]))
-
-    ##########
     ### RPI inputs and outputs
     ##########
 

@@ -1,5 +1,6 @@
 import contextlib
 import copy
+import logging
 import math
 import struct
 import sys
@@ -13,6 +14,7 @@ import octoprint.plugin
 import octoprint.util
 from flask import jsonify, make_response, request
 from octoprint.events import Events
+from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
 from octoprint.server.util.flask import restricted_access
 from octoprint.util import RepeatedTimer
 from RPi import GPIO
@@ -86,6 +88,27 @@ class EnclosurePlugin(
         self.mqtt_message = '{"temperature": 0, "humidity": 0}'
 
     def initialize(self):
+        # Logging formatter
+        logging_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+        # File logging handler
+        file_handler = CleaningTimedRotatingFileHandler(
+            self._settings.get_plugin_logfile_path(),
+            when="D",
+            backupCount=6,
+        )
+        file_handler.setFormatter(logging_formatter)
+        self._logger.addHandler(file_handler)
+
+        # Console logging handler
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(logging_formatter)
+        self._logger.addHandler(console_handler)
+
+        # Don't propagate logging
+        self._logger.propagate = False
+
+        # Initialize other plugin components
         self._enclosure_settings = Settings(self._settings)
         self._notifications = Notifications(self._enclosure_settings, self._logger)
 
@@ -627,14 +650,13 @@ class EnclosurePlugin(
             sensor_data = []
             for sensor in list(filter(lambda item: item["input_type"] == "temperature_sensor", self.rpi_inputs)):
                 temp, hum, airquality = self.get_sensor_data(sensor)
-                if self._enclosure_settings.debug_temperature_log:
-                    self._logger.debug(
-                        "Sensor %s Temperature: %s humidity %s Airquality %s",
-                        sensor["label"],
-                        temp,
-                        hum,
-                        airquality,
-                    )
+                self._logger.debug(
+                    "Sensor %s Temperature: %s humidity %s Airquality %s",
+                    sensor["label"],
+                    temp,
+                    hum,
+                    airquality,
+                )
                 if temp is not None and hum is not None and airquality is not None:
                     sensor["temp_sensor_temp"] = temp
                     sensor["temp_sensor_humidity"] = hum
@@ -973,12 +995,10 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "mcp9808.py")
             args = [sys.executable, script, str(i2cbus), str(address)]
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("Temperature MCP9808 cmd: %s", " ".join(args))
+            self._logger.debug("Temperature MCP9808 cmd: %s", " ".join(args))
             proc = Popen(args, stdout=PIPE)
             stdout, _ = proc.communicate()
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("MCP9808 result: %s", stdout)
+            self._logger.debug("MCP9808 result: %s", stdout)
             return self.to_float(stdout.decode("utf-8").strip())
         except Exception:
             self._logger.exception("Failed to read MCP9808 sensor")
@@ -990,11 +1010,9 @@ class EnclosurePlugin(
             cmd = [sys.executable, script, str(sensor), str(pin)]
             if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("Temperature dht cmd: %s", cmd)
+            self._logger.debug("Temperature dht cmd: %s", cmd)
             stdout = (Popen(cmd, stdout=PIPE).stdout).read()
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("Dht result: %s", stdout)
+            self._logger.debug("Dht result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
         except Exception:
@@ -1007,11 +1025,9 @@ class EnclosurePlugin(
             cmd = [sys.executable, script, str(address), str(i2cbus)]
             if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("Temperature DHT20 cmd: %s", cmd)
+            self._logger.debug("Temperature DHT20 cmd: %s", cmd)
             stdout = (Popen(cmd, stdout=PIPE).stdout).read()
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("DHT20 result: %s", stdout)
+            self._logger.debug("DHT20 result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
         except Exception:
@@ -1024,17 +1040,15 @@ class EnclosurePlugin(
             cmd = [sys.executable, script, str(address)]
             if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("Temperature BME280 cmd: %s", cmd)
+            self._logger.debug("Temperature BME280 cmd: %s", cmd)
 
             stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
             output, errors = stdout.communicate()
 
-            if self._enclosure_settings.debug_temperature_log:
-                if len(errors) > 0:
-                    self._logger.error("BME280 error: %s", errors)
-                else:
-                    self._logger.debug("BME280 result: %s", output)
+            if len(errors) > 0:
+                self._logger.debug("BME280 error: %s", errors)
+            else:
+                self._logger.debug("BME280 result: %s", output)
 
             temp, hum = output.split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
@@ -1048,17 +1062,15 @@ class EnclosurePlugin(
             cmd = [sys.executable, script, str(address)]
             if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("Temperature BME680 cmd: %s", cmd)
+            self._logger.debug("Temperature BME680 cmd: %s", cmd)
 
             stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
             output, errors = stdout.communicate()
 
-            if self._enclosure_settings.debug_temperature_log:
-                if len(errors) > 0:
-                    self._logger.error("BME680 error: %s", errors)
-                else:
-                    self._logger.debug("BME680 result: %s", output)
+            if len(errors) > 0:
+                self._logger.debug("BME680 error: %s", errors)
+            else:
+                self._logger.debug("BME680 result: %s", output)
             temp, hum, airq = output.split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()), self.to_float(airq.strip()))
         except Exception:
@@ -1071,11 +1083,9 @@ class EnclosurePlugin(
             cmd = [sys.executable, script]  # sensor has fixed address 0x5C
             if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("Temperature AM2320 cmd: %s", cmd)
+            self._logger.debug("Temperature AM2320 cmd: %s", cmd)
             stdout = (Popen(cmd, stdout=PIPE).stdout).read()
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("AM2320 result: %s", stdout)
+            self._logger.debug("AM2320 result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
         except Exception:
@@ -1088,15 +1098,13 @@ class EnclosurePlugin(
             cmd = [sys.executable, script, str(address), str(i2cbus)]
             if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("Temperature AHT10 cmd: %s", cmd)
+            self._logger.debug("Temperature AHT10 cmd: %s", cmd)
             stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
             output, errors = stdout.communicate()
-            if self._enclosure_settings.debug_temperature_log:
-                if len(errors) > 0:
-                    self._logger.error("AHT10 error: %s", errors)
-                else:
-                    self._logger.debug("AHT10 result: %s", output)
+            if len(errors) > 0:
+                self._logger.debug("AHT10 error: %s", errors)
+            else:
+                self._logger.debug("AHT10 result: %s", output)
             temp, hum = output.split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
         except Exception:
@@ -1111,8 +1119,7 @@ class EnclosurePlugin(
             self._logger.exception("Failed to read Raspberry Pi CPU temperature")
             return 0
         else:
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("Pi CPU result: %s", temp)
+            self._logger.debug("Pi CPU result: %s", temp)
             return temp
 
     def read_si7021_temp(self, address, i2cbus):
@@ -1121,11 +1128,9 @@ class EnclosurePlugin(
             cmd = [sys.executable, script, str(address), str(i2cbus)]
             if self._enclosure_settings.use_sudo:
                 cmd.insert(0, "sudo")
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("Temperature SI7021 cmd: %s", cmd)
+            self._logger.debug("Temperature SI7021 cmd: %s", cmd)
             stdout = (Popen(cmd, stdout=PIPE).stdout).read()
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("SI7021 result: %s", stdout)
+            self._logger.debug("SI7021 result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
         except Exception:
@@ -1145,8 +1150,7 @@ class EnclosurePlugin(
         if equals_pos != -1:
             temp_string = lines[1][equals_pos + 2 :]
             temp_c = float(temp_string) / 1000.0
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("DS18B20 result: %s", temp_c)
+            self._logger.debug("DS18B20 result: %s", temp_c)
             return f"{temp_c:0.1f}"
         return 0
 
@@ -1161,12 +1165,10 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "tmp102.py")
             args = [sys.executable, script, str(address)]
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("Temperature TMP102 cmd: %s", " ".join(args))
+            self._logger.debug("Temperature TMP102 cmd: %s", " ".join(args))
             proc = Popen(args, stdout=PIPE)
             stdout, _ = proc.communicate()
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("TMP102 result: %s", stdout)
+            self._logger.debug("TMP102 result: %s", stdout)
             return self.to_float(stdout.decode("utf-8").strip())
         except Exception:
             self._logger.exception("Failed to read TMP102 sensor")
@@ -1176,12 +1178,10 @@ class EnclosurePlugin(
         try:
             script = str(SCRIPTS_DIR / "max31855.py")
             args = [sys.executable, script, str(address)]
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("Temperature MAX31855 cmd: %s", " ".join(args))
+            self._logger.debug("Temperature MAX31855 cmd: %s", " ".join(args))
             proc = Popen(args, stdout=PIPE)
             stdout, _ = proc.communicate()
-            if self._enclosure_settings.debug_temperature_log:
-                self._logger.debug("MAX31855 result: %s", stdout)
+            self._logger.debug("MAX31855 result: %s", stdout)
             return self.to_float(stdout.decode("utf-8").strip())
         except Exception:
             self._logger.exception("Failed to read MAX31855 sensor")
@@ -2062,9 +2062,7 @@ class EnclosurePlugin(
             ),
             "use_sudo": True,
             "neopixel_dma": 10,
-            "debug": False,
             "gcode_control": False,
-            "debug_temperature_log": False,
             "use_board_pin_number": False,
             "notification_provider": "",
             "notification_api_key": "",
