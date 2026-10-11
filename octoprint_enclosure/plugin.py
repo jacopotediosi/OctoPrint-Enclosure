@@ -21,7 +21,7 @@ from RPi import GPIO
 from smbus2 import SMBus
 from werkzeug.exceptions import BadRequest
 
-from .core import Settings
+from .core import Frontend, Settings
 from .core.migrations import migrate_settings
 from .getPiTemp import PiTemp
 from .ledstrip import LEDStrip
@@ -110,6 +110,7 @@ class EnclosurePlugin(
 
         # Initialize other plugin components
         self._enclosure_settings = Settings(self._settings)
+        self._frontend = Frontend(self._plugin_manager, self._identifier)
         self._notifications = Notifications(self._enclosure_settings, self._logger)
 
     def start_timer(self):
@@ -747,7 +748,7 @@ class EnclosurePlugin(
         self.update_ui_inputs()
 
     def update_ui_current_temperature(self):
-        self._plugin_manager.send_plugin_message(self._identifier, {"sensor_data": self.temperature_sensor_data})
+        self._frontend.update_sensor_data(self.temperature_sensor_data)
 
     def update_ui_set_temperature(self):
         result = []
@@ -755,7 +756,7 @@ class EnclosurePlugin(
             set_temperature = self.to_float(temp_crt_output["temp_ctr_set_value"])
             result.append({"index_id": temp_crt_output["index_id"], "set_temperature": set_temperature})
             result.append(set_temperature)
-        self._plugin_manager.send_plugin_message(self._identifier, {"set_temperature": result})
+        self._frontend.update_set_temperature(result)
 
     def stop_queue_item(self, queue_id):
         old_list = self.event_queue
@@ -824,15 +825,12 @@ class EnclosurePlugin(
                                     "auto_shutdown": shutdown,
                                 },
                             )
-            self._plugin_manager.send_plugin_message(
-                self._identifier,
-                {
-                    "rpi_output_regular": regular_status,
-                    "rpi_output_pwm": pwm_status,
-                    "rpi_output_neopixel": neopixel_status,
-                    "rpi_output_ledstrip": ledstrip_status,
-                    "rpi_output_temp_hum_ctrl": temp_control_status,
-                },
+            self._frontend.update_outputs(
+                regular=regular_status,
+                pwm=pwm_status,
+                neopixel=neopixel_status,
+                ledstrip=ledstrip_status,
+                temp_hum_ctrl=temp_control_status,
             )
         except Exception:
             self._logger.exception("Error sending outputs status to the UI")
@@ -849,7 +847,7 @@ class EnclosurePlugin(
                     index = self.to_int(sensor["index_id"])
                     value = sensor["filament_sensor_enabled"]
                     sensor_status.append({"index_id": index, "filament_sensor_enabled": value})
-            self._plugin_manager.send_plugin_message(self._identifier, {"filament_sensor_status": sensor_status})
+            self._frontend.update_filament_sensor_status(sensor_status)
         except Exception:
             self._logger.exception("Error sending input status to the UI")
 
@@ -1343,10 +1341,7 @@ class EnclosurePlugin(
                     + " as pin numbers. Please update GPIO accordingly!"
                 )
                 self._logger.info(warn_msg)
-                self._plugin_manager.send_plugin_message(
-                    self._identifier,
-                    {"is_msg": True, "msg": warn_msg, "msg_type": "error"},
-                )
+                self._frontend.show_message(warn_msg, "error")
             GPIO.setwarnings(False)
         except Exception:
             self._logger.exception("Error setting up GPIO mode")
@@ -1600,16 +1595,19 @@ class EnclosurePlugin(
 
     def shell_command(self, command):
         try:
-            stdout = (Popen(command, shell=True, stdout=PIPE).stdout).read()
-            self._plugin_manager.send_plugin_message(
-                self._identifier,
-                {"is_msg": True, "msg": stdout, "msg_type": "success"},
-            )
+            result = run(command, shell=True, capture_output=True, check=False, encoding="utf-8", errors="replace")
         except Exception:
             self._logger.exception("Could not execute shell script: %s", command)
-            self._plugin_manager.send_plugin_message(
-                self._identifier,
-                {"is_msg": True, "msg": "Could not execute shell script", "msg_type": "error"},
+            self._frontend.show_message("Could not execute shell script", "error")
+            return
+
+        if result.returncode == 0:
+            self._frontend.show_message(f"Shell command executed. Output: {result.stdout}", "success")
+        else:
+            self._logger.warning("Shell script %s exited with code %s: %s", command, result.returncode, result.stderr)
+            self._frontend.show_message(
+                f"Shell command failed with exit code {result.returncode}. Error: {result.stderr}",
+                "error",
             )
 
     def handle_gpio_control(self, channel):
