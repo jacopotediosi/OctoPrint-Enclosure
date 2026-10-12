@@ -22,6 +22,7 @@ from werkzeug.exceptions import BadRequest
 
 from .core import Frontend, Settings
 from .core.migrations import migrate_settings
+from .gcode_commands import EncHandler
 from .getPiTemp import PiTemp
 from .hardware import dummy_gpio, gpio
 from .inputs import Sensors, UnsupportedSensorTypeError
@@ -30,7 +31,6 @@ from .ledstrip import LEDStrip
 from .notifications import Notifications, NotificationType
 from .utils import (
     clamp,
-    get_gcode_param,
     is_hhmm,
     parse_rgb,
     seconds_until_next,
@@ -107,6 +107,9 @@ class EnclosurePlugin(
 
         # Init sensors
         self._sensors = Sensors(self._logger, dummy=self.development_mode)
+
+        # Init G-code command handlers
+        self._enc_handler = EncHandler(self)
 
     def start_timer(self):
         """Start the timer that checks the enclosure temperature."""
@@ -2032,49 +2035,7 @@ class EnclosurePlugin(
         }
 
     def hook_gcode_queuing(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
-        if not self._enclosure_settings.gcode_control:
-            return
-
-        if cmd.strip().startswith("ENC"):
-            self._logger.debug("Gcode queuing: %s", cmd)
-            index_id = to_int(get_gcode_param(cmd, "O"))
-            for output in [item for item in self.rpi_outputs if item["index_id"] == index_id]:
-                if output["output_type"] == "regular":
-                    set_value = to_int(get_gcode_param(cmd, "S"))
-                    set_value = clamp(set_value, 0, 1)
-                    value = set_value == 1
-                    value = (not value) if output["active_low"] else value
-                    if output["gpio_i2c_enabled"]:
-                        self.gpio_i2c_write(output, value)
-                    else:
-                        self.write_gpio(to_int(output["gpio_pin"]), value)
-                    comm_instance._log(f"Setting REGULAR output {index_id} to value {value}")
-                    return
-                if output["output_type"] == "pwm":
-                    set_value = to_int(get_gcode_param(cmd, "S"))
-                    set_value = clamp(set_value, 0, 100)
-                    output["duty_cycle"] = set_value
-                    self.write_pwm(to_int(output["gpio_pin"]), set_value)
-                    comm_instance._log(f"Setting PWM output {index_id} to value {set_value}")
-                    return
-                if output["output_type"] == "neopixel_indirect" or output["output_type"] == "neopixel_direct":
-                    red = get_gcode_param(cmd, "R")
-                    green = get_gcode_param(cmd, "G")
-                    blue = get_gcode_param(cmd, "B")
-                    self.send_neopixel_command(output, red, green, blue)
-                    comm_instance._log(f"Setting NEOPIXEL output {index_id} to red: {red} green: {green} blue: {blue}")
-                    return
-                if output["output_type"] == "temp_hum_control":
-                    set_value = to_float(get_gcode_param(cmd, "S"))
-                    should_wait = to_int(get_gcode_param(cmd, "W"))
-                    if should_wait == 1 and self._printer.is_printing():
-                        self._printer.pause_print()
-                        self.waiting_temperature.append(index_id)
-                    output["temp_ctr_set_value"] = set_value
-                    self.update_ui_set_temperature()
-                    self.handle_temp_hum_control()
-                    comm_instance._log(f"Setting TEMP/HUM control output {index_id} to value {set_value}")
-                    return
+        self._enc_handler.handle(comm_instance, cmd)
 
     def get_graph_data(self, comm, parsed_temps):
         for sensor in list(filter(lambda item: item["input_type"] == "temperature_sensor", self.rpi_inputs)):
