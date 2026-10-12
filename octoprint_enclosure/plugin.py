@@ -24,6 +24,7 @@ from .core import Frontend, Settings
 from .core.migrations import migrate_settings
 from .getPiTemp import PiTemp
 from .hardware import dummy_gpio, gpio
+from .inputs import Sensors, UnsupportedSensorTypeError
 from .integrations import Mqtt
 from .ledstrip import LEDStrip
 from .notifications import Notifications, NotificationType
@@ -68,8 +69,6 @@ class EnclosurePlugin(
     last_filament_end_detected = []
     print_complete = False
     development_mode = False
-    dummy_value = 30.0
-    dummy_delta = 0.5
 
     def initialize(self):
         # Logging formatter
@@ -102,9 +101,12 @@ class EnclosurePlugin(
         self.development_mode = self._enclosure_settings.development_mode
         if self.development_mode:
             self._gpio = dummy_gpio
-            self._logger.warning("Development mode is enabled: GPIO inputs and outputs are simulated")
+            self._logger.warning("Development mode is enabled: GPIO (pins, sensors, etc) are simulated")
         else:
             self._gpio = gpio
+
+        # Init sensors
+        self._sensors = Sensors(self._logger, dummy=self.development_mode)
 
     def start_timer(self):
         """Start the timer that checks the enclosure temperature."""
@@ -602,7 +604,7 @@ class EnclosurePlugin(
             sensor_data = []
             for sensor in list(filter(lambda item: item["input_type"] == "temperature_sensor", self.rpi_inputs)):
                 temp, hum, airquality = self.get_sensor_data(sensor)
-                self._logger.debug(
+                self._logger.getChild("Sensors").debug(
                     "Sensor %s Temperature: %s humidity %s Airquality %s",
                     sensor["label"],
                     temp,
@@ -801,8 +803,13 @@ class EnclosurePlugin(
 
     def get_sensor_data(self, sensor):
         try:
-            if self.development_mode:
-                temp, hum, airquality = self.read_dummy_temp()
+            try:
+                reading = self._sensors.read(sensor)
+            except UnsupportedSensorTypeError:
+                reading = None
+
+            if reading is not None:
+                temp, hum, airquality = reading.temperature, reading.humidity, reading.airquality
             elif sensor["temp_sensor_type"] in ["11", "22", "2302"]:
                 temp, hum = self.read_dht_temp(sensor["temp_sensor_type"], sensor["gpio_pin"])
                 airquality = 0
@@ -894,17 +901,6 @@ class EnclosurePlugin(
                             NotificationType.TEMPERATURE_ACTION,
                             f"Temperature action: enclosure temperature exceed {temperature_alarm['alarm_set_temp']}",
                         )
-
-    def read_dummy_temp(self):
-        current_value = self.dummy_value
-        if current_value > 40 or current_value < 30:
-            self.dummy_delta = -self.dummy_delta
-
-        return_value = current_value + self.dummy_delta
-
-        self.dummy_value = return_value
-
-        return return_value, return_value, return_value
 
     def read_raw_i2c_temp(self, sensor):
         try:
