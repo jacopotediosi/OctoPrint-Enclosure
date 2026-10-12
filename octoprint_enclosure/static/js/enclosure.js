@@ -300,16 +300,16 @@ $(function () {
 
     self.onStartupComplete = function () {
       self.settingsOpen = false;
-      self.notifyGpioImportError();
+      self.notifyGpioAlert();
     };
 
-    self.notifyGpioImportError = function () {
-      var gpioImportErrorAlert = $(".enclosure-gpio-import-error").first();
-      if (gpioImportErrorAlert.length) {
+    self.notifyGpioAlert = function () {
+      var gpioAlert = $(".enclosure-gpio-alert").first();
+      if (gpioAlert.length) {
         new PNotify({
           title: "Enclosure",
           title_escape: true,
-          text: gpioImportErrorAlert.text(),
+          text: gpioAlert.text(),
           text_escape: true,
           type: "error",
           hide: false

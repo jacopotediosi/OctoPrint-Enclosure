@@ -114,3 +114,12 @@ class Settings:
     def notification_event_name(self) -> str:
         """The IFTTT event the notifications trigger."""
         return self._settings.get(["notification_event_name"]) or ""
+
+    ##########
+    ### Development
+    ##########
+
+    @property
+    def development_mode(self) -> bool:
+        """Whether the plugin runs in development mode."""
+        return bool(self._settings.get_boolean(["development_mode"]))

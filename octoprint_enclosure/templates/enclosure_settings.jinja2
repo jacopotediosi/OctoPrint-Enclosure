@@ -1,5 +1,5 @@
-{% from "enclosure_macros.jinja2" import checkbox_control_group, gpio_import_error_alert, radio_control_group, select_control_group, text_control_group %}
-{{ gpio_import_error_alert(plugin_enclosure_gpio_import_error) }}
+{% from "enclosure_macros.jinja2" import checkbox_control_group, gpio_alert, radio_control_group, select_control_group, text_control_group %}
+{{ gpio_alert(plugin_enclosure_development_mode, plugin_enclosure_gpio_import_error) }}
 <h4>{{ _("Raspberry Pi Outputs") }}</h4>
 <p>
     Configure all
@@ -425,5 +425,6 @@
                 {% endfor %}
             </div>
         </div>
+        {{ checkbox_control_group("development_mode", _("Development mode"), "Enable development mode. Requires restarting OctoPrint.") }}
     </div>
 </form>

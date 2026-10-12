@@ -36,37 +36,36 @@ CLK   Cin
 
 import time
 
-from .hardware import gpio
-
 
 class LEDStrip:
-    def __init__(self, clock, data):
-        gpio.setwarnings(False)
-        gpio.setmode(gpio.BCM)
+    def __init__(self, gpio, clock, data):
+        self.__gpio = gpio
+        self.__gpio.setwarnings(False)
+        self.__gpio.setmode(self.__gpio.BCM)
         self.__clock = clock
         self.__data = data
         self.__delay = 0
-        gpio.setup(self.__clock, gpio.OUT)
-        gpio.setup(self.__data, gpio.OUT)
+        self.__gpio.setup(self.__clock, self.__gpio.OUT)
+        self.__gpio.setup(self.__data, self.__gpio.OUT)
 
     def __sendclock(self):
-        gpio.output(self.__clock, False)
+        self.__gpio.output(self.__clock, False)
         time.sleep(self.__delay)
-        gpio.output(self.__clock, True)
+        self.__gpio.output(self.__clock, True)
         time.sleep(self.__delay)
 
     def __send32zero(self):
         for _ in range(32):
-            gpio.output(self.__data, False)
+            self.__gpio.output(self.__data, False)
             self.__sendclock()
 
     def __senddata(self, dx):
         self.__send32zero()
         for _ in range(32):
             if (dx & 0x80000000) != 0:
-                gpio.output(self.__data, True)
+                self.__gpio.output(self.__data, True)
             else:
-                gpio.output(self.__data, False)
+                self.__gpio.output(self.__data, False)
             dx <<= 1
             self.__sendclock()
         self.__send32zero()
