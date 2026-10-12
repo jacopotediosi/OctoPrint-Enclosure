@@ -36,37 +36,37 @@ CLK   Cin
 
 import time
 
-from RPi import GPIO
+from .hardware import gpio
 
 
 class LEDStrip:
     def __init__(self, clock, data):
-        GPIO.setwarnings(False)
-        GPIO.setmode(GPIO.BCM)
+        gpio.setwarnings(False)
+        gpio.setmode(gpio.BCM)
         self.__clock = clock
         self.__data = data
         self.__delay = 0
-        GPIO.setup(self.__clock, GPIO.OUT)
-        GPIO.setup(self.__data, GPIO.OUT)
+        gpio.setup(self.__clock, gpio.OUT)
+        gpio.setup(self.__data, gpio.OUT)
 
     def __sendclock(self):
-        GPIO.output(self.__clock, False)
+        gpio.output(self.__clock, False)
         time.sleep(self.__delay)
-        GPIO.output(self.__clock, True)
+        gpio.output(self.__clock, True)
         time.sleep(self.__delay)
 
     def __send32zero(self):
         for _ in range(32):
-            GPIO.output(self.__data, False)
+            gpio.output(self.__data, False)
             self.__sendclock()
 
     def __senddata(self, dx):
         self.__send32zero()
         for _ in range(32):
             if (dx & 0x80000000) != 0:
-                GPIO.output(self.__data, True)
+                gpio.output(self.__data, True)
             else:
-                GPIO.output(self.__data, False)
+                gpio.output(self.__data, False)
             dx <<= 1
             self.__sendclock()
         self.__send32zero()

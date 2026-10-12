@@ -300,6 +300,21 @@ $(function () {
 
     self.onStartupComplete = function () {
       self.settingsOpen = false;
+      self.notifyGpioImportError();
+    };
+
+    self.notifyGpioImportError = function () {
+      var gpioImportErrorAlert = $(".enclosure-gpio-import-error").first();
+      if (gpioImportErrorAlert.length) {
+        new PNotify({
+          title: "Enclosure",
+          title_escape: true,
+          text: gpioImportErrorAlert.text(),
+          text_escape: true,
+          type: "error",
+          hide: false
+        });
+      }
     };
 
     self.onSettingsShown = function () {

@@ -1,4 +1,5 @@
-{% from "enclosure_macros.jinja2" import checkbox_control_group, radio_control_group, select_control_group, text_control_group %}
+{% from "enclosure_macros.jinja2" import checkbox_control_group, gpio_import_error_alert, radio_control_group, select_control_group, text_control_group %}
+{{ gpio_import_error_alert(plugin_enclosure_gpio_import_error) }}
 <h4>{{ _("Raspberry Pi Outputs") }}</h4>
 <p>
     Configure all
