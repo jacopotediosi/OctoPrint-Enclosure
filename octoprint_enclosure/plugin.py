@@ -22,7 +22,7 @@ from werkzeug.exceptions import BadRequest
 
 from .core import Frontend, Settings
 from .core.migrations import migrate_settings
-from .gcode_commands import EncHandler
+from .gcode_commands import EncDevHandler, EncHandler
 from .getPiTemp import PiTemp
 from .hardware import dummy_gpio, gpio
 from .inputs import Sensors, UnsupportedSensorTypeError
@@ -110,6 +110,7 @@ class EnclosurePlugin(
 
         # Init G-code command handlers
         self._enc_handler = EncHandler(self)
+        self._encdev_handler = EncDevHandler(self)
 
     def start_timer(self):
         """Start the timer that checks the enclosure temperature."""
@@ -2036,6 +2037,9 @@ class EnclosurePlugin(
 
     def hook_gcode_queuing(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
         self._enc_handler.handle(comm_instance, cmd)
+
+    def hook_atcommand_queuing(self, comm_instance, phase, command, parameters, tags=None, *args, **kwargs):
+        self._encdev_handler.handle(comm_instance, command, parameters)
 
     def get_graph_data(self, comm, parsed_temps):
         for sensor in list(filter(lambda item: item["input_type"] == "temperature_sensor", self.rpi_inputs)):

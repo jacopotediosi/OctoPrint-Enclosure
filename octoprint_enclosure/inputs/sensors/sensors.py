@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar
 
 from .dummy import DummySensor
 from .registry import SENSORS
@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     import logging
 
     from .base import Reading, Sensor
+
+_SensorT = TypeVar("_SensorT", bound="Sensor")
 
 
 class UnsupportedSensorTypeError(Exception):
@@ -28,7 +30,7 @@ class Sensors:
         """
         self._logger = logger.getChild("Sensors")
         self._dummy = dummy
-        self._sensors: dict[tuple[int, type[Sensor]], Sensor] = {}
+        self._sensors: dict[int, Sensor] = {}
 
     def read(self, config: dict) -> Reading:
         """Read a sensor.
@@ -43,15 +45,31 @@ class Sensors:
             UnsupportedSensorTypeError: If the kind of the sensor is not supported.
 
         """
-        sensor_class = self._get_sensor_class(config)
+        if self._dummy:
+            return self.get_dummy(config["index_id"]).read()
+
+        sensor_class = SENSORS.get(config["temp_sensor_type"])
         if sensor_class is None:
             msg = f"Unsupported sensor type: {config['temp_sensor_type']}"
             raise UnsupportedSensorTypeError(msg)
 
-        key = (config["index_id"], sensor_class)
-        if key not in self._sensors:
-            self._sensors[key] = sensor_class(self._logger)
-        return self._sensors[key].read()
+        return self._get_sensor(config["index_id"], sensor_class).read()
 
-    def _get_sensor_class(self, config: dict) -> type[Sensor] | None:
-        return DummySensor if self._dummy else SENSORS.get(config["temp_sensor_type"])
+    def get_dummy(self, index_id: int) -> DummySensor:
+        """Get the dummy sensor of an input.
+
+        Args:
+            index_id (int): The id of the input.
+
+        Returns:
+            DummySensor: The dummy sensor of the input.
+
+        """
+        return self._get_sensor(index_id, DummySensor)
+
+    def _get_sensor(self, index_id: int, sensor_class: type[_SensorT]) -> _SensorT:
+        sensor = self._sensors.get(index_id)
+        if not isinstance(sensor, sensor_class):
+            sensor = sensor_class(self._logger)
+            self._sensors[index_id] = sensor
+        return sensor

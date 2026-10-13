@@ -23,7 +23,8 @@ __plugin_name__ = "Enclosure Plugin"
 __plugin_pythoncompat__ = ">=3.7,<4"
 __plugin_implementation__ = _get_plugin_implementation()
 __plugin_hooks__ = {
+    "octoprint.comm.protocol.atcommand.queuing": __plugin_implementation__.hook_atcommand_queuing,
     "octoprint.comm.protocol.gcode.queuing": __plugin_implementation__.hook_gcode_queuing,
-    "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information,
     "octoprint.comm.protocol.temperatures.received": (__plugin_implementation__.get_graph_data, 1),
+    "octoprint.plugin.softwareupdate.check_config": __plugin_implementation__.get_update_information,
 }

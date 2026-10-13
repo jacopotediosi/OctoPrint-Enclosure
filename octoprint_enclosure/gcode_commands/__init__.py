@@ -1,3 +1,4 @@
 from .enc import EncHandler
+from .encdev import EncDevHandler
 
-__all__ = ["EncHandler"]
+__all__ = ["EncDevHandler", "EncHandler"]

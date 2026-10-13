@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -36,7 +37,9 @@ class _PinState:
 
     mode: _PinNumbering | None
     levels: dict[int, int]
+    event_edges: dict[int, int]
     event_callbacks: dict[int, Callable[[int], object] | None]
+    pwms: dict[int, PWM]
 
     def __init__(self) -> None:
         self.reset()
@@ -44,7 +47,9 @@ class _PinState:
     def reset(self) -> None:
         self.mode = None
         self.levels = {}
+        self.event_edges = {}
         self.event_callbacks = {}
+        self.pwms = {}
 
 
 class PWM:
@@ -62,6 +67,7 @@ class PWM:
         self.frequency = frequency
         self.duty_cycle = 0.0
         self.running = False
+        _pin_state.pwms[channel] = self
 
     def start(self, dutycycle: float) -> None:
         """Start the PWM with a duty cycle, from 0 to 100."""
@@ -71,6 +77,20 @@ class PWM:
     def stop(self) -> None:
         """Stop the PWM."""
         self.running = False
+
+
+@dataclass(frozen=True)
+class PinStatus:
+    """The status of a dummy pin."""
+
+    level: int
+    """The level of the pin, LOW or HIGH."""
+
+    edge: int | None
+    """The edge detected on the pin, RISING, FALLING or BOTH, or None if no edge is detected."""
+
+    pwm: PWM | None
+    """The software PWM on the pin, if any."""
 
 
 _pin_state = _PinState()
@@ -126,17 +146,57 @@ def cleanup(channel: int | list[int] | tuple[int, ...] | None = None) -> None:
 
     for pin in _as_list(channel):
         _pin_state.levels.pop(pin, None)
+        _pin_state.event_edges.pop(pin, None)
         _pin_state.event_callbacks.pop(pin, None)
+        _pin_state.pwms.pop(pin, None)
 
 
 def add_event_detect(
     channel: int,
-    edge: int,  # noqa: ARG001 - same signature as RPi.GPIO.add_event_detect
+    edge: int,
     callback: Callable[[int], object] | None = None,
     bouncetime: int | None = None,  # noqa: ARG001 - same signature as RPi.GPIO.add_event_detect
 ) -> None:
+    _pin_state.event_edges[channel] = edge
     _pin_state.event_callbacks[channel] = callback
 
 
 def remove_event_detect(channel: int) -> None:
+    _pin_state.event_edges.pop(channel, None)
     _pin_state.event_callbacks.pop(channel, None)
+
+
+def set_input_level(channel: int, level: int) -> None:
+    """Change the level of a pin, as if an input signal changed.
+
+    If the change matches the edge detected on the pin, its callback runs in the calling thread.
+
+    Args:
+        channel (int): The pin.
+        level (int): The new level, LOW or HIGH.
+
+    """
+    previous_level = _pin_state.levels.get(channel, LOW)
+    new_level = HIGH if level else LOW
+    _pin_state.levels[channel] = new_level
+
+    edge = _pin_state.event_edges.get(channel)
+    callback = _pin_state.event_callbacks.get(channel)
+    if new_level == previous_level or edge is None or callback is None:
+        return
+
+    if edge in (BOTH, RISING if new_level == HIGH else FALLING):
+        callback(channel)
+
+
+def get_pins() -> dict[int, PinStatus]:
+    """Get the status of the dummy pins.
+
+    Returns:
+        dict[int, PinStatus]: The status of each pin, by pin number.
+
+    """
+    return {
+        pin: PinStatus(level, _pin_state.event_edges.get(pin), _pin_state.pwms.get(pin))
+        for pin, level in _pin_state.levels.items()
+    }
