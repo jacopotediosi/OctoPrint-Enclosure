@@ -1,14 +1,12 @@
 import contextlib
 import copy
 import logging
-import math
-import struct
 import sys
 import threading
 import time
 from datetime import timedelta
 from pathlib import Path
-from subprocess import PIPE, Popen, run
+from subprocess import Popen, run
 
 import octoprint.plugin
 import octoprint.util
@@ -23,9 +21,8 @@ from werkzeug.exceptions import BadRequest
 from .core import Frontend, Settings
 from .core.migrations import migrate_settings
 from .gcode_commands import EncDevHandler, EncHandler
-from .getPiTemp import PiTemp
 from .hardware import dummy_gpio, gpio
-from .inputs import Sensors, UnsupportedSensorTypeError
+from .inputs import Sensors
 from .integrations import Mqtt
 from .ledstrip import LEDStrip
 from .notifications import Notifications, NotificationType
@@ -39,7 +36,7 @@ from .utils import (
     to_int,
 )
 
-# Directory containing the sensor scripts run as subprocesses
+# Directory containing the neopixel scripts run as subprocesses
 SCRIPTS_DIR = Path(__file__).resolve().parent
 
 
@@ -608,13 +605,6 @@ class EnclosurePlugin(
             sensor_data = []
             for sensor in list(filter(lambda item: item["input_type"] == "temperature_sensor", self.rpi_inputs)):
                 temp, hum, airquality = self.get_sensor_data(sensor)
-                self._logger.getChild("Sensors").debug(
-                    "Sensor %s Temperature: %s humidity %s Airquality %s",
-                    sensor["label"],
-                    temp,
-                    hum,
-                    airquality,
-                )
                 if temp is not None and hum is not None and airquality is not None:
                     sensor["temp_sensor_temp"] = temp
                     sensor["temp_sensor_humidity"] = hum
@@ -807,64 +797,10 @@ class EnclosurePlugin(
 
     def get_sensor_data(self, sensor):
         try:
-            try:
-                reading = self._sensors.read(sensor)
-            except UnsupportedSensorTypeError:
-                reading = None
-
-            if reading is not None:
-                temp, hum, airquality = reading.temperature, reading.humidity, reading.airquality
-            elif sensor["temp_sensor_type"] in ["11", "22", "2302"]:
-                temp, hum = self.read_dht_temp(sensor["temp_sensor_type"], sensor["gpio_pin"])
-                airquality = 0
-            elif sensor["temp_sensor_type"] == "20":
-                temp, hum = self.read_dht20_temp(sensor["temp_sensor_address"], sensor["temp_sensor_i2cbus"])
-                airquality = 0
-            elif sensor["temp_sensor_type"] == "18b20":
-                temp = self.read_18b20_temp(sensor["ds18b20_serial"])
-                hum = 0
-                airquality = 0
-            elif sensor["temp_sensor_type"] == "bme280":
-                temp, hum = self.read_bme280_temp(sensor["temp_sensor_address"])
-                airquality = 0
-            elif sensor["temp_sensor_type"] == "bme680":
-                temp, hum, airquality = self.read_bme680_temp(sensor["temp_sensor_address"])
-            elif sensor["temp_sensor_type"] == "am2320":
-                temp, hum = self.read_am2320_temp()  # sensor has fixed address
-                airquality = 0
-            elif sensor["temp_sensor_type"] == "aht10":
-                temp, hum = self.read_aht10_temp(sensor["temp_sensor_address"], sensor["temp_sensor_i2cbus"])
-                airquality = 0
-            elif sensor["temp_sensor_type"] == "rpi":
-                temp = self.read_rpi_temp()  # rpi CPU Temp
-                hum = 0
-                airquality = 0
-            elif sensor["temp_sensor_type"] == "si7021":
-                temp, hum = self.read_si7021_temp(sensor["temp_sensor_address"], sensor["temp_sensor_i2cbus"])
-                airquality = 0
-            elif sensor["temp_sensor_type"] == "tmp102":
-                temp = self.read_tmp102_temp(sensor["temp_sensor_address"])
-                hum = 0
-                airquality = 0
-            elif sensor["temp_sensor_type"] == "max31855":
-                temp = self.read_max31855_temp(sensor["temp_sensor_address"])
-                hum = 0
-                airquality = 0
-            elif sensor["temp_sensor_type"] == "mcp9808":
-                temp = self.read_mcp_temp(sensor["temp_sensor_address"], sensor["temp_sensor_i2cbus"])
-                hum = 0
-                airquality = 0
-            elif sensor["temp_sensor_type"] == "temp_raw_i2c":
-                temp, hum = self.read_raw_i2c_temp(sensor)
-                airquality = 0
-            elif sensor["temp_sensor_type"] == "hum_raw_i2c":
-                hum, temp = self.read_raw_i2c_temp(sensor)
-                airquality = 0
-            else:
-                self._logger.info("temp_sensor_type no match")
-                temp = None
-                hum = None
-                airquality = 0
+            reading = self._sensors.read(sensor)
+            temp = 0 if reading.temperature is None else reading.temperature
+            hum = 0 if reading.humidity is None else reading.humidity
+            airquality = 0 if reading.airquality is None else reading.airquality
         except Exception:
             self._logger.exception("Error reading sensor %s", sensor["label"])
         else:
@@ -905,233 +841,6 @@ class EnclosurePlugin(
                             NotificationType.TEMPERATURE_ACTION,
                             f"Temperature action: enclosure temperature exceed {temperature_alarm['alarm_set_temp']}",
                         )
-
-    def read_raw_i2c_temp(self, sensor):
-        try:
-            i2cbus = to_int(sensor["temp_i2c_bus"])
-            i2caddr = to_int(sensor["temp_i2c_address"])
-            i2creg = to_int(sensor["temp_i2c_register"])
-
-            with SMBus(i2cbus) as bus:
-                data = bus.read_i2c_block_data(i2caddr, i2creg, 8)
-                fval1 = struct.unpack("f", bytearray(data[0:4]))[0]
-                if math.isnan(fval1):
-                    fval1 = 0
-                fval2 = struct.unpack("f", bytearray(data[4:8]))[0]
-                if math.isnan(fval2):
-                    fval2 = 0
-
-                self._logger.debug(
-                    "read_raw_i2c_temp(i2cbus=%s, i2caddr=%s, i2creg=%s) data == %s (%s, %s)",
-                    i2cbus,
-                    i2caddr,
-                    i2creg,
-                    data,
-                    fval1,
-                    fval2,
-                )
-
-                return (fval1, fval2)
-
-        except Exception:
-            self._logger.exception("Error reading on i2c address %s, reg %s", i2caddr, i2creg)
-            return str(-1)
-
-    def read_mcp_temp(self, address, i2cbus):
-        try:
-            script = str(SCRIPTS_DIR / "mcp9808.py")
-            args = [sys.executable, script, str(i2cbus), str(address)]
-            self._logger.debug("Temperature MCP9808 cmd: %s", " ".join(args))
-            proc = Popen(args, stdout=PIPE)
-            stdout, _ = proc.communicate()
-            self._logger.debug("MCP9808 result: %s", stdout)
-            return to_float(stdout.decode("utf-8").strip())
-        except Exception:
-            self._logger.exception("Failed to read MCP9808 sensor")
-            return 0
-
-    def read_dht_temp(self, sensor, pin):
-        try:
-            script = str(SCRIPTS_DIR / "getDHTTemp.py")
-            cmd = [sys.executable, script, str(sensor), str(pin)]
-            if self._enclosure_settings.use_sudo:
-                cmd.insert(0, "sudo")
-            self._logger.debug("Temperature dht cmd: %s", cmd)
-            stdout = (Popen(cmd, stdout=PIPE).stdout).read()
-            self._logger.debug("Dht result: %s", stdout)
-            temp, hum = stdout.decode("utf-8").split("|")
-            return (to_float(temp.strip()), to_float(hum.strip()))
-        except Exception:
-            self._logger.exception("Failed to read DHT sensor, try disabling Use SUDO in the advanced options")
-            return (0, 0)
-
-    def read_dht20_temp(self, address, i2cbus):
-        try:
-            script = str(SCRIPTS_DIR / "DHT20.py")
-            cmd = [sys.executable, script, str(address), str(i2cbus)]
-            if self._enclosure_settings.use_sudo:
-                cmd.insert(0, "sudo")
-            self._logger.debug("Temperature DHT20 cmd: %s", cmd)
-            stdout = (Popen(cmd, stdout=PIPE).stdout).read()
-            self._logger.debug("DHT20 result: %s", stdout)
-            temp, hum = stdout.decode("utf-8").split("|")
-            return (to_float(temp.strip()), to_float(hum.strip()))
-        except Exception:
-            self._logger.exception("Failed to read DHT20 sensor, try disabling Use SUDO in the advanced options")
-            return (0, 0)
-
-    def read_bme280_temp(self, address):
-        try:
-            script = str(SCRIPTS_DIR / "BME280.py")
-            cmd = [sys.executable, script, str(address)]
-            if self._enclosure_settings.use_sudo:
-                cmd.insert(0, "sudo")
-            self._logger.debug("Temperature BME280 cmd: %s", cmd)
-
-            stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
-            output, errors = stdout.communicate()
-
-            if len(errors) > 0:
-                self._logger.debug("BME280 error: %s", errors)
-            else:
-                self._logger.debug("BME280 result: %s", output)
-
-            temp, hum = output.split("|")
-            return (to_float(temp.strip()), to_float(hum.strip()))
-        except Exception:
-            self._logger.exception("Failed to read BME280 sensor, try disabling Use SUDO in the advanced options")
-            return (0, 0)
-
-    def read_bme680_temp(self, address):
-        try:
-            script = str(SCRIPTS_DIR / "BME680.py")
-            cmd = [sys.executable, script, str(address)]
-            if self._enclosure_settings.use_sudo:
-                cmd.insert(0, "sudo")
-            self._logger.debug("Temperature BME680 cmd: %s", cmd)
-
-            stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
-            output, errors = stdout.communicate()
-
-            if len(errors) > 0:
-                self._logger.debug("BME680 error: %s", errors)
-            else:
-                self._logger.debug("BME680 result: %s", output)
-            temp, hum, airq = output.split("|")
-            return (to_float(temp.strip()), to_float(hum.strip()), to_float(airq.strip()))
-        except Exception:
-            self._logger.exception("Failed to read BME680 sensor, try disabling Use SUDO in the advanced options")
-            return (0, 0, 0)
-
-    def read_am2320_temp(self):
-        try:
-            script = str(SCRIPTS_DIR / "AM2320.py")
-            cmd = [sys.executable, script]  # sensor has fixed address 0x5C
-            if self._enclosure_settings.use_sudo:
-                cmd.insert(0, "sudo")
-            self._logger.debug("Temperature AM2320 cmd: %s", cmd)
-            stdout = (Popen(cmd, stdout=PIPE).stdout).read()
-            self._logger.debug("AM2320 result: %s", stdout)
-            temp, hum = stdout.decode("utf-8").split("|")
-            return (to_float(temp.strip()), to_float(hum.strip()))
-        except Exception:
-            self._logger.exception("Failed to read AM2320 sensor, try disabling Use SUDO in the advanced options")
-            return (0, 0)
-
-    def read_aht10_temp(self, address, i2cbus):
-        try:
-            script = str(SCRIPTS_DIR / "AHT10.py")
-            cmd = [sys.executable, script, str(address), str(i2cbus)]
-            if self._enclosure_settings.use_sudo:
-                cmd.insert(0, "sudo")
-            self._logger.debug("Temperature AHT10 cmd: %s", cmd)
-            stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, text=True)
-            output, errors = stdout.communicate()
-            if len(errors) > 0:
-                self._logger.debug("AHT10 error: %s", errors)
-            else:
-                self._logger.debug("AHT10 result: %s", output)
-            temp, hum = output.split("|")
-            return (to_float(temp.strip()), to_float(hum.strip()))
-        except Exception:
-            self._logger.exception("Failed to read AHT10 sensor, try disabling Use SUDO in the advanced options")
-            return (0, 0)
-
-    def read_rpi_temp(self):
-        try:
-            pitemp = PiTemp()
-            temp = pitemp.get_temp()
-        except Exception:
-            self._logger.exception("Failed to read Raspberry Pi CPU temperature")
-            return 0
-        else:
-            self._logger.debug("Pi CPU result: %s", temp)
-            return temp
-
-    def read_si7021_temp(self, address, i2cbus):
-        try:
-            script = str(SCRIPTS_DIR / "SI7021.py")
-            cmd = [sys.executable, script, str(address), str(i2cbus)]
-            if self._enclosure_settings.use_sudo:
-                cmd.insert(0, "sudo")
-            self._logger.debug("Temperature SI7021 cmd: %s", cmd)
-            stdout = (Popen(cmd, stdout=PIPE).stdout).read()
-            self._logger.debug("SI7021 result: %s", stdout)
-            temp, hum = stdout.decode("utf-8").split("|")
-            return (to_float(temp.strip()), to_float(hum.strip()))
-        except Exception:
-            self._logger.exception("Failed to read SI7021 sensor, try disabling Use SUDO in the advanced options")
-            return (0, 0)
-
-    def read_18b20_temp(self, serial_number):
-        with contextlib.suppress(OSError):
-            run(["modprobe", "w1-gpio"], check=False)
-            run(["modprobe", "w1-therm"], check=False)
-
-        lines = self.read_raw_18b20_temp(serial_number)
-        while lines[0].strip()[-3:] != "YES":
-            time.sleep(0.2)
-            lines = self.read_raw_18b20_temp(serial_number)
-        equals_pos = lines[1].find("t=")
-        if equals_pos != -1:
-            temp_string = lines[1][equals_pos + 2 :]
-            temp_c = float(temp_string) / 1000.0
-            self._logger.debug("DS18B20 result: %s", temp_c)
-            return f"{temp_c:0.1f}"
-        return 0
-
-    def read_raw_18b20_temp(self, serial_number):
-        base_dir = Path("/sys/bus/w1/devices/")
-        device_folder = next(base_dir.glob(str(serial_number) + "*"))
-        device_file = device_folder / "w1_slave"
-        with device_file.open() as device_file_result:
-            return device_file_result.readlines()
-
-    def read_tmp102_temp(self, address):
-        try:
-            script = str(SCRIPTS_DIR / "tmp102.py")
-            args = [sys.executable, script, str(address)]
-            self._logger.debug("Temperature TMP102 cmd: %s", " ".join(args))
-            proc = Popen(args, stdout=PIPE)
-            stdout, _ = proc.communicate()
-            self._logger.debug("TMP102 result: %s", stdout)
-            return to_float(stdout.decode("utf-8").strip())
-        except Exception:
-            self._logger.exception("Failed to read TMP102 sensor")
-            return 0
-
-    def read_max31855_temp(self, address):
-        try:
-            script = str(SCRIPTS_DIR / "max31855.py")
-            args = [sys.executable, script, str(address)]
-            self._logger.debug("Temperature MAX31855 cmd: %s", " ".join(args))
-            proc = Popen(args, stdout=PIPE)
-            stdout, _ = proc.communicate()
-            self._logger.debug("MAX31855 result: %s", stdout)
-            return to_float(stdout.decode("utf-8").strip())
-        except Exception:
-            self._logger.exception("Failed to read MAX31855 sensor")
-            return 0
 
     def handle_pwm_linked_temperature(self):
         try:

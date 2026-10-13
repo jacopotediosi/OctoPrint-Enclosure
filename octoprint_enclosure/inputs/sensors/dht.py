@@ -1,0 +1,72 @@
+from __future__ import annotations
+
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import ClassVar
+
+from typing_extensions import override
+
+from .base import Reading, Sensor
+
+WORKER_PATH = Path(__file__).with_name("dht_worker.py")
+WORKER_TIMEOUT_SECONDS = 30
+
+
+@dataclass(frozen=True)
+class DhtConfig:
+    """The configuration of a DHT sensor."""
+
+    gpio_pin: int
+    """The GPIO pin the sensor is connected to."""
+
+
+class _DhtSensor(Sensor[DhtConfig]):
+    """A DHT temperature and humidity sensor."""
+
+    _model: ClassVar[str]
+    """The model of the sensor."""
+
+    @classmethod
+    @override
+    def parse_config(cls, settings: dict) -> DhtConfig:
+        return DhtConfig(gpio_pin=int(str(settings["gpio_pin"])))
+
+    @override
+    def read(self) -> Reading:
+        command = [sys.executable, str(WORKER_PATH), self._model, str(self.config.gpio_pin)]
+        try:
+            # Read the sensor
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=WORKER_TIMEOUT_SECONDS,
+                check=False,
+            )
+
+            # Check for errors
+            if result.returncode != 0:
+                self._logger.error("Failed to read %s sensor: %s", self._model, result.stderr.strip())
+                return Reading(temperature=-1, humidity=-1)
+
+            # The worker prints the temperature and the humidity, separated by a space
+            temperature, humidity = (float(value) for value in result.stdout.split())
+        except Exception:
+            self._logger.exception("Failed to read %s sensor", self._model)
+            return Reading(temperature=-1, humidity=-1)
+        else:
+            return Reading(temperature=round(temperature, 1), humidity=round(humidity, 1))
+
+
+class Dht11Sensor(_DhtSensor):
+    """A DHT11 temperature and humidity sensor."""
+
+    _model = "DHT11"
+
+
+class Dht22Sensor(_DhtSensor):
+    """A DHT22 (or AM2302) temperature and humidity sensor."""
+
+    _model = "DHT22"

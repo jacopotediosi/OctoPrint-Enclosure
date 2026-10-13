@@ -177,7 +177,7 @@ class EncDevHandler:
 
     def _set_sensor(self, send_reply: Callable[[str], None], index_id: str, values: str) -> None:
         config = self._get_input_config(index_id, "temperature_sensor")
-        sensor = self._plugin._sensors.get_dummy(config["index_id"])
+        sensor = self._plugin._sensors.get_dummy(config)
         new_values = {}
         for item in values.split():
             key, _, value = item.partition("=")
@@ -204,7 +204,7 @@ class EncDevHandler:
     def _fail_sensor(self, send_reply: Callable[[str], None], index_id: str) -> None:
         config = self._get_input_config(index_id, "temperature_sensor")
 
-        self._plugin._sensors.get_dummy(config["index_id"]).failing = True
+        self._plugin._sensors.get_dummy(config).failing = True
 
         send_reply(self._describe_sensor(config))
         self._read_sensors_now()
@@ -235,7 +235,7 @@ class EncDevHandler:
         self._plugin.check_enclosure_temp()
 
     def _describe_sensor(self, config: dict) -> str:
-        sensor = self._plugin._sensors.get_dummy(config["index_id"])
+        sensor = self._plugin._sensors.get_dummy(config)
         state = f"T={sensor.value} MIN={sensor.value_min} MAX={sensor.value_max} DELTA={sensor.value_delta}"
         if sensor.failing:
             state += ", failing"

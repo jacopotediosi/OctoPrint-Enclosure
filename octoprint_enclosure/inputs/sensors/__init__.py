@@ -1,3 +1,3 @@
-from .sensors import Sensors, UnsupportedSensorTypeError
+from .sensors import Sensors
 
-__all__ = ["Sensors", "UnsupportedSensorTypeError"]
+__all__ = ["Sensors"]

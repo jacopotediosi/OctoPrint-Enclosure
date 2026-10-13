@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import math
+import struct
+from dataclasses import dataclass
+
+from smbus2 import SMBus
+from typing_extensions import override
+
+from octoprint_enclosure.utils import to_int
+
+from .base import Reading, Sensor
+
+
+@dataclass(frozen=True)
+class RawI2cConfig:
+    """The configuration of a device sending its readings over I2C as raw floats."""
+
+    temp_i2c_bus: int
+    """The number of the I2C bus."""
+
+    temp_i2c_address: int
+    """The I2C address of the device."""
+
+    temp_i2c_register: int
+    """The register to read the floats from."""
+
+
+class _RawI2cSensor(Sensor[RawI2cConfig]):
+    """A device sending two readings over I2C as raw floats."""
+
+    @classmethod
+    @override
+    def parse_config(cls, settings: dict) -> RawI2cConfig:
+        return RawI2cConfig(
+            temp_i2c_bus=to_int(settings["temp_i2c_bus"]),
+            temp_i2c_address=to_int(settings["temp_i2c_address"]),
+            temp_i2c_register=to_int(settings["temp_i2c_register"]),
+        )
+
+    def _read_floats(self) -> tuple[float, float]:
+        try:
+            with SMBus(self.config.temp_i2c_bus) as bus:
+                data = bus.read_i2c_block_data(self.config.temp_i2c_address, self.config.temp_i2c_register, 8)
+                fval1 = struct.unpack("f", bytearray(data[0:4]))[0]
+                if math.isnan(fval1):
+                    fval1 = 0
+                fval2 = struct.unpack("f", bytearray(data[4:8]))[0]
+                if math.isnan(fval2):
+                    fval2 = 0
+
+                return (fval1, fval2)
+
+        except Exception:
+            self._logger.exception(
+                "Error reading on i2c address %s, reg %s",
+                self.config.temp_i2c_address,
+                self.config.temp_i2c_register,
+            )
+            return (-1, -1)
+
+
+class RawI2cTemperatureSensor(_RawI2cSensor):
+    """A device sending the temperature and then the humidity over I2C as raw floats."""
+
+    @override
+    def read(self) -> Reading:
+        temperature, humidity = self._read_floats()
+        return Reading(temperature=temperature, humidity=humidity)
+
+
+class RawI2cHumiditySensor(_RawI2cSensor):
+    """A device sending the humidity and then the temperature over I2C as raw floats."""
+
+    @override
+    def read(self) -> Reading:
+        humidity, temperature = self._read_floats()
+        return Reading(temperature=temperature, humidity=humidity)

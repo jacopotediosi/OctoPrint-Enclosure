@@ -2,19 +2,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, TypeVar
 
+from .base import Reading
 from .dummy import DummySensor
 from .registry import SENSORS
 
 if TYPE_CHECKING:
     import logging
 
-    from .base import Reading, Sensor
+    from .base import Sensor
 
 _SensorT = TypeVar("_SensorT", bound="Sensor")
-
-
-class UnsupportedSensorTypeError(Exception):
-    """Raised when the kind of a sensor is not supported."""
 
 
 class Sensors:
@@ -32,44 +29,56 @@ class Sensors:
         self._dummy = dummy
         self._sensors: dict[int, Sensor] = {}
 
-    def read(self, config: dict) -> Reading:
+    def read(self, settings: dict) -> Reading:
         """Read a sensor.
 
         Args:
-            config (dict): The configuration of the sensor.
+            settings (dict): The settings of the input the sensor is attached to.
 
         Returns:
             Reading: The values read.
 
-        Raises:
-            UnsupportedSensorTypeError: If the kind of the sensor is not supported.
-
         """
+        sensor_label = settings["label"]
+
         if self._dummy:
-            return self.get_dummy(config["index_id"]).read()
+            sensor = self.get_dummy(settings)
+        else:
+            sensor_type = settings["temp_sensor_type"]
+            sensor_class = SENSORS.get(sensor_type)
+            if sensor_class is None:
+                self._logger.warning("Unsupported type for sensor %s: %s", sensor_label, sensor_type)
+                return Reading(temperature=-1, humidity=-1, airquality=-1)
 
-        sensor_class = SENSORS.get(config["temp_sensor_type"])
-        if sensor_class is None:
-            msg = f"Unsupported sensor type: {config['temp_sensor_type']}"
-            raise UnsupportedSensorTypeError(msg)
+            try:
+                sensor = self._get_sensor(settings, sensor_class)
+            except ValueError as error:
+                self._logger.warning("Invalid settings for sensor %s: %s", sensor_label, error)
+                return Reading(temperature=-1, humidity=-1, airquality=-1)
 
-        return self._get_sensor(config["index_id"], sensor_class).read()
+        reading = sensor.read()
+        self._logger.debug("Sensor %s read: %s", sensor_label, reading)
+        return reading
 
-    def get_dummy(self, index_id: int) -> DummySensor:
+    def get_dummy(self, settings: dict) -> DummySensor:
         """Get the dummy sensor of an input.
 
         Args:
-            index_id (int): The id of the input.
+            settings (dict): The settings of the input.
 
         Returns:
             DummySensor: The dummy sensor of the input.
 
         """
-        return self._get_sensor(index_id, DummySensor)
+        return self._get_sensor(settings, DummySensor)
 
-    def _get_sensor(self, index_id: int, sensor_class: type[_SensorT]) -> _SensorT:
-        sensor = self._sensors.get(index_id)
-        if not isinstance(sensor, sensor_class):
-            sensor = sensor_class(self._logger)
-            self._sensors[index_id] = sensor
+    def _get_sensor(self, settings: dict, sensor_class: type[_SensorT]) -> _SensorT:
+        sensor_index = settings["index_id"]
+        sensor = self._sensors.get(sensor_index)
+        config = sensor_class.parse_config(settings)
+
+        if not isinstance(sensor, sensor_class) or sensor.config != config:
+            sensor = sensor_class(self._logger, config)
+            self._sensors[sensor_index] = sensor
+
         return sensor
