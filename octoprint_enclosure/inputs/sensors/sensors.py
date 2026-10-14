@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, TypeVar
 
-from .base import Reading
+from .base import SensorError
 from .dummy import DummySensor
 from .registry import SENSORS
 
 if TYPE_CHECKING:
     import logging
 
-    from .base import Sensor
+    from .base import Reading, Sensor
 
 _SensorT = TypeVar("_SensorT", bound="Sensor")
 
@@ -38,6 +38,9 @@ class Sensors:
         Returns:
             Reading: The values read.
 
+        Raises:
+            Exception: If the sensor can't be read.
+
         """
         sensor_label = settings["label"]
 
@@ -47,14 +50,14 @@ class Sensors:
             sensor_type = settings["temp_sensor_type"]
             sensor_class = SENSORS.get(sensor_type)
             if sensor_class is None:
-                self._logger.warning("Unsupported type for sensor %s: %s", sensor_label, sensor_type)
-                return Reading(temperature=-1, humidity=-1, airquality=-1)
+                msg = f"Unsupported sensor type: {sensor_type}"
+                raise SensorError(msg)
 
             try:
                 sensor = self._get_sensor(settings, sensor_class)
             except ValueError as error:
-                self._logger.warning("Invalid settings for sensor %s: %s", sensor_label, error)
-                return Reading(temperature=-1, humidity=-1, airquality=-1)
+                msg = f"Invalid settings: {error}"
+                raise SensorError(msg) from error
 
         reading = sensor.read()
         self._logger.debug("Sensor %s read: %s", sensor_label, reading)

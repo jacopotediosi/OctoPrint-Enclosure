@@ -160,8 +160,8 @@ $(function () {
             return (sensor_data['index_id'] == temperature_sensor.index_id());
           }).pop();
           if (linked_temp_sensor){
-            linked_temp_sensor.temp_sensor_temp(sensor_data['temperature'])
-            linked_temp_sensor.temp_sensor_humidity(sensor_data['humidity'])
+            linked_temp_sensor.temp_sensor_temp(sensor_data['temperature'] === null ? "" : sensor_data['temperature'])
+            linked_temp_sensor.temp_sensor_humidity(sensor_data['humidity'] === null ? "" : sensor_data['humidity'])
           }
         })
       }

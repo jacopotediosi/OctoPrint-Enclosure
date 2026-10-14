@@ -22,7 +22,7 @@ from .core import Frontend, Settings
 from .core.migrations import migrate_settings
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, gpio
-from .inputs import Sensors
+from .inputs import SensorError, Sensors
 from .integrations import Mqtt
 from .ledstrip import LEDStrip
 from .notifications import Notifications, NotificationType
@@ -63,6 +63,7 @@ class EnclosurePlugin(
     event_queue = []
     temp_hum_control_status = []
     temperature_sensor_data = []
+    failing_sensors = set()
     last_filament_end_detected = []
     print_complete = False
     development_mode = False
@@ -604,26 +605,65 @@ class EnclosurePlugin(
         try:
             sensor_data = []
             for sensor in list(filter(lambda item: item["input_type"] == "temperature_sensor", self.rpi_inputs)):
-                temp, hum, airquality = self.get_sensor_data(sensor)
-                if temp is not None and hum is not None and airquality is not None:
-                    sensor["temp_sensor_temp"] = temp
-                    sensor["temp_sensor_humidity"] = hum
-                    sensor_data.append(
-                        {
-                            "index_id": sensor["index_id"],
-                            "temperature": temp,
-                            "humidity": hum,
-                            "airquality": airquality,
-                        },
-                    )
-                    self.temperature_sensor_data = sensor_data
-                    self.handle_temp_hum_control()
-                    self.handle_temperature_events()
-                    self.handle_pwm_linked_temperature()
-                    self.update_ui()
+                try:
+                    temp, hum, airquality = self.get_sensor_data(sensor)
+                except Exception as error:
+                    self.handle_sensor_failure(sensor, error)
+                    sensor["temp_sensor_temp"] = ""
+                    sensor["temp_sensor_humidity"] = ""
+                    temp = hum = airquality = None
+                else:
+                    self.handle_sensor_recovery(sensor)
+                    sensor["temp_sensor_temp"] = "" if temp is None else temp
+                    sensor["temp_sensor_humidity"] = "" if hum is None else hum
                     self._mqtt.publish_sensor_reading(sensor["label"], temp, hum)
+
+                sensor_data.append(
+                    {
+                        "index_id": sensor["index_id"],
+                        "temperature": temp,
+                        "humidity": hum,
+                        "airquality": airquality,
+                    },
+                )
+
+            if sensor_data:
+                self.temperature_sensor_data = sensor_data
+                self.handle_temp_hum_control()
+                self.handle_temperature_events()
+                self.handle_pwm_linked_temperature()
+                self.update_ui()
         except Exception:
             self._logger.exception("Error checking enclosure temperature")
+
+    def handle_sensor_failure(self, sensor, error):
+        if sensor["index_id"] in self.failing_sensors:
+            self._logger.debug("Sensor %s still can't be read: %s", sensor["label"], error)
+            return
+
+        self.failing_sensors.add(sensor["index_id"])
+        self._logger.error(
+            "Sensor %s can't be read: %s",
+            sensor["label"],
+            error,
+            exc_info=not isinstance(error, SensorError),
+        )
+
+        for rpi_output in self.rpi_outputs:
+            if (
+                rpi_output["output_type"] == "temperature_alarm"
+                and rpi_output["linked_temp_sensor"] == sensor["index_id"]
+                and int(to_float(rpi_output["alarm_set_temp"])) != 0
+            ):
+                self._notifications.send(
+                    NotificationType.TEMPERATURE_ACTION,
+                    f"Temperature alarm: sensor {sensor['label']} can't be read",
+                )
+
+    def handle_sensor_recovery(self, sensor):
+        if sensor["index_id"] in self.failing_sensors:
+            self.failing_sensors.remove(sensor["index_id"])
+            self._logger.info("Sensor %s has started working again", sensor["label"])
 
     def toggle_output(self, output_index, first_run=False):
         for output in [item for item in self.rpi_outputs if item["index_id"] == output_index]:
@@ -796,31 +836,26 @@ class EnclosurePlugin(
             self._logger.exception("Error sending input status to the UI")
 
     def get_sensor_data(self, sensor):
-        try:
-            reading = self._sensors.read(sensor)
-            temp = 0 if reading.temperature is None else reading.temperature
-            hum = 0 if reading.humidity is None else reading.humidity
-            airquality = 0 if reading.airquality is None else reading.airquality
-        except Exception:
-            self._logger.exception("Error reading sensor %s", sensor["label"])
-        else:
-            if temp != -1 and hum != -1 and airquality != -1:
-                temp = round(to_float(temp), 1) if not sensor["use_fahrenheit"] else round(to_float(temp) * 1.8 + 32, 1)
-                hum = round(to_float(hum), 1)
-                airquality = round(to_float(airquality), 1)
-                return temp, hum, airquality
-            return None, None, None
+        reading = self._sensors.read(sensor)
+
+        temperature = reading.temperature
+        if temperature is not None and sensor["use_fahrenheit"]:
+            temperature = temperature * 1.8 + 32
+
+        temperature = None if temperature is None else round(float(temperature), 1)
+        humidity = None if reading.humidity is None else round(float(reading.humidity), 1)
+        airquality = None if reading.airquality is None else round(float(reading.airquality), 1)
+
+        return temperature, humidity, airquality
 
     def handle_temperature_events(self):
         for temperature_alarm in [item for item in self.rpi_outputs if item["output_type"] == "temperature_alarm"]:
             set_temperature = to_float(temperature_alarm["alarm_set_temp"])
             if int(set_temperature) == 0:
                 continue
-            linked_data = [
-                item
-                for item in self.temperature_sensor_data
-                if item["index_id"] == temperature_alarm["linked_temp_sensor"]
-            ].pop()
+            linked_data = self.get_linked_temp_sensor_data(temperature_alarm["linked_temp_sensor"])
+            if linked_data is None or linked_data["temperature"] is None:
+                continue
             sensor_temperature = to_float(linked_data["temperature"])
             if set_temperature < sensor_temperature:
                 for rpi_controlled_output in self.rpi_outputs:
@@ -852,20 +887,31 @@ class EnclosurePlugin(
                     index_id = to_int(pwm_output["index_id"])
                     linked_id = to_int(pwm_output["linked_temp_sensor"])
                     linked_data = self.get_linked_temp_sensor_data(linked_id)
-                    current_temp = to_float(linked_data["temperature"])
 
                     duty_a = to_float(pwm_output["duty_a"])
                     duty_b = to_float(pwm_output["duty_b"])
                     temp_a = to_float(pwm_output["temperature_a"])
                     temp_b = to_float(pwm_output["temperature_b"])
 
-                    try:
-                        calculated_duty = ((current_temp - temp_a) * (duty_b - duty_a) / (temp_b - temp_a)) + duty_a
-
-                        if current_temp < temp_a:
+                    if linked_data is None or linked_data["temperature"] is None:
+                        # Without a temperature act as if it were very high, with the duty of the hot end of the line:
+                        # full power for a cooling fan, off for a heater
+                        if temp_a == temp_b:
                             calculated_duty = 0
-                    except Exception:
-                        calculated_duty = 0
+                        elif duty_a == duty_b:
+                            calculated_duty = duty_a
+                        else:
+                            calculated_duty = 100 if (duty_b - duty_a) / (temp_b - temp_a) > 0 else 0
+                    else:
+                        current_temp = to_float(linked_data["temperature"])
+
+                        try:
+                            calculated_duty = ((current_temp - temp_a) * (duty_b - duty_a) / (temp_b - temp_a)) + duty_a
+
+                            if current_temp < temp_a:
+                                calculated_duty = 0
+                        except Exception:
+                            calculated_duty = 0
 
                     self._logger.debug("Calculated duty for PWM %s is %s", index_id, calculated_duty)
                 elif self.print_complete:
@@ -879,11 +925,10 @@ class EnclosurePlugin(
             self._logger.exception("Error handling temperature linked PWM outputs")
 
     def get_linked_temp_sensor_data(self, linked_id):
-        try:
-            return [data for data in self.temperature_sensor_data if data["index_id"] == linked_id].pop()
-        except Exception:
+        linked_data = next((data for data in self.temperature_sensor_data if data["index_id"] == linked_id), None)
+        if linked_data is None:
             self._logger.warning("No linked temperature sensor found for %s", linked_id)
-            return None
+        return linked_data
 
     def handle_temp_hum_control(self):
         try:
@@ -900,6 +945,7 @@ class EnclosurePlugin(
                     filter(lambda item: item["index_id"] == temp_hum_control["index_id"], self.temp_hum_control_status),
                 ).pop()["status"]
 
+                reading_missing = False
                 if set_temperature == 0:
                     current_status = False
                 else:
@@ -908,12 +954,17 @@ class EnclosurePlugin(
                     control_type = str(temp_hum_control["temp_ctr_type"])
 
                     if control_type == "dehumidifier":
-                        current_value = to_float(linked_data["humidity"])
+                        linked_value = None if linked_data is None else linked_data["humidity"]
                         temp_deadband = 0
                     else:
-                        current_value = to_float(linked_data["temperature"])
+                        linked_value = None if linked_data is None else linked_data["temperature"]
+                    current_value = to_float(linked_value)
 
-                    if control_type in {"cooler", "dehumidifier"}:
+                    if linked_value is None:
+                        # Without a value turn the output off
+                        reading_missing = True
+                        current_status = False
+                    elif control_type in {"cooler", "dehumidifier"}:
                         if current_value <= set_temperature and current_value >= (set_temperature - temp_deadband):
                             current_status = previous_status
                         elif current_value < set_temperature:
@@ -944,11 +995,12 @@ class EnclosurePlugin(
                         else:
                             self.write_gpio(to_int(temp_hum_control["gpio_pin"]), val)
                     else:
+                        # Without a value, a print waiting for the temperature (ENC W1) stays paused
                         index_id = temp_hum_control["index_id"]
-                        if index_id in self.waiting_temperature:
+                        if not reading_missing and index_id in self.waiting_temperature:
                             self.waiting_temperature.remove(index_id)
 
-                        if not self.waiting_temperature and self._printer.is_paused():
+                        if not reading_missing and not self.waiting_temperature and self._printer.is_paused():
                             self._printer.resume_print()
 
                         self._logger.info("Turning gpio to control temperature off.")
@@ -1752,9 +1804,9 @@ class EnclosurePlugin(
 
     def get_graph_data(self, comm, parsed_temps):
         for sensor in list(filter(lambda item: item["input_type"] == "temperature_sensor", self.rpi_inputs)):
-            if sensor["show_graph_temp"]:
+            if sensor["show_graph_temp"] and sensor["temp_sensor_temp"] != "":
                 parsed_temps[str(sensor["label"])] = (sensor["temp_sensor_temp"], None)
-            if sensor["show_graph_humidity"]:
+            if sensor["show_graph_humidity"] and sensor["temp_sensor_humidity"] != "":
                 parsed_temps[str(sensor["label"]) + " Humidity"] = (sensor["temp_sensor_humidity"], None)
 
         return parsed_temps

@@ -46,26 +46,23 @@ class Mcp9808Sensor(Sensor[Mcp9808Config]):
     @override
     def read(self) -> Reading:
         address = self.config.temp_sensor_address
-        try:
-            with SMBus(self.config.temp_sensor_i2cbus) as bus:
-                # Configure
-                bus.write_i2c_block_data(address, CONFIG_REGISTER, CONFIG_CONTINUOUS_CONVERSION)
-                bus.write_byte_data(address, RESOLUTION_REGISTER, RESOLUTION_0_0625)
+        with SMBus(self.config.temp_sensor_i2cbus) as bus:
+            # Configure
+            bus.write_i2c_block_data(address, CONFIG_REGISTER, CONFIG_CONTINUOUS_CONVERSION)
+            bus.write_byte_data(address, RESOLUTION_REGISTER, RESOLUTION_0_0625)
 
-                # Receive data
-                ambient_temperature = bus.read_i2c_block_data(
-                    address,
-                    AMBIENT_TEMPERATURE_REGISTER,
-                    AMBIENT_TEMPERATURE_BYTES,
-                )
+            # Receive data
+            ambient_temperature = bus.read_i2c_block_data(
+                address,
+                AMBIENT_TEMPERATURE_REGISTER,
+                AMBIENT_TEMPERATURE_BYTES,
+            )
 
-                raw_temperature = int.from_bytes(ambient_temperature, "big") % 2**AMBIENT_TEMPERATURE_BITS
-                if raw_temperature >= 2 ** (AMBIENT_TEMPERATURE_BITS - 1):
-                    raw_temperature -= 2**AMBIENT_TEMPERATURE_BITS
+        raw_temperature = int.from_bytes(ambient_temperature, "big") % 2**AMBIENT_TEMPERATURE_BITS
+        if raw_temperature >= 2 ** (AMBIENT_TEMPERATURE_BITS - 1):
+            raw_temperature -= 2**AMBIENT_TEMPERATURE_BITS
 
-                temperature = raw_temperature / 16
-        except Exception:
-            self._logger.exception("Failed to read MCP9808 sensor")
-            return Reading(temperature=-1)
-        else:
-            return Reading(temperature=round(temperature, 2))
+        # Formula from the datasheet
+        temperature = raw_temperature / 16
+
+        return Reading(temperature=round(temperature, 2))

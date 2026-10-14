@@ -24,6 +24,10 @@ class Reading:
     """The air quality index."""
 
 
+class SensorError(Exception):
+    """Raised when a sensor can't be read, with the reason as message."""
+
+
 class Sensor(ABC, Generic[_ConfigT]):
     """A temperature sensor, generic over the type of its configuration."""
 
@@ -62,5 +66,8 @@ class Sensor(ABC, Generic[_ConfigT]):
 
         Returns:
             Reading: The values read.
+
+        Raises:
+            Exception: If the sensor can't be read.
 
         """

@@ -9,7 +9,7 @@ from typing_extensions import override
 
 from octoprint_enclosure.utils import to_int
 
-from .base import Reading, Sensor
+from .base import Reading, Sensor, SensorError
 
 
 @dataclass(frozen=True)
@@ -38,26 +38,21 @@ class _RawI2cSensor(Sensor[RawI2cConfig]):
             temp_i2c_register=to_int(settings["temp_i2c_register"]),
         )
 
-    def _read_floats(self) -> tuple[float, float]:
-        try:
-            with SMBus(self.config.temp_i2c_bus) as bus:
-                data = bus.read_i2c_block_data(self.config.temp_i2c_address, self.config.temp_i2c_register, 8)
-                fval1 = struct.unpack("f", bytearray(data[0:4]))[0]
-                if math.isnan(fval1):
-                    fval1 = 0
-                fval2 = struct.unpack("f", bytearray(data[4:8]))[0]
-                if math.isnan(fval2):
-                    fval2 = 0
+    def _read_floats(self) -> tuple[float | None, float | None]:
+        with SMBus(self.config.temp_i2c_bus) as bus:
+            data = bus.read_i2c_block_data(self.config.temp_i2c_address, self.config.temp_i2c_register, 8)
 
-                return (fval1, fval2)
+        fval1 = struct.unpack("f", bytearray(data[0:4]))[0]
+        if math.isnan(fval1):
+            self._logger.debug("The first float is NaN: %s", bytes(data[0:4]).hex())
+            fval1 = None
 
-        except Exception:
-            self._logger.exception(
-                "Error reading on i2c address %s, reg %s",
-                self.config.temp_i2c_address,
-                self.config.temp_i2c_register,
-            )
-            return (-1, -1)
+        fval2 = struct.unpack("f", bytearray(data[4:8]))[0]
+        if math.isnan(fval2):
+            self._logger.debug("The second float is NaN: %s", bytes(data[4:8]).hex())
+            fval2 = None
+
+        return (fval1, fval2)
 
 
 class RawI2cTemperatureSensor(_RawI2cSensor):
@@ -66,6 +61,11 @@ class RawI2cTemperatureSensor(_RawI2cSensor):
     @override
     def read(self) -> Reading:
         temperature, humidity = self._read_floats()
+
+        if temperature is None:
+            msg = "The device sent NaN as the temperature"
+            raise SensorError(msg)
+
         return Reading(temperature=temperature, humidity=humidity)
 
 
@@ -75,4 +75,9 @@ class RawI2cHumiditySensor(_RawI2cSensor):
     @override
     def read(self) -> Reading:
         humidity, temperature = self._read_floats()
+
+        if humidity is None:
+            msg = "The device sent NaN as the humidity"
+            raise SensorError(msg)
+
         return Reading(temperature=temperature, humidity=humidity)

@@ -9,7 +9,7 @@ from typing_extensions import override
 
 from octoprint_enclosure.utils import crc16_modbus
 
-from .base import Reading, Sensor
+from .base import Reading, Sensor, SensorError
 
 BUS = 1
 ADDRESS = 0x5C
@@ -40,21 +40,17 @@ class Am2320Sensor(Sensor[Am2320Config]):
 
     @override
     def read(self) -> Reading:
-        try:
-            with SMBus(BUS) as bus:
-                # Wake up: the sleeping sensor doesn't acknowledge these writes
-                for _ in range(WAKE_UP_ATTEMPTS):
-                    with contextlib.suppress(OSError):
-                        bus.write_byte(ADDRESS, 0x00)
+        with SMBus(BUS) as bus:
+            # Wake up: the sleeping sensor doesn't acknowledge these writes
+            for _ in range(WAKE_UP_ATTEMPTS):
+                with contextlib.suppress(OSError):
+                    bus.write_byte(ADDRESS, 0x00)
 
-                # Read the registers
-                bus.write_i2c_block_data(ADDRESS, READ_FUNCTION_CODE, (FIRST_REGISTER, REGISTER_COUNT))
-                time.sleep(READ_DELAY_MS / 1000)
-                read_response_msg = i2c_msg.read(ADDRESS, READ_RESPONSE_BYTES)
-                bus.i2c_rdwr(read_response_msg)
-        except Exception:
-            self._logger.exception("Failed to read AM2320 sensor")
-            return Reading(temperature=-1, humidity=-1)
+            # Read the registers
+            bus.write_i2c_block_data(ADDRESS, READ_FUNCTION_CODE, (FIRST_REGISTER, REGISTER_COUNT))
+            time.sleep(READ_DELAY_MS / 1000)
+            read_response_msg = i2c_msg.read(ADDRESS, READ_RESPONSE_BYTES)
+            bus.i2c_rdwr(read_response_msg)
 
         # Parse response
         read_response = bytes(read_response_msg)
@@ -65,8 +61,8 @@ class Am2320Sensor(Sensor[Am2320Config]):
         header_ok = (function_code, register_count) == (READ_FUNCTION_CODE, REGISTER_COUNT)
         crc_ok = int.from_bytes(crc, "little") == crc16_modbus(read_response[:-2])
         if not header_ok or not crc_ok:
-            self._logger.error("Failed to read AM2320 sensor, invalid response: %s", read_response.hex())
-            return Reading(temperature=-1, humidity=-1)
+            msg = f"Invalid response: {read_response.hex()}"
+            raise SensorError(msg)
 
         # Registers are: humidity high byte, humidity low byte, temperature high byte, temperature low byte
         raw_humidity = int.from_bytes(registers[:2], "big")

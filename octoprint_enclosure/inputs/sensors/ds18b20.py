@@ -8,7 +8,7 @@ from subprocess import run
 
 from typing_extensions import override
 
-from .base import Reading, Sensor
+from .base import Reading, Sensor, SensorError
 
 DEVICES_DIR = Path("/sys/bus/w1/devices/")
 
@@ -40,14 +40,20 @@ class Ds18b20Sensor(Sensor[Ds18b20Config]):
             time.sleep(0.2)
             lines = self._read_lines()
         equals_pos = lines[1].find("t=")
-        if equals_pos != -1:
-            temp_string = lines[1][equals_pos + 2 :]
-            temp_c = float(temp_string) / 1000.0
-            return Reading(temperature=round(temp_c, 1))
-        return Reading(temperature=-1)
+        if equals_pos == -1:
+            msg = f"No temperature in the sensor output: {lines[1].strip()}"
+            raise SensorError(msg)
+
+        temp_string = lines[1][equals_pos + 2 :]
+        temp_c = float(temp_string) / 1000.0
+        return Reading(temperature=round(temp_c, 1))
 
     def _read_lines(self) -> list[str]:
-        device_folder = next(DEVICES_DIR.glob(self.config.ds18b20_serial + "*"))
+        device_folder = next(DEVICES_DIR.glob(self.config.ds18b20_serial + "*"), None)
+        if device_folder is None:
+            msg = f"No 1-Wire device with serial {self.config.ds18b20_serial}"
+            raise SensorError(msg)
+
         device_file = device_folder / "w1_slave"
         with device_file.open() as device_file_result:
             return device_file_result.readlines()

@@ -45,28 +45,25 @@ class Si7021Sensor(Sensor[Si7021Config]):
     @override
     def read(self) -> Reading:
         address = self.config.temp_sensor_address
-        try:
-            with SMBus(self.config.temp_sensor_i2cbus) as bus:
-                # Measure and receive the humidity
-                bus.write_byte(address, MEASURE_HUMIDITY_COMMAND)
-                time.sleep(MEASURE_HUMIDITY_DELAY_MS / 1000)
-                humidity_msg = i2c_msg.read(address, TEMP_HUM_BYTES)
-                bus.i2c_rdwr(humidity_msg)
+        with SMBus(self.config.temp_sensor_i2cbus) as bus:
+            # Measure and receive the humidity
+            bus.write_byte(address, MEASURE_HUMIDITY_COMMAND)
+            time.sleep(MEASURE_HUMIDITY_DELAY_MS / 1000)
+            humidity_msg = i2c_msg.read(address, TEMP_HUM_BYTES)
+            bus.i2c_rdwr(humidity_msg)
 
-                # Measure and receive the temperature
-                bus.write_byte(address, MEASURE_TEMPERATURE_COMMAND)
-                time.sleep(MEASURE_TEMPERATURE_DELAY_MS / 1000)
-                temperature_msg = i2c_msg.read(address, TEMP_HUM_BYTES)
-                bus.i2c_rdwr(temperature_msg)
+            # Measure and receive the temperature
+            bus.write_byte(address, MEASURE_TEMPERATURE_COMMAND)
+            time.sleep(MEASURE_TEMPERATURE_DELAY_MS / 1000)
+            temperature_msg = i2c_msg.read(address, TEMP_HUM_BYTES)
+            bus.i2c_rdwr(temperature_msg)
 
-                raw_humidity = int.from_bytes(bytes(humidity_msg), "big")
-                raw_temperature = int.from_bytes(bytes(temperature_msg), "big")
+        # Parse messages
+        raw_humidity = int.from_bytes(bytes(humidity_msg), "big")
+        raw_temperature = int.from_bytes(bytes(temperature_msg), "big")
 
-                # Formulas from the datasheet
-                humidity = raw_humidity / 2**16 * 125 - 6
-                temperature = raw_temperature / 2**16 * 175.72 - 46.85
-        except Exception:
-            self._logger.exception("Failed to read SI7021 sensor")
-            return Reading(temperature=-1, humidity=-1)
-        else:
-            return Reading(temperature=round(temperature, 1), humidity=round(humidity, 1))
+        # Formulas from the datasheet
+        humidity = raw_humidity / 2**16 * 125 - 6
+        temperature = raw_temperature / 2**16 * 175.72 - 46.85
+
+        return Reading(temperature=round(temperature, 1), humidity=round(humidity, 1))

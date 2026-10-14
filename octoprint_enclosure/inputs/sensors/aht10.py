@@ -45,28 +45,24 @@ class Aht10Sensor(Sensor[Aht10Config]):
     @override
     def read(self) -> Reading:
         address = self.config.temp_sensor_address
-        try:
-            with SMBus(self.config.temp_sensor_i2cbus) as bus:
-                # Init and receive status
-                bus.write_i2c_block_data(address, INITIALIZE_COMMAND, INITIALIZE_PARAMETERS)
-                bus.read_byte(address)
+        with SMBus(self.config.temp_sensor_i2cbus) as bus:
+            # Init and receive status
+            bus.write_i2c_block_data(address, INITIALIZE_COMMAND, INITIALIZE_PARAMETERS)
+            bus.read_byte(address)
 
-                # Measure and receive data
-                bus.write_i2c_block_data(address, MEASURE_COMMAND, MEASURE_PARAMETERS)
-                measure_response_msg = i2c_msg.read(address, MEASURE_RESPONSE_BYTES)
-                bus.i2c_rdwr(measure_response_msg)
+            # Measure and receive data
+            bus.write_i2c_block_data(address, MEASURE_COMMAND, MEASURE_PARAMETERS)
+            measure_response_msg = i2c_msg.read(address, MEASURE_RESPONSE_BYTES)
+            bus.i2c_rdwr(measure_response_msg)
 
-                measure_response_bytes = bytes(measure_response_msg)
-                _status, measurement = measure_response_bytes[0], measure_response_bytes[1:]
+        measure_response_bytes = bytes(measure_response_msg)
+        _status, measurement = measure_response_bytes[0], measure_response_bytes[1:]
 
-                raw_hum_temp = int.from_bytes(measurement, "big")
-                raw_humidity, raw_temperature = divmod(raw_hum_temp, 2**MEASURE_RESPONSE_HUM_TEMP_BITS)
+        raw_hum_temp = int.from_bytes(measurement, "big")
+        raw_humidity, raw_temperature = divmod(raw_hum_temp, 2**MEASURE_RESPONSE_HUM_TEMP_BITS)
 
-                # Formulas from the datasheet
-                humidity = int(raw_humidity / 2**MEASURE_RESPONSE_HUM_TEMP_BITS * 100)
-                temperature = raw_temperature / 2**MEASURE_RESPONSE_HUM_TEMP_BITS * 200 - 50
-        except Exception:
-            self._logger.exception("Failed to read AHT10 sensor")
-            return Reading(temperature=-1, humidity=-1)
-        else:
-            return Reading(temperature=round(temperature, 1), humidity=humidity)
+        # Formulas from the datasheet
+        humidity = int(raw_humidity / 2**MEASURE_RESPONSE_HUM_TEMP_BITS * 100)
+        temperature = raw_temperature / 2**MEASURE_RESPONSE_HUM_TEMP_BITS * 200 - 50
+
+        return Reading(temperature=round(temperature, 1), humidity=humidity)

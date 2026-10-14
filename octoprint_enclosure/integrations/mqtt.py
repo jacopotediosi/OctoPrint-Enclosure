@@ -35,8 +35,8 @@ class Mqtt:
         else:
             self._logger.warning("Mqtt helpers not found. Mqtt integration won't work.")
 
-    def publish_sensor_reading(self, sensor_label: str, temperature: float, humidity: float) -> None:
-        """Publish the latest reading of a temperature sensor."""
+    def publish_sensor_reading(self, sensor_label: str, temperature: float | None, humidity: float | None) -> None:
+        """Publish the latest reading of a temperature sensor, with None for the values it doesn't measure."""
         if self._mqtt_publish is None:
             return
 

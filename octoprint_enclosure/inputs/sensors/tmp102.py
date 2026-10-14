@@ -46,16 +46,13 @@ class Tmp102Sensor(Sensor[Tmp102Config]):
     @override
     def read(self) -> Reading:
         address = self.config.temp_sensor_address
-        try:
-            with SMBus(BUS) as bus:
-                # Receive the temperature
-                temperature_bytes = bus.read_i2c_block_data(address, TEMPERATURE_REGISTER, TEMPERATURE_BYTES)
-                raw_temperature = int.from_bytes(temperature_bytes, "big", signed=True) >> TEMPERATURE_UNUSED_BITS
+        with SMBus(BUS) as bus:
+            # Receive the temperature
+            temperature_bytes = bus.read_i2c_block_data(address, TEMPERATURE_REGISTER, TEMPERATURE_BYTES)
 
-                # Formula from the datasheet
-                temperature = raw_temperature / 16
-        except Exception:
-            self._logger.exception("Failed to read TMP102 sensor")
-            return Reading(temperature=-1)
-        else:
-            return Reading(temperature=round(temperature, 1))
+        raw_temperature = int.from_bytes(temperature_bytes, "big", signed=True) >> TEMPERATURE_UNUSED_BITS
+
+        # Formula from the datasheet
+        temperature = raw_temperature / 16
+
+        return Reading(temperature=round(temperature, 1))

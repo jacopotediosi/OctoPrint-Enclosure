@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from .base import Reading, Sensor
+from .base import Reading, Sensor, SensorError
 
 if TYPE_CHECKING:
     import logging
@@ -56,7 +56,7 @@ class DummySensor(Sensor[DummyConfig]):
     def read(self) -> Reading:
         if self.failing:
             msg = "The dummy sensor is set to fail"
-            raise RuntimeError(msg)
+            raise SensorError(msg)
 
         reading = Reading(temperature=self.value, humidity=self.value, airquality=self.value)
 

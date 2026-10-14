@@ -8,7 +8,7 @@ from typing import ClassVar
 
 from typing_extensions import override
 
-from .base import Reading, Sensor
+from .base import Reading, Sensor, SensorError
 
 WORKER_PATH = Path(__file__).with_name("dht_worker.py")
 WORKER_TIMEOUT_SECONDS = 30
@@ -36,28 +36,24 @@ class _DhtSensor(Sensor[DhtConfig]):
     @override
     def read(self) -> Reading:
         command = [sys.executable, str(WORKER_PATH), self._model, str(self.config.gpio_pin)]
-        try:
-            # Read the sensor
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=WORKER_TIMEOUT_SECONDS,
-                check=False,
-            )
 
-            # Check for errors
-            if result.returncode != 0:
-                self._logger.error("Failed to read %s sensor: %s", self._model, result.stderr.strip())
-                return Reading(temperature=-1, humidity=-1)
+        # Read the sensor
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=WORKER_TIMEOUT_SECONDS,
+            check=False,
+        )
 
-            # The worker prints the temperature and the humidity, separated by a space
-            temperature, humidity = (float(value) for value in result.stdout.split())
-        except Exception:
-            self._logger.exception("Failed to read %s sensor", self._model)
-            return Reading(temperature=-1, humidity=-1)
-        else:
-            return Reading(temperature=round(temperature, 1), humidity=round(humidity, 1))
+        # Check for errors
+        if result.returncode != 0:
+            raise SensorError(result.stderr.strip())
+
+        # The worker prints the temperature and the humidity, separated by a space
+        temperature, humidity = (float(value) for value in result.stdout.split())
+
+        return Reading(temperature=round(temperature, 1), humidity=round(humidity, 1))
 
 
 class Dht11Sensor(_DhtSensor):

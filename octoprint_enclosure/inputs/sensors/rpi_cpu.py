@@ -23,10 +23,4 @@ class RpiCpuSensor(Sensor[RpiCpuConfig]):
 
     @override
     def read(self) -> Reading:
-        try:
-            temp = round(CPUTemperature().temperature, 1)
-        except Exception:
-            self._logger.exception("Failed to read Raspberry Pi CPU temperature")
-            return Reading(temperature=-1)
-        else:
-            return Reading(temperature=temp)
+        return Reading(temperature=round(CPUTemperature().temperature, 1))

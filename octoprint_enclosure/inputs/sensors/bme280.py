@@ -31,12 +31,8 @@ class Bme280Sensor(Sensor[Bme280Config]):
 
     @override
     def read(self) -> Reading:
-        try:
-            with SMBus(BUS) as bus:
-                calibration_params = bme280.load_calibration_params(bus, self.config.temp_sensor_address)
-                readings = bme280.sample(bus, self.config.temp_sensor_address, calibration_params)
-        except Exception:
-            self._logger.exception("Failed to read BME280 sensor")
-            return Reading(temperature=-1, humidity=-1)
-        else:
-            return Reading(temperature=round(readings.temperature, 1), humidity=round(readings.humidity, 1))
+        with SMBus(BUS) as bus:
+            calibration_params = bme280.load_calibration_params(bus, self.config.temp_sensor_address)
+            readings = bme280.sample(bus, self.config.temp_sensor_address, calibration_params)
+
+        return Reading(temperature=round(readings.temperature, 1), humidity=round(readings.humidity, 1))
