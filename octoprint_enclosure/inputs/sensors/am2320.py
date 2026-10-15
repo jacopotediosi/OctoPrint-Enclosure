@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from smbus2 import SMBus, i2c_msg
 from typing_extensions import override
 
+from octoprint_enclosure.core import BaseConfig
 from octoprint_enclosure.utils import crc16_modbus
 
 from .base import Reading, Sensor, SensorError
@@ -26,17 +27,14 @@ READ_RESPONSE_BYTES = 1 + 1 + REGISTER_COUNT + 2
 
 
 @dataclass(frozen=True)
-class Am2320Config:
+class Am2320Config(BaseConfig):
     """The configuration of an AM2320 sensor."""
 
 
 class Am2320Sensor(Sensor[Am2320Config]):
     """An AM2320 temperature and humidity sensor."""
 
-    @classmethod
-    @override
-    def parse_config(cls, settings: dict) -> Am2320Config:
-        return Am2320Config()
+    config_class = Am2320Config
 
     @override
     def read(self) -> Reading:

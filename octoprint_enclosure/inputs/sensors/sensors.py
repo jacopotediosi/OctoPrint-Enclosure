@@ -78,7 +78,7 @@ class Sensors:
     def _get_sensor(self, settings: dict, sensor_class: type[_SensorT]) -> _SensorT:
         sensor_index = settings["index_id"]
         sensor = self._sensors.get(sensor_index)
-        config = sensor_class.parse_config(settings)
+        config = sensor_class.config_class.from_settings(settings)
 
         if not isinstance(sensor, sensor_class) or sensor.config != config:
             sensor = sensor_class(self._logger, config)

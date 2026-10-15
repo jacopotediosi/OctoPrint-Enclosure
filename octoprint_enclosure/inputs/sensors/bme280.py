@@ -6,7 +6,7 @@ import bme280
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.utils import parse_hex
+from octoprint_enclosure.core import BaseConfig, HexInt
 
 from .base import Reading, Sensor
 
@@ -14,20 +14,17 @@ BUS = 1
 
 
 @dataclass(frozen=True)
-class Bme280Config:
+class Bme280Config(BaseConfig):
     """The configuration of a BME280 sensor."""
 
-    temp_sensor_address: int
+    temp_sensor_address: HexInt
     """The I2C address of the sensor."""
 
 
 class Bme280Sensor(Sensor[Bme280Config]):
     """A BME280 temperature and humidity sensor."""
 
-    @classmethod
-    @override
-    def parse_config(cls, settings: dict) -> Bme280Config:
-        return Bme280Config(temp_sensor_address=parse_hex(settings["temp_sensor_address"]))
+    config_class = Bme280Config
 
     @override
     def read(self) -> Reading:

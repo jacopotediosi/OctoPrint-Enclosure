@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.utils import parse_hex
+from octoprint_enclosure.core import BaseConfig, HexInt
 
 from .base import Reading, Sensor
 
@@ -22,10 +22,10 @@ AMBIENT_TEMPERATURE_BITS = 13
 
 
 @dataclass(frozen=True)
-class Mcp9808Config:
+class Mcp9808Config(BaseConfig):
     """The configuration of an MCP9808 sensor."""
 
-    temp_sensor_address: int
+    temp_sensor_address: HexInt
     """The I2C address of the sensor."""
 
     temp_sensor_i2cbus: int
@@ -35,13 +35,7 @@ class Mcp9808Config:
 class Mcp9808Sensor(Sensor[Mcp9808Config]):
     """An MCP9808 temperature sensor."""
 
-    @classmethod
-    @override
-    def parse_config(cls, settings: dict) -> Mcp9808Config:
-        return Mcp9808Config(
-            temp_sensor_address=parse_hex(settings["temp_sensor_address"]),
-            temp_sensor_i2cbus=int(str(settings["temp_sensor_i2cbus"])),
-        )
+    config_class = Mcp9808Config
 
     @override
     def read(self) -> Reading:

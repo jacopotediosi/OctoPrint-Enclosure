@@ -8,26 +8,25 @@ from subprocess import run
 
 from typing_extensions import override
 
+from octoprint_enclosure.core import BaseConfig
+
 from .base import Reading, Sensor, SensorError
 
 DEVICES_DIR = Path("/sys/bus/w1/devices/")
 
 
 @dataclass(frozen=True)
-class Ds18b20Config:
+class Ds18b20Config(BaseConfig):
     """The configuration of a DS18B20 sensor."""
 
-    ds18b20_serial: str
+    ds18b20_serial: str = ""
     """The serial number of the sensor, such as 28-0123456789ab."""
 
 
 class Ds18b20Sensor(Sensor[Ds18b20Config]):
     """A DS18B20 temperature sensor, read through the 1-Wire driver of the kernel."""
 
-    @classmethod
-    @override
-    def parse_config(cls, settings: dict) -> Ds18b20Config:
-        return Ds18b20Config(ds18b20_serial=str(settings["ds18b20_serial"]))
+    config_class = Ds18b20Config
 
     @override
     def read(self) -> Reading:

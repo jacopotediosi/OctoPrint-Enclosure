@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import spidev
 from typing_extensions import override
 
-from octoprint_enclosure.utils import parse_hex
+from octoprint_enclosure.core import BaseConfig, HexInt
 
 from .base import Reading, Sensor, SensorError
 
@@ -23,10 +23,10 @@ RESPONSE_FAULTS = {
 
 
 @dataclass(frozen=True)
-class Max31855Config:
+class Max31855Config(BaseConfig):
     """The configuration of a MAX31855 sensor."""
 
-    temp_sensor_address: int
+    temp_sensor_address: HexInt
     """The SPI chip select of the sensor, 0 for CE0 or 1 for CE1."""
 
     def __post_init__(self) -> None:
@@ -44,10 +44,7 @@ class Max31855Config:
 class Max31855Sensor(Sensor[Max31855Config]):
     """A MAX31855 thermocouple sensor."""
 
-    @classmethod
-    @override
-    def parse_config(cls, settings: dict) -> Max31855Config:
-        return Max31855Config(temp_sensor_address=parse_hex(settings["temp_sensor_address"]))
+    config_class = Max31855Config
 
     @override
     def read(self) -> Reading:

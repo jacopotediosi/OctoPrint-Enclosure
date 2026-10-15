@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
+from octoprint_enclosure.core import BaseConfig
+
 from .base import Reading, Sensor, SensorError
 
 if TYPE_CHECKING:
@@ -17,12 +19,14 @@ VALUE_DELTA = 0.5
 
 
 @dataclass(frozen=True)
-class DummyConfig:
+class DummyConfig(BaseConfig):
     """The configuration of a dummy sensor."""
 
 
 class DummySensor(Sensor[DummyConfig]):
     """A fake sensor for development purposes, whose values swing between a minimum and a maximum."""
+
+    config_class = DummyConfig
 
     value: float
     """The value of the next reading."""
@@ -46,11 +50,6 @@ class DummySensor(Sensor[DummyConfig]):
         self.value_max = VALUE_MAX
         self.value_delta = VALUE_DELTA
         self.failing = False
-
-    @classmethod
-    @override
-    def parse_config(cls, settings: dict) -> DummyConfig:
-        return DummyConfig()
 
     @override
     def read(self) -> Reading:

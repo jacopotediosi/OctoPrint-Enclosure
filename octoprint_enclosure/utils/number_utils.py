@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 
@@ -39,6 +40,34 @@ def parse_hex(value: Any) -> int:  # noqa: ANN401 - value is purposely untyped
 
     """
     return int(str(value), 16)
+
+
+def parse_float(value: Any) -> float:  # noqa: ANN401 - value is purposely untyped
+    """Convert a value to a finite float.
+
+    Args:
+        value (Any): The value.
+
+    Returns:
+        float: The converted value.
+
+    Raises:
+        TypeError: If the value is neither a string nor a number.
+        ValueError: If the value is not a number, or is NaN or infinite.
+        OverflowError: If the value is an integer too large for a float.
+
+    Examples:
+        >>> parse_float("1.5")
+        1.5
+        >>> parse_float(2)
+        2.0
+
+    """
+    number = float(value)
+    if not math.isfinite(number):
+        msg = f"not a finite number: {value!r}"
+        raise ValueError(msg)
+    return number
 
 
 def clamp(value: float, minimum: float, maximum: float) -> float:

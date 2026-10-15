@@ -7,13 +7,13 @@ from dataclasses import dataclass
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.utils import to_int
+from octoprint_enclosure.core import BaseConfig
 
 from .base import Reading, Sensor, SensorError
 
 
 @dataclass(frozen=True)
-class RawI2cConfig:
+class RawI2cConfig(BaseConfig):
     """The configuration of a device sending its readings over I2C as raw floats."""
 
     temp_i2c_bus: int
@@ -29,14 +29,7 @@ class RawI2cConfig:
 class _RawI2cSensor(Sensor[RawI2cConfig]):
     """A device sending two readings over I2C as raw floats."""
 
-    @classmethod
-    @override
-    def parse_config(cls, settings: dict) -> RawI2cConfig:
-        return RawI2cConfig(
-            temp_i2c_bus=to_int(settings["temp_i2c_bus"]),
-            temp_i2c_address=to_int(settings["temp_i2c_address"]),
-            temp_i2c_register=to_int(settings["temp_i2c_register"]),
-        )
+    config_class = RawI2cConfig
 
     def _read_floats(self) -> tuple[float | None, float | None]:
         with SMBus(self.config.temp_i2c_bus) as bus:

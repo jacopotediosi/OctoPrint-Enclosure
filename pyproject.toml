@@ -104,6 +104,9 @@ ignore = [
     "TRY003", # raise-vanilla-args
 ]
 
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["octoprint_enclosure.core.BaseConfig"]
+
 [tool.djlint]
 ignore = [
     "H021", # inline styles are tolerated

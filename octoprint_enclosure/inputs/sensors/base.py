@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 if TYPE_CHECKING:
     import logging
 
-_ConfigT = TypeVar("_ConfigT")
+    from octoprint_enclosure.core import BaseConfig
+
+_ConfigT = TypeVar("_ConfigT", bound="BaseConfig")
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,9 @@ class SensorError(Exception):
 class Sensor(ABC, Generic[_ConfigT]):
     """A temperature sensor, generic over the type of its configuration."""
 
+    config_class: type[_ConfigT]
+    """The dataclass of the configuration, whose fields are named like the keys of the settings of the input."""
+
     config: _ConfigT
     """The configuration of the sensor."""
 
@@ -46,19 +51,6 @@ class Sensor(ABC, Generic[_ConfigT]):
         """
         self._logger = logger
         self.config = config
-
-    @classmethod
-    @abstractmethod
-    def parse_config(cls, settings: dict) -> _ConfigT:
-        """Get the configuration of the sensor from the settings of its input.
-
-        Args:
-            settings (dict): The settings of the input.
-
-        Returns:
-            _ConfigT: The configuration of the sensor.
-
-        """
 
     @abstractmethod
     def read(self) -> Reading:

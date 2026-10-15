@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from smbus2 import SMBus, i2c_msg
 from typing_extensions import override
 
-from octoprint_enclosure.utils import parse_hex
+from octoprint_enclosure.core import BaseConfig, HexInt
 
 from .base import Reading, Sensor
 
@@ -21,10 +21,10 @@ TEMP_HUM_BYTES = 2
 
 
 @dataclass(frozen=True)
-class Si7021Config:
+class Si7021Config(BaseConfig):
     """The configuration of an SI7021 sensor."""
 
-    temp_sensor_address: int
+    temp_sensor_address: HexInt
     """The I2C address of the sensor."""
 
     temp_sensor_i2cbus: int
@@ -34,13 +34,7 @@ class Si7021Config:
 class Si7021Sensor(Sensor[Si7021Config]):
     """An SI7021 temperature and humidity sensor."""
 
-    @classmethod
-    @override
-    def parse_config(cls, settings: dict) -> Si7021Config:
-        return Si7021Config(
-            temp_sensor_address=parse_hex(settings["temp_sensor_address"]),
-            temp_sensor_i2cbus=int(str(settings["temp_sensor_i2cbus"])),
-        )
+    config_class = Si7021Config
 
     @override
     def read(self) -> Reading:
