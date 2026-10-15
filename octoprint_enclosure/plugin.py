@@ -64,6 +64,7 @@ class EnclosurePlugin(
     temp_hum_control_status = []
     temperature_sensor_data = []
     failing_sensors = set()
+    sensors_lock = threading.Lock()
     last_filament_end_detected = []
     print_complete = False
     development_mode = False
@@ -102,9 +103,6 @@ class EnclosurePlugin(
             self._logger.warning("Development mode is enabled: GPIO (pins, sensors, etc) are simulated")
         else:
             self._gpio = gpio
-
-        # Init sensors
-        self._sensors = Sensors(self._logger, dummy=self.development_mode)
 
         # Init G-code command handlers
         self._enc_handler = EncHandler(self)
@@ -147,6 +145,7 @@ class EnclosurePlugin(
         self.generate_temp_hum_control_status()
         self.setup_gpio()
         self.configure_gpio()
+        self.configure_sensors()
         self.update_ui()
         self.start_outpus_with_server()
         self.handle_initial_gpio_control()
@@ -601,18 +600,29 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error sending neopixel command for output %s", output["index_id"])
 
+    def get_sensor_inputs(self):
+        return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "temperature_sensor"]
+
+    def configure_sensors(self):
+        self._sensors = Sensors(self.get_sensor_inputs(), self._logger, dummy=self.development_mode)
+
     def check_enclosure_temp(self):
         try:
+            with self.sensors_lock:
+                sensor_inputs = self.get_sensor_inputs()
+                sensors = self._sensors
+
             sensor_data = []
-            for sensor in list(filter(lambda item: item["input_type"] == "temperature_sensor", self.rpi_inputs)):
+            for sensor in sensor_inputs:
                 try:
-                    temp, hum, airquality = self.get_sensor_data(sensor)
+                    reading = sensors.read(sensor["index_id"])
                 except Exception as error:
                     self.handle_sensor_failure(sensor, error)
                     sensor["temp_sensor_temp"] = ""
                     sensor["temp_sensor_humidity"] = ""
                     temp = hum = airquality = None
                 else:
+                    temp, hum, airquality = self.convert_reading(sensor, reading)
                     self.handle_sensor_recovery(sensor)
                     sensor["temp_sensor_temp"] = "" if temp is None else temp
                     sensor["temp_sensor_humidity"] = "" if hum is None else hum
@@ -835,9 +845,7 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error sending input status to the UI")
 
-    def get_sensor_data(self, sensor):
-        reading = self._sensors.read(sensor)
-
+    def convert_reading(self, sensor, reading):
         temperature = reading.temperature
         if temperature is not None and sensor["use_fahrenheit"]:
             temperature = temperature * 1.8 + 32
@@ -1167,7 +1175,7 @@ class EnclosurePlugin(
                     self._gpio.add_event_detect(gpio_pin, edge, callback=self.handle_printer_action, bouncetime=200)
                     self._logger.info("Adding PRINTER CONTROL event detect on pin %s with edge: %s", gpio_pin, edge)
 
-            for rpi_input in list(filter(lambda item: item["input_type"] == "temperature_sensor", self.rpi_inputs)):
+            for rpi_input in self.get_sensor_inputs():
                 gpio_pin = to_int(rpi_input["gpio_pin"])
                 if rpi_input["input_pull_resistor"] == "input_pull_up":
                     pull_resistor = self._gpio.PUD_UP
@@ -1701,7 +1709,9 @@ class EnclosurePlugin(
         outputs_before_save = self.get_output_list()
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
-        self.rpi_inputs = self._enclosure_settings.rpi_inputs
+        with self.sensors_lock:
+            self.rpi_inputs = self._enclosure_settings.rpi_inputs
+            self.configure_sensors()
         outputs_after_save = self.get_output_list()
 
         common_pins = list(set(outputs_before_save) & set(outputs_after_save))
@@ -1803,7 +1813,7 @@ class EnclosurePlugin(
         self._encdev_handler.handle(comm_instance, command, parameters)
 
     def get_graph_data(self, comm, parsed_temps):
-        for sensor in list(filter(lambda item: item["input_type"] == "temperature_sensor", self.rpi_inputs)):
+        for sensor in self.get_sensor_inputs():
             if sensor["show_graph_temp"] and sensor["temp_sensor_temp"] != "":
                 parsed_temps[str(sensor["label"])] = (sensor["temp_sensor_temp"], None)
             if sensor["show_graph_humidity"] and sensor["temp_sensor_humidity"] != "":

@@ -4,12 +4,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+from octoprint_enclosure.core import BaseConfig
+
 if TYPE_CHECKING:
     import logging
 
-    from octoprint_enclosure.core import BaseConfig
-
-_ConfigT = TypeVar("_ConfigT", bound="BaseConfig")
+_ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
 
 
 @dataclass(frozen=True)
@@ -41,16 +41,16 @@ class Sensor(ABC, Generic[_ConfigT]):
 
     _logger: logging.Logger
 
-    def __init__(self, logger: logging.Logger, config: _ConfigT) -> None:
+    def __init__(self, config: _ConfigT, logger: logging.Logger) -> None:
         """Set up the sensor.
 
         Args:
-            logger (logging.Logger): The logger to write to.
             config (_ConfigT): The configuration of the sensor.
+            logger (logging.Logger): The logger to write to.
 
         """
-        self._logger = logger
         self.config = config
+        self._logger = logger
 
     @abstractmethod
     def read(self) -> Reading:

@@ -43,8 +43,8 @@ class DummySensor(Sensor[DummyConfig]):
     failing: bool
     """Whether reading the sensor must fail."""
 
-    def __init__(self, logger: logging.Logger, config: DummyConfig) -> None:
-        super().__init__(logger, config)
+    def __init__(self, config: DummyConfig, logger: logging.Logger) -> None:
+        super().__init__(config, logger)
         self.value = round(random.uniform(VALUE_MIN, VALUE_MAX), 1)  # noqa: S311 - not used for security
         self.value_min = VALUE_MIN
         self.value_max = VALUE_MAX
