@@ -59,25 +59,6 @@ class Settings:
             self._settings.set_boolean(["use_board_pin_number"], value)
 
     ##########
-    ### Scripts
-    ##########
-
-    @property
-    def use_sudo(self) -> bool:
-        """Whether the sensor and NeoPixel scripts are run with sudo."""
-        return bool(self._settings.get_boolean(["use_sudo"]))
-
-    ##########
-    ### NeoPixel
-    ##########
-
-    @property
-    def neopixel_dma(self) -> int:
-        """The DMA channel used to drive the NeoPixels connected directly to the Raspberry Pi."""
-        value = self._settings.get_int(["neopixel_dma"])
-        return 10 if value is None else value
-
-    ##########
     ### G-code
     ##########
 

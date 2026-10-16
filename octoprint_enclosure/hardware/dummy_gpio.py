@@ -74,6 +74,10 @@ class PWM:
         self.duty_cycle = dutycycle
         self.running = True
 
+    def ChangeDutyCycle(self, dutycycle: float) -> None:  # noqa: N802 - same name as RPi.GPIO.PWM.ChangeDutyCycle
+        """Change the duty cycle, from 0 to 100."""
+        self.duty_cycle = dutycycle
+
     def stop(self) -> None:
         """Stop the PWM."""
         self.running = False

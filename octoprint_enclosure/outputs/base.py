@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, Generic, TypeVar
+
+from octoprint_enclosure.core import BaseConfig
+
+if TYPE_CHECKING:
+    import logging
+    from types import ModuleType
+
+_ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
+
+
+class OutputError(Exception):
+    """Raised when an output can't be used, with the reason as message."""
+
+
+class Output(ABC, Generic[_ConfigT]):
+    """An output, generic over the type of its configuration."""
+
+    config_class: type[_ConfigT]
+    """The dataclass of the configuration, whose fields are named like the keys of the settings of the output."""
+
+    config: _ConfigT
+    """The configuration of the output."""
+
+    _gpio: ModuleType
+    """The GPIO backend."""
+
+    _logger: logging.Logger
+
+    def __init__(self, config: _ConfigT, gpio: ModuleType, logger: logging.Logger) -> None:
+        """Set up the output.
+
+        Args:
+            config (_ConfigT): The configuration of the output.
+            gpio (ModuleType): The GPIO backend.
+            logger (logging.Logger): The logger to write to.
+
+        """
+        self.config = config
+        self._gpio = gpio
+        self._logger = logger
+
+    @abstractmethod
+    def run_enc_command(self, command: str) -> str | None:
+        """Apply an ENC command to the output.
+
+        Args:
+            command (str): The G-code line of the ENC command.
+
+        Returns:
+            str | None: The reply to write in the terminal, or None if the output has no ENC command.
+
+        Raises:
+            Exception: If the command can't be applied.
+
+        """

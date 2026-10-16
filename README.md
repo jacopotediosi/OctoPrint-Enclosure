@@ -121,23 +121,53 @@ i2cdetect -y 1
 
 ### Neopixel
 
-If your setup does not have pip install pip:
-`sudo apt-get install python3-pip`
+The plugin can drive NeoPixels in two ways:
 
-Install the required library:
-`sudo pip3 install rpi_ws281x`
+* **Neopixel Control via Microcontroller:** a microcontroller, for example an Arduino, is connected to the I2C bus and drives the NeoPixels. To use this way, please enable I2C as described for the I2C sensors.
+* **Neopixel Control directly from raspberry pi:** the Raspberry Pi drives the NeoPixels with the [rpi_ws281x](https://github.com/jgarff/rpi_ws281x) library, which is installed automatically together with the plugin.
 
-rpi_ws281x really needs sudo, and you need to setup up so your rpi does not ask for a password when running a python script, so run:
+When the NeoPixels are connected directly to the Raspberry Pi, the GPIO pin decides how rpi_ws281x drives them:
 
-`sudo visudo`
+| GPIO | Physical pin | Hardware | Requires root |
+|---|---|---|---|
+| 10 | 19 | SPI | No |
+| 12, 13, 18 or 19 | 32, 33, 12 or 35 | PWM | Yes |
+| 21 | 40 | PCM | Yes |
 
-and add `pi ALL=(ALL) NOPASSWD: ALL` to the end of the file.
+#### GPIO 10 (recommended)
 
-Also backlist the audio kernel:
+On GPIO 10 the plugin doesn't need root, so it doesn't use sudo. The user that runs OctoPrint must be in the `spi` and `gpio` groups; on OctoPi, the `pi` user already is.
 
-`sudo nano /etc/modprobe.d/snd-blacklist.conf`
+* Enable SPI with `sudo raspi-config`.
+* The NeoPixels must be the only device on SPI bus 0.
+* On a Raspberry Pi 3, add `core_freq=250` to `/boot/config.txt` (`/boot/firmware/config.txt` on newer systems) and reboot. On a Raspberry Pi 4, add `core_freq=500` and `core_freq_min=500`. Otherwise the SPI clock has the wrong speed.
+* With more than about 400 NeoPixels, add `spidev.bufsiz=32768` to `/boot/cmdline.txt` (`/boot/firmware/cmdline.txt` on newer systems) and reboot.
 
-add the `blacklist snd_bcm2835` to the end of the file.
+#### Other GPIO pins
+
+On the other pins rpi_ws281x requires root, so the plugin runs it with sudo, and sudo must not ask for a password. Create a dedicated file:
+
+```
+sudo visudo -f /etc/sudoers.d/octoprint-enclosure
+```
+
+and write this line in it, replacing `pi` if OctoPrint runs with another user:
+
+```
+pi ALL=(ALL) NOPASSWD: ALL
+```
+
+**Warning:** this lets the user of OctoPrint run any command as root without a password, so anything that takes control of OctoPrint, for example a malicious plugin, can take control of the whole system. If you can, use GPIO 10 instead.
+
+With GPIO 12, 13, 18 or 19, also disable the audio of the Raspberry Pi, which uses the same PWM hardware:
+
+```
+sudo nano /etc/modprobe.d/snd-blacklist.conf
+```
+
+and add `blacklist snd_bcm2835` to the end of the file.
+
+With GPIO 21 you can't use I2S audio devices, which use the same PCM hardware.
 
 ### GPIO
 

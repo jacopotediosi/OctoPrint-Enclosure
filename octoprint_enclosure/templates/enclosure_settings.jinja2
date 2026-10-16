@@ -126,7 +126,7 @@
         <div data-bind="if: output_type() == 'temperature_alarm'">
             {{ text_control_group("alarm_set_temp", _("Set Temperature"), "Set temperature that will trigger the event") }}
             {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settings_outputs_regular", "When the event happen, you want control which IO?") }}
-            {{ select_control_group("controlled_io_set_value", _("Set Controlled IO Value"), [("low", "Low"), ("high", "High")], "When the event happen, you want to turn the controlled IO HIGH or LOW?") }}
+            {{ select_control_group("controlled_io_set_state", _("Set Controlled IO State"), [("on", "On"), ("off", "Off")], "When the event happen, you want to turn the controlled IO on or off?") }}
         </div>
         <div data-bind="if: output_type() == 'pwm'">
             {{ text_control_group("pwm_frequency", _("PWM Frequency"), "Value is in Hz") }}
@@ -161,6 +161,9 @@
                            data-bind="rgbColor: default_neopixel_color">
                 </div>
             </div>
+        </div>
+        <div data-bind="if: output_type() == 'neopixel_direct'">
+            {{ text_control_group("neopixel_dma", _("DMA Channel"), "DMA channel used to drive the NeoPixels.") }}
         </div>
         <div data-bind="if: output_type() == 'gcode_output'">
             <div class="control-group">
@@ -319,7 +322,7 @@
             <div data-bind="if: action_type() == 'output_control'">
                 {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settings_possible_outputs", "When the event happens, do you want control of which OUTPUT?") }}
                 <div data-bind="if: $root.isRegularOutput(controlled_io())">
-                    {{ select_control_group("controlled_io_set_value", _("Set Controlled IO Value"), [("low", "Low"), ("high", "High"), ("toggle", "Toggle")], "When the event happens, do you want to turn the controlled IO HIGH or LOW?") }}
+                    {{ select_control_group("controlled_io_set_state", _("Set Controlled IO State"), [("on", "On"), ("off", "Off"), ("toggle", "Toggle")], "When the event happens, do you want to turn the controlled IO on, off, or toggle it?") }}
                 </div>
             </div>
             <div data-bind="if: action_type() == 'printer_control'">
@@ -380,12 +383,10 @@
     <div id="advanced_enclosure"
          class="accordion-body collapse"
          data-bind="with: settingsViewModel.settings.plugins.enclosure">
-        {{ checkbox_control_group("use_sudo", _("Use SUDO"), "Use sudo to run python commands.") }}
         {% call checkbox_control_group("gcode_control", _("Enable gcode control")) %}
             <span class="help-inline">Use gcode to control outputs, check the documentation on
                 <a href="https://github.com/jacopotediosi/OctoPrint-Enclosure">github</a> page</span>
         {% endcall %}
-        {{ text_control_group("neopixel_dma", _("Neopixel DMA Channel"), "DMA channel used on direct control of neopixel.") }}
         {{ checkbox_control_group("use_board_pin_number", _("Use Board Pin #"), "Use BOARD pin numbers instead of BCM pin numbers") }}
         <div class="control-group">
             <div class="controls">

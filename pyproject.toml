@@ -21,6 +21,7 @@ dependencies = [
     "requests>=2.4.0",  # min is 2.4.0 for the (connect, read) timeout tuple
     "RPi.bme280>=0.2.0",  # min is 0.2.0 for the compensation_params in sample() signature
     "RPi.GPIO>=0.5.11",  # min is 0.5.11 for GPIO.getmode()
+    "rpi_ws281x>=3.1.0",  # min is 3.1.0 for the strip_type parameter of PixelStrip
     "smbus2>=0.3.0",  # min is 0.3.0 for SMBus as context manager
     "spidev>=3.2",  # min is 3.2 for SpiDev as context manager
     "typing_extensions>=4.4",  # min is 4.4 for typing_extensions.override

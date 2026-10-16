@@ -6,7 +6,7 @@ import threading
 import time
 from datetime import timedelta
 from pathlib import Path
-from subprocess import Popen, run
+from subprocess import run
 
 import octoprint.plugin
 import octoprint.util
@@ -15,7 +15,6 @@ from octoprint.events import Events
 from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
 from octoprint.server.util.flask import restricted_access
 from octoprint.util import RepeatedTimer
-from smbus2 import SMBus
 from werkzeug.exceptions import BadRequest
 
 from .core import Frontend, Settings
@@ -24,8 +23,16 @@ from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, gpio
 from .inputs import SensorError, Sensors
 from .integrations import Mqtt
-from .ledstrip import LEDStrip
 from .notifications import Notifications, NotificationType
+from .outputs import (
+    LedstripOutput,
+    NeopixelDirectOutput,
+    NeopixelIndirectOutput,
+    OutputError,
+    Outputs,
+    PwmOutput,
+    RegularOutput,
+)
 from .utils import (
     clamp,
     is_hhmm,
@@ -35,9 +42,6 @@ from .utils import (
     to_float,
     to_int,
 )
-
-# Directory containing the neopixel scripts run as subprocesses
-SCRIPTS_DIR = Path(__file__).resolve().parent
 
 
 # Translates the Pull-Up/Pull-Down GPIO resistor setting to active-low/active-high boolean
@@ -59,7 +63,6 @@ class EnclosurePlugin(
     rpi_inputs = []
     waiting_temperature = []
     rpi_outputs_not_changed = []
-    pwm_instances = []
     event_queue = []
     temp_hum_control_status = []
     temperature_sensor_data = []
@@ -130,11 +133,29 @@ class EnclosurePlugin(
             return " OFF "
         return pin_state
 
+    # Function that returns whether a regular output is on, or the message of the error reading it
+    def output_state_boolean(self, index_id):
+        try:
+            return self._outputs.get(index_id, RegularOutput).is_on()
+        except OutputError:
+            return "ERROR: Unable to read pin"
+        except Exception:
+            self._logger.exception("Error reading output %s", index_id)
+            return "ERROR: Unable to read pin"
+
+    # Function that returns the human-readable state of a regular output
+    def output_state_human(self, index_id):
+        output_state = self.output_state_boolean(index_id)
+        if output_state is True:
+            return " ON "
+        if output_state is False:
+            return " OFF "
+        return output_state
+
     # ~~ StartupPlugin mixin
     def on_after_startup(self):
         self._mqtt.load_helpers()
 
-        self.pwm_instances = []
         self.event_queue = []
         self.rpi_outputs_not_changed = []
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
@@ -143,6 +164,7 @@ class EnclosurePlugin(
         for rpi_output in self.rpi_outputs:
             rpi_output["temp_ctr_set_value"] = 0
         self.generate_temp_hum_control_status()
+        self.configure_outputs()
         self.setup_gpio()
         self.configure_gpio()
         self.configure_sensors()
@@ -153,7 +175,7 @@ class EnclosurePlugin(
         self.print_complete = False
 
     def get_settings_version(self):
-        return 10
+        return 11
 
     def on_settings_migrate(self, target, current=None):
         migrate_settings(target, current, self._settings, self._logger)
@@ -187,12 +209,12 @@ class EnclosurePlugin(
             if identifier == to_int(rpi_output["gpio_pin"]):
                 match_found = True
                 configured_as = "Output"
-                active_low = check_input_active_low(rpi_output["active_low"])
                 pin = to_int(rpi_output["gpio_pin"])
-                if rpi_output["gpio_i2c_enabled"]:
-                    b = self.gpio_i2c_input(rpi_output, active_low)
-                    val = " ON " if b else " OFF "
+                if rpi_output["output_type"] in ("regular", "temp_hum_control"):
+                    active_low = bool(rpi_output["active_low"])
+                    val = self.output_state_human(to_int(rpi_output["index_id"]))
                 else:
+                    active_low = False
                     val = self.pin_state_human(pin, active_low)
                 label = rpi_output["label"]
                 resp.append(
@@ -285,12 +307,7 @@ class EnclosurePlugin(
                 index = to_int(rpi_output["index_id"])
                 label = rpi_output["label"]
                 pin = to_int(rpi_output["gpio_pin"])
-                active_low = rpi_output["active_low"]
-                if rpi_output["gpio_i2c_enabled"]:
-                    b = self.gpio_i2c_input(rpi_output, active_low)
-                    val = " ON " if b else " OFF "
-                else:
-                    val = self.pin_state_human(pin, active_low)
+                val = self.output_state_human(index)
                 outputs.append({"index_id": index, "label": label, "GPIO_Pin": pin, "State": val})
         return jsonify(outputs)
 
@@ -299,11 +316,13 @@ class EnclosurePlugin(
         for rpi_output in self.rpi_outputs:
             if identifier == to_int(rpi_output["index_id"]):
                 out = copy.deepcopy(rpi_output)
-                pin = to_int(rpi_output["gpio_pin"])
-                if rpi_output["gpio_i2c_enabled"]:
-                    out["current_value"] = self.gpio_i2c_input(rpi_output, rpi_output["active_low"])
+                if rpi_output["output_type"] == "pwm":
+                    with contextlib.suppress(OutputError):
+                        out["duty_cycle"] = self._outputs.get(identifier, PwmOutput).duty_cycle
+                if rpi_output["output_type"] in ("regular", "temp_hum_control"):
+                    out["current_value"] = self.output_state_boolean(identifier)
                 else:
-                    out["current_value"] = self.pin_state_boolean(pin, rpi_output["active_low"])
+                    out["current_value"] = self.pin_state_boolean(to_int(rpi_output["gpio_pin"]), False)
                 return jsonify(out)
         return make_response("", 404)
 
@@ -324,11 +343,7 @@ class EnclosurePlugin(
 
         for rpi_output in self.rpi_outputs:
             if identifier == to_int(rpi_output["index_id"]):
-                val = (not value) if rpi_output["active_low"] else value
-                if rpi_output["gpio_i2c_enabled"]:
-                    self.gpio_i2c_write(rpi_output, val)
-                else:
-                    self.write_gpio(to_int(rpi_output["gpio_pin"]), val)
+                self.switch_output(identifier, "on" if value else "off")
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:identifier>/auto-startup", methods=["PATCH"])
@@ -399,10 +414,8 @@ class EnclosurePlugin(
 
         set_value = to_int(data["duty_cycle"])
         for rpi_output in [item for item in self.rpi_outputs if item["index_id"] == identifier]:
-            rpi_output["duty_cycle"] = set_value
             rpi_output["new_duty_cycle"] = ""
-            gpio_pin = to_int(rpi_output["gpio_pin"])
-            self.write_pwm(gpio_pin, set_value)
+            self.write_pwm(identifier, set_value)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/rgb-led/<int:identifier>", methods=["PATCH"])
@@ -478,78 +491,6 @@ class EnclosurePlugin(
         self.send_gcode_command(rpi_output["gcode"])
         return make_response("", 204)
 
-    # GPIO over i2c
-
-    def gpio_i2c_input(self, output, active_low=None):
-        state = False
-        try:
-            i2cbus = to_int(output["gpio_i2c_bus"])
-            i2caddr = to_int(output["gpio_i2c_address"])
-            i2creg = to_int(output["gpio_i2c_register_status"])
-            data_on = to_int(output["gpio_i2c_data_on"])
-
-            with SMBus(i2cbus) as bus:
-                data = bus.read_i2c_block_data(i2caddr, i2creg, 1)
-                if data[0] == data_on:
-                    state = True
-
-            self._logger.debug(
-                "gpio_i2c_input(i2cbus=%s, i2caddr=%s, i2creg=%s, data_on=%s) data == %s",
-                i2cbus,
-                i2caddr,
-                i2creg,
-                data_on,
-                data,
-            )
-
-            if active_low is None and state:
-                return state
-
-        except Exception:
-            self._logger.exception(
-                "Error reading on i2c address %s, reg %s",
-                output["gpio_i2c_address"],
-                output["gpio_i2c_register_status"],
-            )
-
-        return (not state) if active_low else state
-
-    def gpio_i2c_write(self, output, state, queue_id=None):
-        try:
-            i2cbus = to_int(output["gpio_i2c_bus"])
-            i2caddr = to_int(output["gpio_i2c_address"])
-            i2creg = to_int(output["gpio_i2c_register"])
-            data_on = to_int(output["gpio_i2c_data_on"])
-            data_off = to_int(output["gpio_i2c_data_off"])
-
-            with SMBus(i2cbus) as bus:
-                data = []
-                if state:
-                    data.append(data_on)
-                else:
-                    data.append(data_off)
-
-                bus.write_i2c_block_data(i2caddr, i2creg, data)
-
-            if queue_id is not None:
-                self._logger.debug("Running scheduled queue id %s", queue_id)
-            self._logger.debug(
-                "Writing on GPIO (i2c): %s/%s value %s",
-                output["gpio_i2c_address"],
-                output["gpio_i2c_register"],
-                state,
-            )
-            self.update_ui()
-            if queue_id is not None:
-                self.stop_queue_item(queue_id)
-
-        except Exception:
-            self._logger.exception(
-                "Error writing on i2c address %s, reg %s",
-                output["gpio_i2c_address"],
-                output["gpio_i2c_register"],
-            )
-
     def send_neopixel_command(self, output, red, green, blue, queue_id=None):
         """Send neopixel command.
 
@@ -561,44 +502,27 @@ class EnclosurePlugin(
             queue_id (str, optional): Scheduled queue item to remove after sending the command.
 
         """
+        index_id = output["index_id"]
         try:
             output["neopixel_color"] = f"rgb({red},{green},{blue})"
 
-            neopixel_direct = output["output_type"] == "neopixel_direct"
+            if queue_id is not None:
+                self._logger.debug("running scheduled queue id %s", queue_id)
 
-            if neopixel_direct:
-                # rpi_ws281x requires root, so neopixel_direct.py runs with the system python
-                script = str(SCRIPTS_DIR / "neopixel_direct.py")
-                cmd = ["python3", script]
-            else:
-                script = str(SCRIPTS_DIR / "neopixel_indirect.py")
-                cmd = [sys.executable, script]
+            neopixel_class = (
+                NeopixelDirectOutput if output["output_type"] == "neopixel_direct" else NeopixelIndirectOutput
+            )
+            self._outputs.get(index_id, neopixel_class).set_color(int(red), int(green), int(blue))
 
-            if self._enclosure_settings.use_sudo:
-                cmd.insert(0, "sudo")
-
-            cmd += [
-                str(to_int(output["gpio_pin"])),
-                str(output["neopixel_count"]),
-                str(output["neopixel_brightness"]),
-                str(red),
-                str(green),
-                str(blue),
-            ]
-
-            if neopixel_direct:
-                cmd.append(str(self._enclosure_settings.neopixel_dma))
-            else:
-                cmd.append(str(output["microcontroller_address"] or 0))
-
-                if queue_id is not None:
-                    self._logger.debug("running scheduled queue id %s", queue_id)
-                self._logger.debug("Sending neopixel cmd: %s", cmd)
-            Popen(cmd)
             if queue_id is not None:
                 self.stop_queue_item(queue_id)
+        except OutputError as error:
+            self._logger.debug("Can't set the color of output %s: %s", index_id, error)
         except Exception:
-            self._logger.exception("Error sending neopixel command for output %s", output["index_id"])
+            self._logger.exception("Error sending neopixel command for output %s", index_id)
+
+    def configure_outputs(self):
+        self._outputs = Outputs(self.rpi_outputs, self._gpio, self._logger)
 
     def get_sensor_inputs(self):
         return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "temperature_sensor"]
@@ -677,63 +601,43 @@ class EnclosurePlugin(
 
     def toggle_output(self, output_index, first_run=False):
         for output in [item for item in self.rpi_outputs if item["index_id"] == output_index]:
-            gpio_pin = to_int(output["gpio_pin"])
             index_id = to_int(output["index_id"])
 
             if output["output_type"] == "regular":
-                if output["gpio_i2c_enabled"]:
-                    current_value = self.gpio_i2c_input(output)
-                elif first_run:
-                    current_value = False
-                else:
-                    current_value = (
-                        (not self._gpio.input(gpio_pin)) if output["active_low"] else self._gpio.input(gpio_pin)
-                    )
-
-                time_delay = to_int(output["toggle_timer_off"]) if current_value else to_int(output["toggle_timer_on"])
-
                 if not self.print_complete:
-                    if output["gpio_i2c_enabled"]:
-                        self.gpio_i2c_write(output, not current_value)
-                    else:
-                        self.write_gpio(gpio_pin, not current_value)
+                    on = self.switch_output(index_id, "on" if first_run else "toggle")
+                    time_delay = to_int(output["toggle_timer_on"]) if on else to_int(output["toggle_timer_off"])
                     thread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
                     thread.start()
                 else:
-                    off_value = bool(output["active_low"])
-                    if output["gpio_i2c_enabled"]:
-                        self.gpio_i2c_write(output, off_value)
-                    else:
-                        self.write_gpio(gpio_pin, off_value)
+                    self.switch_output(index_id, "off")
                 self.update_ui_outputs()
                 return
 
             if output["output_type"] == "pwm":
-                for pwm in self.pwm_instances:
-                    if gpio_pin in pwm:
-                        if first_run:
-                            current_pwm_value = 0
-                        elif "duty_cycle" in pwm:
-                            current_pwm_value = pwm["duty_cycle"]
-                            current_pwm_value = to_int(current_pwm_value)
-                        else:
-                            current_pwm_value = 0
+                try:
+                    pwm_output = self._outputs.get(index_id, PwmOutput)
+                except OutputError as error:
+                    self._logger.debug("Can't toggle output %s: %s", index_id, error)
+                    return
 
-                        if current_pwm_value != 0:
-                            time_delay = to_int(output["toggle_timer_off"])
-                            write_value = 0
-                        else:
-                            time_delay = to_int(output["toggle_timer_on"])
-                            write_value = to_int(output["default_duty_cycle"])
+                current_pwm_value = 0 if first_run else to_int(pwm_output.duty_cycle)
 
-                        if not self.print_complete:
-                            self.write_pwm(gpio_pin, write_value)
-                            thread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
-                            thread.start()
-                        else:
-                            self.write_pwm(to_int(output["gpio_pin"]), 0)
-                        self.update_ui_outputs()
-                        return
+                if current_pwm_value != 0:
+                    time_delay = to_int(output["toggle_timer_off"])
+                    write_value = 0
+                else:
+                    time_delay = to_int(output["toggle_timer_on"])
+                    write_value = to_int(output["default_duty_cycle"])
+
+                if not self.print_complete:
+                    self.write_pwm(index_id, write_value)
+                    thread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
+                    thread.start()
+                else:
+                    self.write_pwm(index_id, 0)
+                self.update_ui_outputs()
+                return
 
     def update_ui(self):
         self.update_ui_outputs()
@@ -773,23 +677,16 @@ class EnclosurePlugin(
             temp_control_status = []
             for output in self.rpi_outputs:
                 index = to_int(output["index_id"])
-                pin = to_int(output["gpio_pin"])
                 startup = output["auto_startup"]
                 shutdown = output["auto_shutdown"]
 
                 if output["output_type"] == "regular":
-                    if output["gpio_i2c_enabled"]:
-                        val = self.gpio_i2c_input(output)
-                    else:
-                        val = self._gpio.input(pin) if not output["active_low"] else (not self._gpio.input(pin))
+                    val = self.output_state_boolean(index) is True
                     regular_status.append(
                         {"index_id": index, "status": val, "auto_startup": startup, "auto_shutdown": shutdown},
                     )
                 if output["output_type"] == "temp_hum_control":
-                    if output["gpio_i2c_enabled"]:
-                        val = self.gpio_i2c_input(output)
-                    else:
-                        val = self._gpio.input(pin) if not output["active_low"] else (not self._gpio.input(pin))
+                    val = self.output_state_boolean(index) is True
                     temp_control_status.append(
                         {"index_id": index, "status": val, "auto_startup": startup, "auto_shutdown": shutdown},
                     )
@@ -804,21 +701,16 @@ class EnclosurePlugin(
                         {"index_id": index, "color": val, "auto_startup": startup, "auto_shutdown": shutdown},
                     )
                 if output["output_type"] == "pwm":
-                    for pwm in self.pwm_instances:
-                        if pin in pwm:
-                            if "duty_cycle" in pwm:
-                                pwm_val = pwm["duty_cycle"]
-                                val = to_int(pwm_val)
-                            else:
-                                val = 0
-                            pwm_status.append(
-                                {
-                                    "index_id": index,
-                                    "pwm_value": val,
-                                    "auto_startup": startup,
-                                    "auto_shutdown": shutdown,
-                                },
-                            )
+                    with contextlib.suppress(OutputError):
+                        val = to_int(self._outputs.get(index, PwmOutput).duty_cycle)
+                        pwm_status.append(
+                            {
+                                "index_id": index,
+                                "pwm_value": val,
+                                "auto_startup": startup,
+                                "auto_shutdown": shutdown,
+                            },
+                        )
             self._frontend.update_outputs(
                 regular=regular_status,
                 pwm=pwm_status,
@@ -870,16 +762,10 @@ class EnclosurePlugin(
                     if to_int(temperature_alarm["controlled_io"]) == to_int(
                         rpi_controlled_output["index_id"],
                     ):
-                        if rpi_controlled_output["gpio_i2c_enabled"]:
-                            val = temperature_alarm["controlled_io_set_value"] != "low"
-                            self.gpio_i2c_write(rpi_controlled_output, val)
-                        else:
-                            val = (
-                                self._gpio.LOW
-                                if temperature_alarm["controlled_io_set_value"] == "low"
-                                else self._gpio.HIGH
-                            )
-                            self.write_gpio(to_int(rpi_controlled_output["gpio_pin"]), val)
+                        self.switch_output(
+                            rpi_controlled_output["index_id"],
+                            temperature_alarm["controlled_io_set_state"],
+                        )
                         self._notifications.send(
                             NotificationType.TEMPERATURE_ACTION,
                             f"Temperature action: enclosure temperature exceed {temperature_alarm['alarm_set_temp']}",
@@ -890,9 +776,8 @@ class EnclosurePlugin(
             for pwm_output in list(
                 filter(lambda item: item["output_type"] == "pwm" and item["pwm_temperature_linked"], self.rpi_outputs),
             ):
-                gpio_pin = to_int(pwm_output["gpio_pin"])
+                index_id = to_int(pwm_output["index_id"])
                 if self._printer.is_printing():
-                    index_id = to_int(pwm_output["index_id"])
                     linked_id = to_int(pwm_output["linked_temp_sensor"])
                     linked_data = self.get_linked_temp_sensor_data(linked_id)
 
@@ -923,11 +808,12 @@ class EnclosurePlugin(
 
                     self._logger.debug("Calculated duty for PWM %s is %s", index_id, calculated_duty)
                 elif self.print_complete:
-                    calculated_duty = to_int(pwm_output["duty_cycle"])
+                    # After a print the PWM keeps its duty cycle: the default one, or the one set through API or ENC
+                    continue
                 else:
                     calculated_duty = 0
 
-                self.write_pwm(gpio_pin, clamp(calculated_duty, 0, 100))
+                self.write_pwm(index_id, clamp(calculated_duty, 0, 100))
 
         except Exception:
             self._logger.exception("Error handling temperature linked PWM outputs")
@@ -997,11 +883,7 @@ class EnclosurePlugin(
                 if current_status != previous_status:
                     if current_status:
                         self._logger.info("Turning gpio to control temperature on.")
-                        val = not temp_hum_control["active_low"]
-                        if temp_hum_control["gpio_i2c_enabled"]:
-                            self.gpio_i2c_write(temp_hum_control, val)
-                        else:
-                            self.write_gpio(to_int(temp_hum_control["gpio_pin"]), val)
+                        self.switch_output(temp_hum_control["index_id"], "on")
                     else:
                         # Without a value, a print waiting for the temperature (ENC W1) stays paused
                         index_id = temp_hum_control["index_id"]
@@ -1012,11 +894,7 @@ class EnclosurePlugin(
                             self._printer.resume_print()
 
                         self._logger.info("Turning gpio to control temperature off.")
-                        val = bool(temp_hum_control["active_low"])
-                        if temp_hum_control["gpio_i2c_enabled"]:
-                            self.gpio_i2c_write(temp_hum_control, val)
-                        else:
-                            self.write_gpio(to_int(temp_hum_control["gpio_pin"]), val)
+                        self.switch_output(temp_hum_control["index_id"], "off")
                     for control_status in self.temp_hum_control_status:
                         if control_status["index_id"] == temp_hum_control["index_id"]:
                             control_status["status"] = current_status
@@ -1106,51 +984,13 @@ class EnclosurePlugin(
 
     def configure_gpio(self):
         try:
-            for gpio_out in list(
-                filter(
-                    lambda item: (
-                        (item["output_type"] == "regular" or item["output_type"] == "temp_hum_control")
-                        and not item["gpio_i2c_enabled"]
-                    ),
-                    self.rpi_outputs,
-                ),
-            ):
-                initial_value = self._gpio.HIGH if gpio_out["active_low"] else self._gpio.LOW
-                pin = to_int(gpio_out["gpio_pin"])
-                if pin not in self.rpi_outputs_not_changed:
-                    self._logger.info("Setting GPIO pin %s as OUTPUT with initial value: %s", pin, initial_value)
-                    self._gpio.setup(pin, self._gpio.OUT, initial=initial_value)
-            for gpio_out_pwm in list(filter(lambda item: item["output_type"] == "pwm", self.rpi_outputs)):
-                pin = to_int(gpio_out_pwm["gpio_pin"])
-                self._logger.info("Setting GPIO pin %s as PWM", pin)
-
-                # Stop and clear any other pwm instances on that pin
-                pwm_instances_to_remove = []
-                for pwm_instance in self.pwm_instances:
-                    if pin in pwm_instance:
-                        pwm_instance[pin].stop()
-                        pwm_instances_to_remove.append(pwm_instance)
-                for pwm_instance in pwm_instances_to_remove:
-                    self.pwm_instances.remove(pwm_instance)
-
-                # Clear the pin
-                self.clear_channel(pin)
-
-                # Setup new pwm on that pin
-                self._gpio.setup(pin, self._gpio.OUT)
-                pwm_instance = self._gpio.PWM(pin, to_int(gpio_out_pwm["pwm_frequency"]))
-
-                # Start the pwm
-                self._logger.info("starting PWM on pin %s", pin)
-                pwm_instance.start(to_int(gpio_out_pwm["default_duty_cycle"]))
-
-                # Add the pwm to pwm_instances list
-                self.pwm_instances.append({pin: pwm_instance})
-            for gpio_out_neopixel in list(
-                filter(lambda item: item["output_type"] == "neopixel_direct", self.rpi_outputs),
-            ):
-                pin = to_int(gpio_out_neopixel["gpio_pin"])
-                self.clear_channel(pin)
+            for regular_output in self._outputs.get_all(RegularOutput):
+                if regular_output.config.gpio_pin not in self.rpi_outputs_not_changed:
+                    regular_output.setup()
+            for pwm_output in self._outputs.get_all(PwmOutput):
+                pwm_output.start()
+            for neopixel_output in self._outputs.get_all(NeopixelDirectOutput):
+                self.clear_channel(neopixel_output.config.gpio_pin)
 
             for rpi_input in list(filter(lambda item: item["input_type"] == "gpio", self.rpi_inputs)):
                 gpio_pin = to_int(rpi_input["gpio_pin"])
@@ -1303,12 +1143,7 @@ class EnclosurePlugin(
                         r_out for r_out in self.rpi_outputs if to_int(r_out["index_id"]) == controlled_io
                     ].pop()
                     if rpi_output["output_type"] == "regular":
-                        if rpi_output["gpio_i2c_enabled"]:
-                            val = rpi_input["controlled_io_set_value"] != "low"
-                            self.gpio_i2c_write(rpi_output, val)
-                        else:
-                            val = self._gpio.LOW if rpi_input["controlled_io_set_value"] == "low" else self._gpio.HIGH
-                            self.write_gpio(to_int(rpi_output["gpio_pin"]), val)
+                        self.switch_output(controlled_io, rpi_input["controlled_io_set_state"])
         except Exception:
             self._logger.exception("Error handling initial GPIO control")
 
@@ -1343,22 +1178,11 @@ class EnclosurePlugin(
                         r_out for r_out in self.rpi_outputs if to_int(r_out["index_id"]) == controlled_io
                     ].pop()
                     if rpi_output["output_type"] == "regular":
-                        if rpi_input["controlled_io_set_value"] == "toggle":
-                            val = (
-                                self._gpio.LOW
-                                if self._gpio.input(to_int(rpi_output["gpio_pin"])) == self._gpio.HIGH
-                                else self._gpio.HIGH
-                            )
-                        else:
-                            val = self._gpio.LOW if rpi_input["controlled_io_set_value"] == "low" else self._gpio.HIGH
-                        if rpi_output["gpio_i2c_enabled"]:
-                            self.gpio_i2c_write(rpi_output, val)
-                        else:
-                            self.write_gpio(to_int(rpi_output["gpio_pin"]), val)
+                        self.switch_output(controlled_io, rpi_input["controlled_io_set_state"])
                         self._notifications.send(
                             NotificationType.GPIO_ACTION,
                             f"GPIO control action caused by input {rpi_input['label']}. "
-                            f"Setting GPIO{rpi_input['controlled_io']} to: {rpi_input['controlled_io_set_value']}",
+                            f"Setting GPIO{rpi_input['controlled_io']} to: {rpi_input['controlled_io_set_state']}",
                         )
                     if rpi_output["output_type"] == "gcode_output":
                         self.send_gcode_command(rpi_output["gcode"])
@@ -1427,37 +1251,48 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error handling printer action on channel %s", channel)
 
-    def write_gpio(self, gpio_pin, value, queue_id=None):
+    # Turns a regular output "on" or "off", or toggles it, and returns whether it is on, or None if it fails
+    def switch_output(self, index_id, state, queue_id=None):
+        if state not in ("on", "off", "toggle"):
+            self._logger.error("Unknown state %r for output %s", state, index_id)
+            return None
+
         try:
-            self._gpio.output(gpio_pin, value)
+            regular_output = self._outputs.get(index_id, RegularOutput)
+            if state == "toggle":
+                on = regular_output.toggle()
+            elif state == "on":
+                regular_output.turn_on()
+                on = True
+            else:
+                regular_output.turn_off()
+                on = False
             if queue_id is not None:
                 self._logger.debug("Running scheduled queue id %s", queue_id)
-            self._logger.debug("Writing on GPIO: %s value %s", gpio_pin, value)
             self.update_ui()
             if queue_id is not None:
                 self.stop_queue_item(queue_id)
+        except OutputError as error:
+            self._logger.debug("Can't write on output %s: %s", index_id, error)
+            return None
         except Exception:
-            self._logger.exception("Error writing on pin %s", gpio_pin)
+            self._logger.exception("Error writing on output %s", index_id)
+            return None
+        else:
+            return on
 
-    def write_pwm(self, gpio_pin, pwm_value, queue_id=None):
+    def write_pwm(self, index_id, pwm_value, queue_id=None):
         try:
             if queue_id is not None:
                 self._logger.debug("running scheduled queue id %s", queue_id)
-            for pwm in self.pwm_instances:
-                if gpio_pin in pwm:
-                    pwm_object = pwm[gpio_pin]
-                    old_pwm_value = pwm.get("duty_cycle", -1)
-                    if to_int(old_pwm_value) != to_int(pwm_value):
-                        pwm["duty_cycle"] = pwm_value
-                        pwm_object.start(pwm_value)  # should be changed back to pwm_object.ChangeDutyCycle() but this
-                        # was causing errors.
-                        self._logger.debug("Writing PWM on gpio: %s value %s", gpio_pin, pwm_value)
-                    self.update_ui()
-                    if queue_id is not None:
-                        self.stop_queue_item(queue_id)
-                    break
+            self._outputs.get(index_id, PwmOutput).set_duty_cycle(pwm_value)
+            self.update_ui()
+            if queue_id is not None:
+                self.stop_queue_item(queue_id)
+        except OutputError as error:
+            self._logger.debug("Can't write PWM on output %s: %s", index_id, error)
         except Exception:
-            self._logger.exception("Error writing PWM on pin %s", gpio_pin)
+            self._logger.exception("Error writing PWM on output %s", index_id)
 
     def get_output_list(self):
         return [
@@ -1501,7 +1336,7 @@ class EnclosurePlugin(
             for rpi_output in self.rpi_outputs:
                 shutdown_time = rpi_output["shutdown_time"]
                 if rpi_output["output_type"] == "pwm" and rpi_output["pwm_temperature_linked"]:
-                    rpi_output["duty_cycle"] = rpi_output["default_duty_cycle"]
+                    self.write_pwm(rpi_output["index_id"], to_int(rpi_output["default_duty_cycle"]))
                 if rpi_output["auto_shutdown"] and not is_hhmm(shutdown_time):
                     delay_seconds = to_float(shutdown_time)
                     self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
@@ -1515,8 +1350,6 @@ class EnclosurePlugin(
             for rpi_output in self.rpi_outputs:
                 if rpi_output["shutdown_on_failed"]:
                     shutdown_time = rpi_output["shutdown_time"]
-                    if rpi_output["output_type"] == "pwm" and rpi_output["pwm_temperature_linked"]:
-                        rpi_output["duty_cycle"] = rpi_output["default_duty_cycle"]
                     if rpi_output["auto_shutdown"] and not is_hhmm(shutdown_time):
                         delay_seconds = to_float(shutdown_time)
                         self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
@@ -1550,8 +1383,7 @@ class EnclosurePlugin(
     def schedule_auto_shutdown_outputs(self, rpi_output, shutdown_delay_seconds):
         suffix = "auto_shutdown"
         if rpi_output["output_type"] == "regular":
-            value = bool(rpi_output["active_low"])
-            self.add_regular_output_to_queue(shutdown_delay_seconds, rpi_output, value, suffix)
+            self.add_regular_output_to_queue(shutdown_delay_seconds, rpi_output, "off", suffix)
         if rpi_output["output_type"] == "ledstrip":
             self.ledstrip_set_rgb(rpi_output)
         if rpi_output["output_type"] == "pwm" and not rpi_output["pwm_temperature_linked"]:
@@ -1567,34 +1399,30 @@ class EnclosurePlugin(
         self._logger.debug("Events scheduled to run %s", self.event_queue)
 
     def ledstrip_set_rgb(self, rpi_output, rgb=None):
-        clk = rpi_output["ledstrip_gpio_clk"]
-        data = rpi_output["ledstrip_gpio_dat"]
-        if clk is not None and data is not None:
-            ledstrip = LEDStrip(self._gpio, to_int(clk), to_int(data))
+        try:
+            ledstrip = self._outputs.get(rpi_output["index_id"], LedstripOutput)
+        except OutputError as error:
+            self._logger.debug("Can't set the color of output %s: %s", rpi_output["index_id"], error)
+        else:
             if rgb is None:
                 red, green, blue = parse_rgb(rpi_output["default_ledstrip_color"])
             else:
                 red, green, blue = parse_rgb(rgb)
 
             self._logger.info("LEDSTRIP set rgb color: %s, %s, %s", red, green, blue)
-            ledstrip.setcolourrgb(to_int(red), to_int(green), to_int(blue))
+            ledstrip.set_color(to_int(red), to_int(green), to_int(blue))
             rpi_output["ledstrip_color"] = f"rgb({red},{green},{blue})"
 
     def start_outpus_with_server(self):
         for rpi_output in self.rpi_outputs:
             if rpi_output["startup_with_server"]:
-                gpio_pin = to_int(rpi_output["gpio_pin"])
                 if rpi_output["output_type"] == "regular":
-                    value = not rpi_output["active_low"]
-                    if rpi_output["gpio_i2c_enabled"]:
-                        self.gpio_i2c_write(rpi_output, value)
-                    else:
-                        self.write_gpio(gpio_pin, value)
+                    self.switch_output(rpi_output["index_id"], "on")
                 if rpi_output["output_type"] == "ledstrip":
                     self.ledstrip_set_rgb(rpi_output)
                 if rpi_output["output_type"] == "pwm" and not rpi_output["pwm_temperature_linked"]:
                     value = to_int(rpi_output["default_duty_cycle"])
-                    self.write_pwm(gpio_pin, value)
+                    self.write_pwm(rpi_output["index_id"], value)
                 if rpi_output["output_type"] == "neopixel_indirect" or rpi_output["output_type"] == "neopixel_direct":
                     red, green, blue = parse_rgb(rpi_output["default_neopixel_color"])
                     self.send_neopixel_command(rpi_output, red, green, blue)
@@ -1604,8 +1432,7 @@ class EnclosurePlugin(
     def schedule_auto_startup_outputs(self, rpi_output, delay_seconds):
         suffix = "auto_startup"
         if rpi_output["output_type"] == "regular":
-            value = not rpi_output["active_low"]
-            self.add_regular_output_to_queue(delay_seconds, rpi_output, value, suffix)
+            self.add_regular_output_to_queue(delay_seconds, rpi_output, "on", suffix)
         if rpi_output["output_type"] == "ledstrip":
             self.ledstrip_set_rgb(rpi_output)
         if rpi_output["output_type"] == "pwm" and not rpi_output["pwm_temperature_linked"]:
@@ -1640,37 +1467,25 @@ class EnclosurePlugin(
         thread = threading.Timer(
             delay_seconds,
             self.write_pwm,
-            args=[to_int(rpi_output["gpio_pin"]), value, queue_id],
+            args=[rpi_output["index_id"], value, queue_id],
         )
 
         self.event_queue.append({"queue_id": queue_id, "thread": thread})
 
     def schedule_pwm_duty_on_queue(self, delay_seconds, rpi_output, value, suffix):
         queue_id = f"{rpi_output['index_id']}_pwm_linked_temp_{suffix}"
-        thread = threading.Timer(delay_seconds, self.set_pwm_duty_cycle, args=[rpi_output, value, queue_id])
+        thread = threading.Timer(delay_seconds, self.write_pwm, args=[rpi_output["index_id"], value, queue_id])
 
         self._logger.debug("Scheduling pwm linked temp output id %s on %s delay_seconds", queue_id, delay_seconds)
 
         self.event_queue.append({"queue_id": queue_id, "thread": thread})
 
-    def set_pwm_duty_cycle(self, rpi_output, value, queue_id):
-        rpi_output["duty_cycle"] = value
-        if queue_id is not None:
-            self.stop_queue_item(queue_id)
-
-    def add_regular_output_to_queue(self, delay_seconds, rpi_output, value, suffix):
+    def add_regular_output_to_queue(self, delay_seconds, rpi_output, state, suffix):
         queue_id = f"{rpi_output['index_id']}_{suffix}"
 
         self._logger.debug("Scheduling regular output id %s on %s delay_seconds", queue_id, delay_seconds)
 
-        if rpi_output["gpio_i2c_enabled"]:
-            thread = threading.Timer(delay_seconds, self.gpio_i2c_write, args=[rpi_output, value, queue_id])
-        else:
-            thread = threading.Timer(
-                delay_seconds,
-                self.write_gpio,
-                args=[to_int(rpi_output["gpio_pin"]), value, queue_id],
-            )
+        thread = threading.Timer(delay_seconds, self.switch_output, args=[rpi_output["index_id"], state, queue_id])
 
         self.event_queue.append({"queue_id": queue_id, "thread": thread})
 
@@ -1708,7 +1523,10 @@ class EnclosurePlugin(
     def on_settings_save(self, data):
         outputs_before_save = self.get_output_list()
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
+        for pwm_output in self._outputs.get_all(PwmOutput):
+            pwm_output.stop()
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
+        self.configure_outputs()
         with self.sensors_lock:
             self.rpi_inputs = self._enclosure_settings.rpi_inputs
             self.configure_sensors()
@@ -1747,8 +1565,6 @@ class EnclosurePlugin(
                 "M82            ;Set extruder to Absolute Mode\n"
                 "G92 E0         ;Set Extruder to 0"
             ),
-            "use_sudo": True,
-            "neopixel_dma": 10,
             "gcode_control": False,
             "use_board_pin_number": False,
             "notification_provider": "",

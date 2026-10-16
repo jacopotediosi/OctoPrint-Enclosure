@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.utils import clamp, get_gcode_param, to_float, to_int
+from octoprint_enclosure.outputs import OutputError
+from octoprint_enclosure.utils import get_gcode_param, to_float, to_int
 
 if TYPE_CHECKING:
     from octoprint.util.comm import MachineCom
@@ -42,21 +43,7 @@ class EncHandler:
             return
 
         output_type = output["output_type"]
-        if output_type == "regular":
-            value = clamp(to_int(get_gcode_param(cmd, "S")), 0, 1) == 1
-            if output["active_low"]:
-                value = not value
-            if output["gpio_i2c_enabled"]:
-                plugin.gpio_i2c_write(output, value)
-            else:
-                plugin.write_gpio(to_int(output["gpio_pin"]), value)
-            comm_instance._log(f"Setting REGULAR output {index_id} to value {value}")
-        elif output_type == "pwm":
-            duty_cycle = clamp(to_int(get_gcode_param(cmd, "S")), 0, 100)
-            output["duty_cycle"] = duty_cycle
-            plugin.write_pwm(to_int(output["gpio_pin"]), duty_cycle)
-            comm_instance._log(f"Setting PWM output {index_id} to value {duty_cycle}")
-        elif output_type in ("neopixel_indirect", "neopixel_direct"):
+        if output_type in ("neopixel_indirect", "neopixel_direct"):
             red, green, blue = (get_gcode_param(cmd, letter) for letter in "RGB")
             plugin.send_neopixel_command(output, red, green, blue)
             comm_instance._log(f"Setting NEOPIXEL output {index_id} to red: {red} green: {green} blue: {blue}")
@@ -69,3 +56,15 @@ class EncHandler:
             plugin.update_ui_set_temperature()
             plugin.handle_temp_hum_control()
             comm_instance._log(f"Setting TEMP/HUM control output {index_id} to value {temperature}")
+        else:
+            try:
+                reply = plugin._outputs.run_enc_command(index_id, cmd)
+            except OutputError as error:
+                plugin._logger.debug("Can't run ENC command %s: %s", cmd, error)
+                return
+            except Exception:
+                plugin._logger.exception("Error running ENC command: %s", cmd)
+                return
+            if reply is not None:
+                plugin.update_ui()
+                comm_instance._log(reply)
