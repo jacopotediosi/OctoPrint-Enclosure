@@ -2,26 +2,26 @@
    title="Raspberry Pi Outputs"
    class="dropdown-toggle"
    data-toggle="dropdown"
-   data-bind="visible: $root.navbar_outputs().length > 0 && $root.isUser()">
+   data-bind="visible: $root.navbar_items().length > 0 && $root.isUser()">
     <i class="fa fa-codepen"></i>
     <b class="caret"></b>
 </a>
-<ul class="dropdown-menu" data-bind="foreach: $root.navbar_outputs()">
-    <li data-bind="if: output_type() == 'regular'">
+<ul class="dropdown-menu" data-bind="foreach: $root.navbar_items()">
+    <li data-bind="if: $root.navbarItemType($data) == 'regular'">
         <a href="#" data-bind="click: $root.handleIO">
             <span data-bind="text: label"></span>
             <span class="badge help-inline"
                   data-bind="text: gpio_status() ? 'on' : 'off', css: {'badge-success': gpio_status(), 'badge-important': !gpio_status()}"></span>
         </a>
     </li>
-    <li data-bind="if: output_type() == 'gcode_output', css: {disabled: !$root.isOperational()}">
+    <li data-bind="if: $root.navbarItemType($data) == 'gcode_output', css: {disabled: !$root.isOperational()}">
         <a href="#"
            data-bind="click: $root.isOperational() ? $root.handleGcode : function () {}">
             <span data-bind="text: label"></span>
             <span class="badge" data-bind="css: {'badge-info': $root.isOperational()}">gcode</span>
         </a>
     </li>
-    <li data-bind="if: output_type() == 'shell_output'">
+    <li data-bind="if: $root.navbarItemType($data) == 'shell_output'">
         <a href="#" data-bind="click: $root.handleShellOutput">
             <span data-bind="text: label"></span>
             <span class="badge badge-info">shell</span>

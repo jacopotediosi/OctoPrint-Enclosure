@@ -111,28 +111,6 @@
                 </button>
             </div>
         </div>
-        <div data-bind="if: output_type() == 'gcode_output'">
-            <h4>
-                <span data-bind="text: label"></span>
-                <span class="badge">gcode output</span>
-            </h4>
-            <div>
-                <button type="button"
-                        data-bind="enable: $root.isOperational(), click: $root.handleGcode"
-                        class="btn">Send gcode</button>
-            </div>
-        </div>
-        <div data-bind="if: output_type() == 'shell_output'">
-            <h4>
-                <span data-bind="text: label"></span>
-                <span class="badge">Shell Script</span>
-            </h4>
-            <div>
-                <button type="button"
-                        data-bind="enable: $root.isUser(), click: $root.handleShellOutput"
-                        class="btn">Execute Script</button>
-            </div>
-        </div>
         <div data-bind="if: output_type() == 'pwm'">
             <h4>
                 <span data-bind="text: label"></span>
@@ -180,7 +158,7 @@
                       data-bind="text: gpio_status() ? 'on' : 'off', css: {'badge-success': gpio_status(), 'badge-important': !gpio_status()}"></span>
             </h4>
         </div>
-        <div data-bind="if: !(output_type() == 'pwm' && pwm_temperature_linked()) && !((output_type() == 'regular' || output_type() == 'pwm') && toggle_timer()) && !(output_type() == 'gcode_output' || output_type() == 'temperature_alarm' || output_type() == 'shell_output')">
+        <div data-bind="if: !(output_type() == 'pwm' && pwm_temperature_linked()) && !((output_type() == 'regular' || output_type() == 'pwm') && toggle_timer()) && !(output_type() == 'temperature_alarm')">
             <h5 data-bind="if: $root.isUser()">
                 <span>Auto Startup</span>
                 <a href="#"
@@ -203,6 +181,32 @@
             <span>Time Toggle</span>
             <span class="badge">active</span>
         </h5>
+    </div>
+</div>
+<div data-bind="foreach: $root.tab_actions()">
+    <div style="margin-bottom: 20px">
+        <div data-bind="if: action_type() == 'gcode_output'">
+            <h4>
+                <span data-bind="text: label"></span>
+                <span class="badge">gcode output</span>
+            </h4>
+            <div>
+                <button type="button"
+                        data-bind="enable: $root.isOperational(), click: $root.handleGcode"
+                        class="btn">Send gcode</button>
+            </div>
+        </div>
+        <div data-bind="if: action_type() == 'shell_output'">
+            <h4>
+                <span data-bind="text: label"></span>
+                <span class="badge">Shell Script</span>
+            </h4>
+            <div>
+                <button type="button"
+                        data-bind="enable: $root.isUser(), click: $root.handleShellOutput"
+                        class="btn">Execute Script</button>
+            </div>
+        </div>
     </div>
 </div>
 <div data-bind="foreach: $root.tab_filament_sensors()">

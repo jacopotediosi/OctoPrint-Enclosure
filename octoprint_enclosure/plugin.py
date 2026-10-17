@@ -6,7 +6,6 @@ import threading
 import time
 from datetime import timedelta
 from pathlib import Path
-from subprocess import run
 
 import octoprint.plugin
 import octoprint.util
@@ -17,6 +16,7 @@ from octoprint.server.util.flask import restricted_access
 from octoprint.util import RepeatedTimer
 from werkzeug.exceptions import BadRequest
 
+from .actions import ActionError, Actions, GcodeAction, ShellAction
 from .core import Frontend, Settings
 from .core.migrations import migrate_settings
 from .gcode_commands import EncDevHandler, EncHandler
@@ -61,6 +61,7 @@ class EnclosurePlugin(
 ):
     rpi_outputs = []
     rpi_inputs = []
+    actions = []
     waiting_temperature = []
     rpi_outputs_not_changed = []
     event_queue = []
@@ -160,11 +161,13 @@ class EnclosurePlugin(
         self.rpi_outputs_not_changed = []
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
         self.rpi_inputs = self._enclosure_settings.rpi_inputs
+        self.actions = self._enclosure_settings.actions
         # Reset volatile temp_ctr_set_value to 0 on startup (it should not be persisted)
         for rpi_output in self.rpi_outputs:
             rpi_output["temp_ctr_set_value"] = 0
         self.generate_temp_hum_control_status()
         self.configure_outputs()
+        self.configure_actions()
         self.setup_gpio()
         self.configure_gpio()
         self.configure_sensors()
@@ -313,16 +316,20 @@ class EnclosurePlugin(
 
     @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:identifier>", methods=["GET"])
     def get_output_status(self, identifier):
-        for rpi_output in self.rpi_outputs:
-            if identifier == to_int(rpi_output["index_id"]):
-                out = copy.deepcopy(rpi_output)
-                if rpi_output["output_type"] == "pwm":
+        for item_settings in [*self.rpi_outputs, *self.actions]:
+            if identifier == to_int(item_settings["index_id"]):
+                out = copy.deepcopy(item_settings)
+                # In previous versions, actions were outputs. To keep backward compatibility, the API returns
+                # the actions as when they were saved among the outputs, with their type in output_type.
+                if "action_type" in out:
+                    out["output_type"] = out.pop("action_type")
+                if out["output_type"] == "pwm":
                     with contextlib.suppress(OutputError):
                         out["duty_cycle"] = self._outputs.get(identifier, PwmOutput).duty_cycle
-                if rpi_output["output_type"] in ("regular", "temp_hum_control"):
+                if out["output_type"] in ("regular", "temp_hum_control"):
                     out["current_value"] = self.output_state_boolean(identifier)
                 else:
-                    out["current_value"] = self.pin_state_boolean(to_int(rpi_output["gpio_pin"]), False)
+                    out["current_value"] = self.pin_state_boolean(to_int(out.get("gpio_pin")), False)
                 return jsonify(out)
         return make_response("", 404)
 
@@ -478,17 +485,13 @@ class EnclosurePlugin(
     @octoprint.plugin.BlueprintPlugin.route("/shell/<int:identifier>", methods=["POST"])
     @restricted_access
     def send_shell_command(self, identifier):
-        rpi_output = [r_out for r_out in self.rpi_outputs if to_int(r_out["index_id"]) == identifier].pop()
-
-        command = rpi_output["shell_script"]
-        self.shell_command(command)
+        self.run_action(identifier, ShellAction)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/gcode/<int:identifier>", methods=["POST"])
     @restricted_access
     def requested_gcode_command(self, identifier):
-        rpi_output = [r_out for r_out in self.rpi_outputs if to_int(r_out["index_id"]) == identifier].pop()
-        self.send_gcode_command(rpi_output["gcode"])
+        self.run_action(identifier, GcodeAction)
         return make_response("", 204)
 
     def send_neopixel_command(self, output, red, green, blue, queue_id=None):
@@ -523,6 +526,17 @@ class EnclosurePlugin(
 
     def configure_outputs(self):
         self._outputs = Outputs(self.rpi_outputs, self._gpio, self._logger)
+
+    def configure_actions(self):
+        self._actions = Actions(self.actions, self._printer, self._frontend, self._logger)
+
+    # Returns the settings of the output or action with the given id, since outputs and actions share the ids
+    def get_output_or_action_settings(self, index_id):
+        return [
+            item_settings
+            for item_settings in [*self.rpi_outputs, *self.actions]
+            if to_int(item_settings["index_id"]) == index_id
+        ].pop()
 
     def get_sensor_inputs(self):
         return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "temperature_sensor"]
@@ -1139,30 +1153,19 @@ class EnclosurePlugin(
                 gpio_pin = to_int(rpi_input["gpio_pin"])
                 controlled_io = to_int(rpi_input["controlled_io"])
                 if (rpi_input["edge"] == "fall") ^ self._gpio.input(gpio_pin):
-                    rpi_output = [
-                        r_out for r_out in self.rpi_outputs if to_int(r_out["index_id"]) == controlled_io
-                    ].pop()
-                    if rpi_output["output_type"] == "regular":
+                    controlled_settings = self.get_output_or_action_settings(controlled_io)
+                    if controlled_settings.get("output_type") == "regular":
                         self.switch_output(controlled_io, rpi_input["controlled_io_set_state"])
         except Exception:
             self._logger.exception("Error handling initial GPIO control")
 
-    def shell_command(self, command):
+    def run_action(self, index_id, action_class):
         try:
-            result = run(command, shell=True, capture_output=True, check=False, encoding="utf-8", errors="replace")
-        except Exception:
-            self._logger.exception("Could not execute shell script: %s", command)
-            self._frontend.show_message("Could not execute shell script", "error")
+            action = self._actions.get(index_id, action_class)
+        except ActionError as error:
+            self._logger.debug("Can't run action %s: %s", index_id, error)
             return
-
-        if result.returncode == 0:
-            self._frontend.show_message(f"Shell command executed. Output: {result.stdout}", "success")
-        else:
-            self._logger.warning("Shell script %s exited with code %s: %s", command, result.returncode, result.stderr)
-            self._frontend.show_message(
-                f"Shell command failed with exit code {result.returncode}. Error: {result.stderr}",
-                "error",
-            )
+        action.run()
 
     def handle_gpio_control(self, channel):
 
@@ -1174,34 +1177,24 @@ class EnclosurePlugin(
                 gpio_pin = to_int(rpi_input["gpio_pin"])
                 controlled_io = to_int(rpi_input["controlled_io"])
                 if (rpi_input["edge"] == "fall") ^ self._gpio.input(gpio_pin):
-                    rpi_output = [
-                        r_out for r_out in self.rpi_outputs if to_int(r_out["index_id"]) == controlled_io
-                    ].pop()
-                    if rpi_output["output_type"] == "regular":
+                    controlled_settings = self.get_output_or_action_settings(controlled_io)
+                    if controlled_settings.get("output_type") == "regular":
                         self.switch_output(controlled_io, rpi_input["controlled_io_set_state"])
                         self._notifications.send(
                             NotificationType.GPIO_ACTION,
                             f"GPIO control action caused by input {rpi_input['label']}. "
                             f"Setting GPIO{rpi_input['controlled_io']} to: {rpi_input['controlled_io_set_state']}",
                         )
-                    if rpi_output["output_type"] == "gcode_output":
-                        self.send_gcode_command(rpi_output["gcode"])
+                    if controlled_settings.get("action_type") == "gcode_output":
+                        self.run_action(controlled_io, GcodeAction)
                         self._notifications.send(
                             NotificationType.GPIO_ACTION,
                             f"GPIO control action caused by input {rpi_input['label']}. Sending GCODE command",
                         )
-                    if rpi_output["output_type"] == "shell_output":
-                        command = rpi_output["shell_script"]
-                        self.shell_command(command)
+                    if controlled_settings.get("action_type") == "shell_output":
+                        self.run_action(controlled_io, ShellAction)
         except Exception:
             self._logger.exception("Error handling GPIO control on channel %s", channel)
-
-    def send_gcode_command(self, command):
-        for line in command.split("\n"):
-            if line:
-                self._printer.commands(line.strip())
-                self._logger.info("Sending GCODE command: %s", line.strip())
-                time.sleep(0.2)
 
     def handle_printer_action(self, channel):
         try:
@@ -1527,6 +1520,8 @@ class EnclosurePlugin(
             pwm_output.stop()
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
         self.configure_outputs()
+        self.actions = self._enclosure_settings.actions
+        self.configure_actions()
         with self.sensors_lock:
             self.rpi_inputs = self._enclosure_settings.rpi_inputs
             self.configure_sensors()
@@ -1550,6 +1545,7 @@ class EnclosurePlugin(
         return {
             "rpi_outputs": [],
             "rpi_inputs": [],
+            "actions": [],
             "filament_sensor_gcode": (
                 "G91  ;Set Relative Mode \n"
                 "G1 E-5.000000 F500 ;Retract 5mm\n"

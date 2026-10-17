@@ -21,7 +21,21 @@ class Settings:
         self.write_lock = threading.RLock()
 
     ##########
-    ### RPI inputs and outputs
+    ### Outputs
+    ##########
+
+    @property
+    def rpi_outputs(self) -> list[dict]:
+        """The configured outputs."""
+        return self._settings.get(["rpi_outputs"])
+
+    @rpi_outputs.setter
+    def rpi_outputs(self, value: list[dict]) -> None:
+        with self.write_lock:
+            self._settings.set(["rpi_outputs"], value)
+
+    ##########
+    ### Inputs
     ##########
 
     @property
@@ -34,15 +48,14 @@ class Settings:
         with self.write_lock:
             self._settings.set(["rpi_inputs"], value)
 
-    @property
-    def rpi_outputs(self) -> list[dict]:
-        """The configured outputs."""
-        return self._settings.get(["rpi_outputs"])
+    ##########
+    ### Actions
+    ##########
 
-    @rpi_outputs.setter
-    def rpi_outputs(self, value: list[dict]) -> None:
-        with self.write_lock:
-            self._settings.set(["rpi_outputs"], value)
+    @property
+    def actions(self) -> list[dict]:
+        """The configured actions, such as G-code and shell scripts."""
+        return self._settings.get(["actions"])
 
     ##########
     ### GPIO

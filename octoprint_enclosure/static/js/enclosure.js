@@ -34,6 +34,7 @@ $(function () {
 
     self.rpi_outputs = ko.observableArray();
     self.rpi_inputs = ko.observableArray();
+    self.actions = ko.observableArray();
 
     self.settingsOpen = false;
 
@@ -44,9 +45,7 @@ $(function () {
     });
 
     self.settings_possible_outputs = ko.pureComputed(function () {
-      return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs(), function (item) {
-        return ((item.output_type() === "regular" && !item.toggle_timer()) || item.output_type() === "gcode_output" || item.output_type() === "shell_output");
-      });
+      return self.settings_outputs_regular().concat(self.settingsViewModel.settings.plugins.enclosure.actions());
     });
 
     self.rpi_inputs_temperature_sensors = ko.pureComputed(function () {
@@ -55,11 +54,19 @@ $(function () {
       });
     });
 
-    self.navbar_outputs = ko.pureComputed(function () {
-      return ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
-        return (["regular", "gcode_output", "shell_output"].indexOf(item.output_type()) >= 0 && item.show_on_navbar());
+    self.navbar_items = ko.pureComputed(function () {
+      var outputs = ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
+        return (item.output_type() === "regular" && item.show_on_navbar());
       });
+      var actions = ko.utils.arrayFilter(self.actions(), function (item) {
+        return (item.show_on_navbar());
+      });
+      return outputs.concat(actions);
     });
+
+    self.navbarItemType = function (item) {
+      return ko.unwrap(item.output_type || item.action_type);
+    };
 
     self.navbar_temperature_sensors = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.rpi_inputs_temperature_sensors(), function (item) {
@@ -84,6 +91,12 @@ $(function () {
 
     self.tab_outputs = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
+        return (!item.hide_btn_ui());
+      });
+    });
+
+    self.tab_actions = ko.pureComputed(function () {
+      return ko.utils.arrayFilter(self.actions(), function (item) {
         return (!item.hide_btn_ui());
       });
     });
@@ -288,6 +301,7 @@ $(function () {
     self.bindFromSettings = function(){
       self.rpi_outputs(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs());
       self.rpi_inputs(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs());
+      self.actions(self.settingsViewModel.settings.plugins.enclosure.actions());
     };
 
     self.onBeforeBinding = function () {
@@ -359,17 +373,22 @@ $(function () {
       }
     };
 
+    // Actions used to be outputs: they share the ids with the outputs, so that they keep the ids they had
+    self.nextOutputOrActionIndex = function () {
+      var enclosure = self.settingsViewModel.settings.plugins.enclosure;
+      var indexes = enclosure.rpi_outputs().concat(enclosure.actions()).map(function (item) {
+        return parseInt(item.index_id(), 10) || 0;
+      });
+      return indexes.length == 0 ? 1 : Math.max.apply(null, indexes) + 1;
+    };
+
     self.addRpiOutput = function () {
-
-      var arrRelaysLength = self.settingsViewModel.settings.plugins.enclosure.rpi_outputs().length;
-
-      var nextIndex = arrRelaysLength == 0 ? 1 : self.settingsViewModel.settings.plugins.enclosure.rpi_outputs()[arrRelaysLength - 1].index_id() + 1;
+      var nextIndex = self.nextOutputOrActionIndex();
 
       self.settingsViewModel.settings.plugins.enclosure.rpi_outputs.push({
         index_id: ko.observable(nextIndex),
         label: ko.observable("Output " + nextIndex),
         output_type: ko.observable("regular"),
-        shell_script: ko.observable(""),
         gpio_pin: ko.observable(0),
         gpio_status: ko.observable(false),
         hide_btn_ui: ko.observable(false),
@@ -415,7 +434,6 @@ $(function () {
         ledstrip_gpio_clk: ko.observable(""),
         ledstrip_gpio_dat: ko.observable(""),
         microcontroller_address: ko.observable(0),
-        gcode: ko.observable(""),
         show_on_navbar: ko.observable(false),
         gpio_i2c_enabled: ko.observable(false),
         gpio_i2c_bus: ko.observable(1),
@@ -433,10 +451,26 @@ $(function () {
       self.settingsViewModel.settings.plugins.enclosure.rpi_outputs.remove(data);
     };
 
+    self.addAction = function () {
+      var nextIndex = self.nextOutputOrActionIndex();
+
+      self.settingsViewModel.settings.plugins.enclosure.actions.push({
+        index_id: ko.observable(nextIndex),
+        label: ko.observable("Action " + nextIndex),
+        action_type: ko.observable("gcode_output"),
+        gcode: ko.observable(""),
+        shell_script: ko.observable(""),
+        hide_btn_ui: ko.observable(false),
+        show_on_navbar: ko.observable(false)
+      });
+    };
+
+    self.removeAction = function (data) {
+      self.settingsViewModel.settings.plugins.enclosure.actions.remove(data);
+    };
+
     self.addRpiInput = function () {
-
       var arrRelaysLength = self.settingsViewModel.settings.plugins.enclosure.rpi_inputs().length;
-
       var nextIndex = arrRelaysLength == 0 ? 1 : self.settingsViewModel.settings.plugins.enclosure.rpi_inputs()[arrRelaysLength - 1].index_id() + 1;
 
       self.settingsViewModel.settings.plugins.enclosure.rpi_inputs.push({

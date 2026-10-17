@@ -3,9 +3,10 @@
 <h4>{{ _("Raspberry Pi Outputs") }}</h4>
 <p>
     Configure all
-    <strong>outputs</strong>. Outputs can be everything that performs actions based on UI button presses, or automatic events or alarms.
+    <strong>outputs</strong>. Outputs are the devices driven by the plugin: from a button on the Enclosure tab, from an input, or
+    automatically, for example when a print ends or a temperature alarm goes off.
 </p>
-<p>Example of possible outputs are GPIO pins, neopixel LED's, temperature control or sending gcode to the printer.</p>
+<p>Example of possible outputs are GPIO pins, neopixel LED's or temperature control.</p>
 <form class="form-horizontal">
     <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.rpi_outputs">
         <!--
@@ -21,17 +22,12 @@
             ("ledstrip", _("RGB LED Strip")),
             ("temp_hum_control", _("Temperature / Humidity Control")),
             ("temperature_alarm", _("Temperature Alarm")),
-            ("gcode_output", _("Gcode")),
-            ("shell_output", _("Shell Script")),
         ]) }}
         <div data-bind="if: output_type() != 'temperature_alarm'">
             {{ text_control_group("label", _("Label"), "Name displayed on Enclosure Tab") }}
         </div>
         {{ text_control_group("index_id", _("Id"), "Id used for API control", disabled=true) }}
-        <div data-bind="if: output_type() == 'shell_output'">
-            {{ text_control_group("shell_script", _("Script"), "Shell script to be executed") }}
-        </div>
-        <div data-bind="ifnot: output_type() == 'gcode_output' || output_type() == 'temperature_alarm' || output_type() == 'shell_output' || output_type() == 'ledstrip' || (output_type() == 'regular' && gpio_i2c_enabled())">
+        <div data-bind="ifnot: output_type() == 'temperature_alarm' || output_type() == 'ledstrip' || (output_type() == 'regular' && gpio_i2c_enabled())">
             {% call text_control_group("gpio_pin", _("IO Number")) %}
                 <span class="help-inline"
                       data-bind="visible: output_type() != 'neopixel_indirect'">GPIO number that will be controlled.</span>
@@ -60,7 +56,7 @@
             </div>
         </div>
         <div data-bind="ifnot: (output_type() == 'regular' || output_type() == 'pwm') && toggle_timer()">
-            <div data-bind="ifnot: output_type() == 'gcode_output' || output_type() == 'temperature_alarm' || output_type() == 'shell_output'">
+            <div data-bind="ifnot: output_type() == 'temperature_alarm'">
                 <div data-bind="ifnot: output_type() == 'pwm' && pwm_temperature_linked()">
                     {{ checkbox_control_group("startup_with_server", _("Start with server"), "Choose if output should turn on automatically when octoprint starts") }}
                     {{ checkbox_control_group("auto_startup", _("Auto Startup"), "Choose if output should turn on automatically when print starts") }}
@@ -69,7 +65,7 @@
                     {{ text_control_group("startup_time", _("Startup Delay / Hour"), "Time delay in seconds to turn on GPIO when print starts OR exact time that the event should happen, note that events will only be scheduled after a print starts, time should be formatted as HH:MM on a 24 hours format, don't forget to check timezone of your Raspberry Pi.") }}
                 </div>
             </div>
-            <div data-bind="ifnot: output_type() == 'gcode_output' || output_type() == 'temperature_alarm' || output_type() == 'shell_output'">
+            <div data-bind="ifnot: output_type() == 'temperature_alarm'">
                 {{ checkbox_control_group("auto_shutdown", _("Auto Shutdown"), "Choose if output should turn off automatically when print finishes") }}
             </div>
             <div data-bind="if: $data.auto_shutdown">
@@ -80,7 +76,7 @@
                         <b>Link PWM to Temperature</b> option</span>
                 {% endcall %}
             </div>
-            <div data-bind="ifnot: output_type() == 'gcode_output' || output_type() == 'temperature_alarm' || output_type() == 'shell_output'">
+            <div data-bind="ifnot: output_type() == 'temperature_alarm'">
                 {{ checkbox_control_group("shutdown_on_error", _("Auto Shutdown on Serial Connection Error"), "Choose if output should turn off automatically when an error or disconnect was detected. Shutdown Delay will be ignored in this case") }}
             </div>
         </div>
@@ -99,7 +95,7 @@
             {{ text_control_group("gpio_i2c_data_off", _("I2C OFF data"), "I2C data to write in HEX value when OFF") }}
             {{ text_control_group("gpio_i2c_register_status", _("I2C Register (read status)"), "I2C register for reading gpio state in HEX value") }}
         </div>
-        <div data-bind="if: output_type() == 'regular' || output_type() == 'gcode_output' || output_type() == 'shell_output' || output_type() == 'ledstrip'">
+        <div data-bind="if: output_type() == 'regular' || output_type() == 'ledstrip'">
             {{ checkbox_control_group("hide_btn_ui", _("Hide UI Button"), "If you plan to use a physical button (INPUT) and want to hide the button from enclosure tab check this.") }}
             <div data-bind="ifnot: output_type() == 'ledstrip'">
                 {{ checkbox_control_group("show_on_navbar", _("Show Button on Navbar"), "Add shortcut on navbar to toggle output") }}
@@ -164,16 +160,6 @@
         </div>
         <div data-bind="if: output_type() == 'neopixel_direct'">
             {{ text_control_group("neopixel_dma", _("DMA Channel"), "DMA channel used to drive the NeoPixels.") }}
-        </div>
-        <div data-bind="if: output_type() == 'gcode_output'">
-            <div class="control-group">
-                <label class="control-label">{{ _("Gcode") }}</label>
-                <div class="controls">
-                    <textarea rows="4" class="block" data-bind="value: gcode"></textarea>
-                    <span class="help-inline">GCODE that will be sent to the printer. You should add
-                        <code>ENTER</code> on the end of every line sent to the printer</span>
-                </div>
-            </div>
         </div>
         <div class="control-group">
             <a title="Delete IO"
@@ -370,6 +356,54 @@
         <button type="button"
                 class="btn pull-right"
                 data-bind="click: function() { $root.addRpiInput(); }">Add Inputs...</button>
+    </div>
+</form>
+<h4>{{ _("Actions") }}</h4>
+<p>
+    Configure all
+    <strong>actions</strong>. Actions send gcode to the printer or run a shell script, from a button on the Enclosure tab or on the
+    navbar, or from an input.
+</p>
+<form class="form-horizontal">
+    <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.actions">
+        {{ radio_control_group("action_type", _("Action Type"), [
+            ("gcode_output", _("Gcode")),
+            ("shell_output", _("Shell Script")),
+        ]) }}
+        {{ text_control_group("label", _("Label"), "Name displayed on Enclosure Tab") }}
+        {{ text_control_group("index_id", _("Id"), "Id used for API control", disabled=true) }}
+        <div data-bind="if: action_type() == 'shell_output'">
+            {{ text_control_group("shell_script", _("Script"), "Shell script to be executed") }}
+        </div>
+        <div data-bind="if: action_type() == 'gcode_output'">
+            <div class="control-group">
+                <label class="control-label">{{ _("Gcode") }}</label>
+                <div class="controls">
+                    <textarea rows="4" class="block" data-bind="value: gcode"></textarea>
+                    <span class="help-inline">GCODE that will be sent to the printer. You should add
+                        <code>ENTER</code> on the end of every line sent to the printer</span>
+                </div>
+            </div>
+        </div>
+        {{ checkbox_control_group("hide_btn_ui", _("Hide UI Button"), "If you plan to use a physical button (INPUT) and want to hide the button from enclosure tab check this.") }}
+        {{ checkbox_control_group("show_on_navbar", _("Show Button on Navbar"), "Add shortcut on navbar to run the action") }}
+        <div class="control-group">
+            <a title="Delete Action"
+               class="btn btn-danger pull-right"
+               data-bind="click: function() { $parent.removeAction($data) }">
+                <i class="icon-trash"></i>
+            </a>
+        </div>
+        <div class="control-group">
+            <div class="controls">
+                <hr />
+            </div>
+        </div>
+    </div>
+    <div class="control-group">
+        <button type="button"
+                class="btn pull-right"
+                data-bind="click: function() { $root.addAction(); }">Add Actions...</button>
     </div>
 </form>
 <form class="form-horizontal">
