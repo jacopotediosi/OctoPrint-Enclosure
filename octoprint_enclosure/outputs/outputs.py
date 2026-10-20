@@ -147,11 +147,14 @@ class Outputs:
         try:
             output_config = output_class.config_class.from_settings(output_settings)
         except ValueError as error:
-            logger = self._get_output_logger(_InvalidOutput, index_id)
-            logger.warning("Invalid settings: %s", error)
-            return _InvalidOutput(f"Invalid settings: {error}", gpio, logger)
+            return self._create_invalid_output(index_id, f"Invalid settings: {error}", gpio)
 
         return output_class(output_config, gpio, self._get_output_logger(output_class, index_id))
+
+    def _create_invalid_output(self, index_id: int, reason: str, gpio: ModuleType) -> _InvalidOutput:
+        logger = self._get_output_logger(_InvalidOutput, index_id)
+        logger.warning("%s", reason)
+        return _InvalidOutput(reason, gpio, logger)
 
     def _get_output_logger(self, output_class: type[Output], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{output_class.__name__}.{index_id}")

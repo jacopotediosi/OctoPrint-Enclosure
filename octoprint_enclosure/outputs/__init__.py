@@ -4,7 +4,7 @@ from .neopixel_direct import NeopixelDirectOutput
 from .neopixel_indirect import NeopixelIndirectOutput
 from .outputs import Outputs
 from .pwm import PwmOutput
-from .regular import RegularOutput
+from .regular import RegularOutput, RegularSetState
 
 __all__ = [
     "LedstripOutput",
@@ -14,4 +14,5 @@ __all__ = [
     "Outputs",
     "PwmOutput",
     "RegularOutput",
+    "RegularSetState",
 ]

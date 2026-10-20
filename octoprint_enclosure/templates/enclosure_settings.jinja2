@@ -3,7 +3,7 @@
 <h4>{{ _("Raspberry Pi Outputs") }}</h4>
 <p>
     Configure all
-    <strong>outputs</strong>. Outputs are the devices driven by the plugin: from a button on the Enclosure tab, from an input, or
+    <strong>outputs</strong>. Outputs are the devices driven by the plugin: from a button on the Enclosure tab, from an automation, or
     automatically, for example when a print ends or a temperature alarm goes off.
 </p>
 <p>Example of possible outputs are GPIO pins, neopixel LED's or temperature control.</p>
@@ -103,10 +103,10 @@
         </div>
         <div data-bind="if: output_type() == 'temperature_alarm' || output_type() == 'temp_hum_control' || (output_type() == 'pwm' && pwm_temperature_linked())">
             <div data-bind="if: temp_ctr_type() == 'heater' || temp_ctr_type() == 'cooler' || (output_type() == 'pwm' && pwm_temperature_linked())">
-                {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_temperature_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.") }}
+                {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_temperature_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", allow_unset=true) }}
             </div>
             <div data-bind="if: temp_ctr_type() == 'dehumidifier'">
-                {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_hum_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.") }}
+                {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_hum_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", allow_unset=true) }}
             </div>
         </div>
         <div data-bind="if: output_type() == 'temp_hum_control'">
@@ -121,7 +121,7 @@
         </div>
         <div data-bind="if: output_type() == 'temperature_alarm'">
             {{ text_control_group("alarm_set_temp", _("Set Temperature"), "Set temperature that will trigger the event") }}
-            {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settings_outputs_regular", "When the event happen, you want control which IO?") }}
+            {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settings_outputs_regular", "When the event happen, you want control which IO?", allow_unset=true) }}
             {{ select_control_group("controlled_io_set_state", _("Set Controlled IO State"), [("on", "On"), ("off", "Off")], "When the event happen, you want to turn the controlled IO on or off?") }}
         </div>
         <div data-bind="if: output_type() == 'pwm'">
@@ -183,12 +183,10 @@
 <h4>{{ _("Raspberry Pi Inputs") }}</h4>
 <p>
     Configure all
-    <strong>inputs</strong>. Inputs get data from gpio or connected sensors to provide additional functionality. Inputs can control
-    outputs or influence how they behave.
+    <strong>inputs</strong>. Inputs get data from gpio or connected sensors to provide additional functionality.
 </p>
 <p>
-    Example of possible inputs are buttons connected to GPIO pins that control outputs or printer events, temperature and humidity
-    sensors, and filament sensors.
+    Example of possible inputs are buttons and filament sensors connected to GPIO pins, and temperature and humidity sensors.
 </p>
 <form class="form-horizontal">
     <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.rpi_inputs">
@@ -224,7 +222,7 @@
                 ("mcp9808", "MCP9808"),
                 ("temp_raw_i2c", "Raw I2C Temperature"),
                 ("hum_raw_i2c", "Raw I2C Humidity"),
-            ]) %}
+            ], allow_unset=true) %}
                 <span class="help-inline">
                     <span class="label label-important">Attention</span> You need to install and configure the necessary libraries for the temperature sensor, check
                     the documentation on
@@ -283,50 +281,8 @@
             {{ checkbox_control_group("use_fahrenheit", _("Use Fahrenheit Unit"), "Choose if you want to work with Celsius or Fahrenheit") }}
         </div>
         <div data-bind="if: input_type() == 'gpio'">
-            {% call radio_control_group("action_type", _("Action Type"), [("output_control", _("Output Control")), ("printer_control", _("Printer"))]) %}
-                <div class="control-group">
-                    <div class="controls">
-                        <span class="help-inline"
-                              data-bind="visible: action_type() == 'printer_control'">
-                            <span class="label label-info">Info:</span> PRINTER actions when a condition is met, that can be a filament sensor, button, etc. Actions can
-                            be Pause \ Resume \ Cancel a printer_control job, change the filament or disable Temperature Control. You can
-                            use the "change filament" action and set up the input GPIO according to your sensor, for example, if your filament
-                            sensor connects to ground when detects the end of the filament, you should choose PULL UP resistors and detect
-                        the event on the falling edge.</span>
-                        <span class="help-inline"
-                              data-bind="visible: action_type() == 'output_control'">
-                            <span class="label label-info">Info:</span> Action will control GPIO outputs when a condition is met, for example detect a press of a button.
-                            You can use this to control any previous configured OUTPUTS, basically being able to control your lights / fan
-                            / printer using mechanical buttons buttons instead of the octoprint interface. You can only control REGULAR outputs.
-                        </span>
-                    </div>
-                </div>
-            {% endcall %}
-            {{ text_control_group("gpio_pin", _("Input IO Number"), "Input GPIO that will detect the event that should trigger the action. For example if you have a filament sensor you put the GPIO pin that the sensor is connected. This can also be a press of a button or any other signal that you want to detect. You can not use GPIO 4 here if you are using temperature sensor DS18B20") }}
-            {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("input_pull_up", "Input Pullup"), ("input_pull_down", "Input Pulldown")], "Choose what type of pull resistors that you want on the output. If your signal is active low, that means it should run the action when receive a low signal (ground), you should choose PULL UP resistors.") }}
-            {{ select_control_group("edge", _("Event Trigger"), [("rise", "Rise"), ("fall", "Fall")], "Do you want to trigger the event on the rise or falling edge? If you signal is active low, that means it should run the action when it receives a low signal (ground), you should choose FALLING EDGE.") }}
-            <div data-bind="if: action_type() == 'output_control'">
-                {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settings_possible_outputs", "When the event happens, do you want control of which OUTPUT?") }}
-                <div data-bind="if: $root.isRegularOutput(controlled_io())">
-                    {{ select_control_group("controlled_io_set_state", _("Set Controlled IO State"), [("on", "On"), ("off", "Off"), ("toggle", "Toggle")], "When the event happens, do you want to turn the controlled IO on, off, or toggle it?") }}
-                </div>
-            </div>
-            <div data-bind="if: action_type() == 'printer_control'">
-                {{ select_control_group("printer_action", _("Printer Action"), [
-                    ("filament", "Filament Change"),
-                    ("resume", "Printer Resume"),
-                    ("pause", "Printer Pause"),
-                    ("cancel", "Printer Cancel"),
-                    ("start", "Start Print"),
-                    ("toggle", "Printer Toggle (Connect / Pause / Resume)"),
-                    ("toggle_job", "Job Toggle (Connect / Start / Cancel)"),
-                    ("stop_temp_hum_control", "Stop Temperature Control"),
-                ], "You can use filament change on your filament detectors and add buttons to resume and pause the print job.") }}
-                <div data-bind="if: printer_action() == 'filament'">
-                    {{ checkbox_control_group("filament_sensor_enabled", _("Enable"), "Enable and disable filament sensors") }}
-                    {{ text_control_group("filament_sensor_timeout", _("Filament detection timeout"), "Time in seconds that filament sensor will be inactive after sensing end of filament. This is to avoid sending multiple commands to the printer.") }}
-                </div>
-            </div>
+            {{ text_control_group("gpio_pin", _("Input IO Number"), "Input GPIO that will detect the event that should trigger the automations. For example if you have a filament sensor you put the GPIO pin that the sensor is connected. This can also be a press of a button or any other signal that you want to detect. You can not use GPIO 4 here if you are using temperature sensor DS18B20") }}
+            {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("input_pull_up", "Input Pullup"), ("input_pull_down", "Input Pulldown")], "Choose what type of pull resistors that you want on the input. If your signal is active low, that means it should trigger the automations when receive a low signal (ground), you should choose PULL UP resistors.", allow_unset=true) }}
         </div>
         <div data-bind="if: input_type() == 'temperature_sensor'">
             {{ checkbox_control_group("temp_sensor_navbar", _("Show temperature on navbar"), "Enable and disable temperature on navbar") }}
@@ -362,7 +318,7 @@
 <p>
     Configure all
     <strong>actions</strong>. Actions send gcode to the printer or run a shell script, from a button on the Enclosure tab or on the
-    navbar, or from an input.
+    navbar, or from an automation.
 </p>
 <form class="form-horizontal">
     <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.actions">
@@ -404,6 +360,114 @@
         <button type="button"
                 class="btn pull-right"
                 data-bind="click: function() { $root.addAction(); }">Add Actions...</button>
+    </div>
+</form>
+<h4>{{ _("Automations") }}</h4>
+<p>
+    Configure all
+    <strong>automations</strong>. A rule reacts to a trigger, such as a GPIO input that changes: it controls an output, runs an action or
+    controls the printer. A filament sensor detects the end of the filament during a print.
+</p>
+<form class="form-horizontal">
+    <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.automations">
+        {% call radio_control_group("automation_type", _("Automation Type"), [
+            ("rule", _("Rule")),
+            ("filament", _("Filament Sensor")),
+        ]) %}
+            <div class="control-group">
+                <div class="controls">
+                    <span class="help-inline" data-bind="visible: automation_type() == 'rule'">
+                        <span class="label label-info">Info:</span> Does something when its trigger happens, for example controls an output when a button connected to a
+                        GPIO input is pressed.
+                    </span>
+                    <span class="help-inline"
+                          data-bind="visible: automation_type() == 'filament'">
+                        <span class="label label-info">Info:</span> Sends the Filament Change Gcode of the advanced options when the sensor detects the end of the
+                        filament during a print. Set up the input GPIO according to your sensor, for example, if your filament sensor connects to ground
+                        when detects the end of the filament, you should choose PULL UP resistors and detect the event on the falling edge.
+                    </span>
+                </div>
+            </div>
+        {% endcall %}
+        {{ text_control_group("label", _("Label"), "Name of Automation") }}
+        <div data-bind="if: automation_type() == 'rule'">
+            {{ radio_control_group("trigger_type", _("Trigger"), [
+                ("gpio_input", _("GPIO Input")),
+            ]) }}
+        </div>
+        <div data-bind="if: automation_type() == 'filament' || trigger_type() == 'gpio_input'">
+            {{ select_control_group("input", _("Input"), "$root.settings_gpio_inputs", "GPIO input that triggers the automation. Configured on the input side of the plugin.", allow_unset=true) }}
+            {{ select_control_group("edge", _("Event Trigger"), [("rise", "Rise"), ("fall", "Fall")], "Do you want to trigger the event on the rise or falling edge? If you signal is active low, that means it should run the automation when it receives a low signal (ground), you should choose FALLING EDGE.") }}
+        </div>
+        <div data-bind="if: automation_type() == 'rule'">
+            {% call radio_control_group("reaction_type", _("Reaction"), [
+                ("output_control", _("Output Control")),
+                ("run_action", _("Run Action")),
+                ("printer_control", _("Printer")),
+            ]) %}
+                <div class="control-group">
+                    <div class="controls">
+                        <span class="help-inline"
+                              data-bind="visible: reaction_type() == 'output_control'">
+                            <span class="label label-info">Info:</span> Will control GPIO outputs when a condition is met, for example detect a press of a button. You can
+                            use this to control any previous configured REGULAR OUTPUTS, basically being able to control your lights / fan / printer using
+                            mechanical buttons instead of the octoprint interface.
+                        </span>
+                        <span class="help-inline"
+                              data-bind="visible: reaction_type() == 'run_action'">
+                            <span class="label label-info">Info:</span> Will run an action when a condition is met, for example send gcode to the printer or run a shell
+                            script when a button is pressed.
+                        </span>
+                        <span class="help-inline"
+                              data-bind="visible: reaction_type() == 'printer_control'">
+                            <span class="label label-info">Info:</span> PRINTER actions when a condition is met, for example the press of a button. Actions can be Pause
+                            \ Resume \ Cancel a print job or disable Temperature Control.
+                        </span>
+                    </div>
+                </div>
+            {% endcall %}
+            <div data-bind="if: reaction_type() == 'output_control'">
+                {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settings_outputs_regular", "When the event happens, do you want control of which OUTPUT?", allow_unset=true) }}
+                <div data-bind="if: $root.isRegularOutput(controlled_io())">
+                    {{ select_control_group("controlled_io_set_state", _("Set Controlled IO State"), [("on", "On"), ("off", "Off"), ("toggle", "Toggle")], "When the event happens, do you want to turn the controlled IO on, off, or toggle it?") }}
+                </div>
+            </div>
+            <div data-bind="if: reaction_type() == 'run_action'">
+                {{ select_control_group("action", _("Action"), "$root.settingsViewModel.settings.plugins.enclosure.actions", "Action to run when the event happens. Configured on the actions side of the plugin.", allow_unset=true) }}
+            </div>
+            <div data-bind="if: reaction_type() == 'printer_control'">
+                {{ select_control_group("printer_action", _("Printer Action"), [
+                    ("resume", "Printer Resume"),
+                    ("pause", "Printer Pause"),
+                    ("cancel", "Printer Cancel"),
+                    ("start", "Start Print"),
+                    ("toggle", "Printer Toggle (Connect / Pause / Resume)"),
+                    ("toggle_job", "Job Toggle (Connect / Start / Cancel)"),
+                    ("stop_temp_hum_control", "Stop Temperature Control"),
+                ], "You can add buttons to resume and pause the print job.") }}
+            </div>
+        </div>
+        <div data-bind="if: automation_type() == 'filament'">
+            {{ checkbox_control_group("filament_sensor_enabled", _("Enable"), "Enable and disable filament sensors") }}
+            {{ text_control_group("filament_sensor_timeout", _("Filament detection timeout"), "Time in seconds that filament sensor will be inactive after sensing end of filament. This is to avoid sending multiple commands to the printer.") }}
+        </div>
+        <div class="control-group">
+            <a title="Delete Automation"
+               class="btn btn-danger pull-right"
+               data-bind="click: function() { $parent.removeAutomation($data) }">
+                <i class="icon-trash"></i>
+            </a>
+        </div>
+        <div class="control-group">
+            <div class="controls">
+                <hr />
+            </div>
+        </div>
+    </div>
+    <div class="control-group">
+        <button type="button"
+                class="btn pull-right"
+                data-bind="click: function() { $root.addAutomation(); }">Add Automations...</button>
     </div>
 </form>
 <form class="form-horizontal">

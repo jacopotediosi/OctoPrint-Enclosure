@@ -35,6 +35,7 @@ $(function () {
     self.rpi_outputs = ko.observableArray();
     self.rpi_inputs = ko.observableArray();
     self.actions = ko.observableArray();
+    self.automations = ko.observableArray();
 
     self.settingsOpen = false;
 
@@ -42,10 +43,6 @@ $(function () {
       return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs(), function (item) {
         return (item.output_type() === "regular" && !item.toggle_timer());
       });
-    });
-
-    self.settings_possible_outputs = ko.pureComputed(function () {
-      return self.settings_outputs_regular().concat(self.settingsViewModel.settings.plugins.enclosure.actions());
     });
 
     self.rpi_inputs_temperature_sensors = ko.pureComputed(function () {
@@ -102,8 +99,14 @@ $(function () {
     });
 
     self.tab_filament_sensors = ko.pureComputed(function () {
-      return ko.utils.arrayFilter(self.rpi_inputs(), function (item) {
-        return (item.input_type() === "gpio" && item.action_type() === "printer_control" && item.printer_action() === "filament");
+      return ko.utils.arrayFilter(self.automations(), function (item) {
+        return (item.automation_type() === "filament" && item.input() !== "");
+      });
+    });
+
+    self.settings_gpio_inputs = ko.pureComputed(function () {
+      return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs(), function (item) {
+        return (item.input_type() === "gpio");
       });
     });
 
@@ -257,7 +260,7 @@ $(function () {
 
       if (data.hasOwnProperty("filament_sensor_status")) {
         data.filament_sensor_status.forEach(function (filament_sensor) {
-          var linked_filament_sensor = ko.utils.arrayFilter(self.rpi_inputs(), function (item) {
+          var linked_filament_sensor = ko.utils.arrayFilter(self.automations(), function (item) {
             return (filament_sensor['index_id'] == item.index_id());
           }).pop();
           if (linked_filament_sensor) {
@@ -302,6 +305,7 @@ $(function () {
       self.rpi_outputs(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs());
       self.rpi_inputs(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs());
       self.actions(self.settingsViewModel.settings.plugins.enclosure.actions());
+      self.automations(self.settingsViewModel.settings.plugins.enclosure.automations());
     };
 
     self.onBeforeBinding = function () {
@@ -373,17 +377,17 @@ $(function () {
       }
     };
 
-    // Actions used to be outputs: they share the ids with the outputs, so that they keep the ids they had
-    self.nextOutputOrActionIndex = function () {
+    // Outputs, actions and automations share the ids, because many actions and automations used to be inputs/outputs and keep their ids
+    self.nextSharedIndex = function () {
       var enclosure = self.settingsViewModel.settings.plugins.enclosure;
-      var indexes = enclosure.rpi_outputs().concat(enclosure.actions()).map(function (item) {
+      var indexes = enclosure.rpi_outputs().concat(enclosure.actions(), enclosure.automations()).map(function (item) {
         return parseInt(item.index_id(), 10) || 0;
       });
       return indexes.length == 0 ? 1 : Math.max.apply(null, indexes) + 1;
     };
 
     self.addRpiOutput = function () {
-      var nextIndex = self.nextOutputOrActionIndex();
+      var nextIndex = self.nextSharedIndex();
 
       self.settingsViewModel.settings.plugins.enclosure.rpi_outputs.push({
         index_id: ko.observable(nextIndex),
@@ -452,7 +456,7 @@ $(function () {
     };
 
     self.addAction = function () {
-      var nextIndex = self.nextOutputOrActionIndex();
+      var nextIndex = self.nextSharedIndex();
 
       self.settingsViewModel.settings.plugins.enclosure.actions.push({
         index_id: ko.observable(nextIndex),
@@ -479,20 +483,13 @@ $(function () {
         input_type: ko.observable("gpio"),
         gpio_pin: ko.observable(0),
         input_pull_resistor: ko.observable("input_pull_up"),
-        temp_sensor_type: ko.observable("DS18B20"),
+        temp_sensor_type: ko.observable(""),
         temp_sensor_address: ko.observable(""),
         temp_sensor_temp: ko.observable(""),
         temp_sensor_humidity: ko.observable(""),
         ds18b20_serial: ko.observable(""),
         use_fahrenheit: ko.observable(false),
-        action_type: ko.observable("output_control"),
-        controlled_io: ko.observable(""),
-        controlled_io_set_state: ko.observable("on"),
-        edge: ko.observable("fall"),
-        printer_action: ko.observable("filament"),
         temp_sensor_navbar: ko.observable(true),
-        filament_sensor_timeout: ko.observable(120),
-        filament_sensor_enabled: ko.observable(true),
         temp_sensor_i2cbus: ko.observable(1),
         temp_i2c_bus: ko.observable(1),
         temp_i2c_address: ko.observable(1),
@@ -504,6 +501,30 @@ $(function () {
 
     self.removeRpiInput = function (definition) {
       self.settingsViewModel.settings.plugins.enclosure.rpi_inputs.remove(definition);
+    };
+
+    self.addAutomation = function () {
+      var nextIndex = self.nextSharedIndex();
+
+      self.settingsViewModel.settings.plugins.enclosure.automations.push({
+        index_id: ko.observable(nextIndex),
+        label: ko.observable("Automation " + nextIndex),
+        automation_type: ko.observable("rule"),
+        trigger_type: ko.observable("gpio_input"),
+        input: ko.observable(""),
+        edge: ko.observable("fall"),
+        reaction_type: ko.observable("output_control"),
+        action: ko.observable(""),
+        controlled_io: ko.observable(""),
+        controlled_io_set_state: ko.observable("on"),
+        printer_action: ko.observable("pause"),
+        filament_sensor_enabled: ko.observable(true),
+        filament_sensor_timeout: ko.observable(120)
+      });
+    };
+
+    self.removeAutomation = function (data) {
+      self.settingsViewModel.settings.plugins.enclosure.automations.remove(data);
     };
 
     self.turnOffHeater = function (item) {
@@ -560,7 +581,7 @@ $(function () {
     };
 
     self.switchFilamentSensor = function (item) {
-      OctoPrint.patchJson(self.buildPluginUrl("filament/" + item.index_id()), {status: !item.filament_sensor_enabled()})
+      OctoPrint.patchJson(self.buildPluginUrl("filament/" + item.input()), {status: !item.filament_sensor_enabled()})
         .done(function () {
           self.getUpdateUI();
         });

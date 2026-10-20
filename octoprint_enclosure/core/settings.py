@@ -58,6 +58,20 @@ class Settings:
         return self._settings.get(["actions"])
 
     ##########
+    ### Automations
+    ##########
+
+    @property
+    def automations(self) -> list[dict]:
+        """The configured automations."""
+        return self._settings.get(["automations"])
+
+    @automations.setter
+    def automations(self, value: list[dict]) -> None:
+        with self.write_lock:
+            self._settings.set(["automations"], value)
+
+    ##########
     ### GPIO
     ##########
 

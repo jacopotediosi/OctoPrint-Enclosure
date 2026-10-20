@@ -11,11 +11,11 @@
         </div>
     </div>
 {% endmacro %}
-{% macro select_control_group(value_binding, label, options, help="") %}
+{% macro select_control_group(value_binding, label, options, help="", allow_unset=false) %}
     <div class="control-group">
         <label class="control-label">{{ label }}</label>
         <div class="controls">
-            <select data-bind="{% if options is string %}options: {{ options }}, optionsText: 'label', optionsValue: 'index_id', {% endif %}value: {{ value_binding }}">
+            <select data-bind="{% if options is string %}options: {{ options }}, optionsText: 'label', optionsValue: 'index_id', {% endif %}value: {{ value_binding }}{% if allow_unset %}, valueAllowUnset: true{% endif %}">
                 {% if options is not string %}
                     {% for value, text in options %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
                 {% endif %}

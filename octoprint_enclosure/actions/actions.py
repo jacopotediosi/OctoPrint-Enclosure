@@ -85,11 +85,11 @@ class Actions:
 
             action_class = ACTIONS.get(action_config.action_type)
             if action_class is None:
-                action: Action = _InvalidAction(
+                action: Action = self._create_invalid_action(
+                    action_config.index_id,
                     f"Unsupported action type: {action_config.action_type!r}",
                     printer,
                     frontend,
-                    self._get_action_logger(_InvalidAction, action_config.index_id),
                 )
             else:
                 action = self._create_action(action_class, action_config.index_id, action_settings, printer, frontend)
@@ -129,11 +129,20 @@ class Actions:
         try:
             action_config = action_class.config_class.from_settings(action_settings)
         except ValueError as error:
-            logger = self._get_action_logger(_InvalidAction, index_id)
-            logger.warning("Invalid settings: %s", error)
-            return _InvalidAction(f"Invalid settings: {error}", printer, frontend, logger)
+            return self._create_invalid_action(index_id, f"Invalid settings: {error}", printer, frontend)
 
         return action_class(action_config, printer, frontend, self._get_action_logger(action_class, index_id))
+
+    def _create_invalid_action(
+        self,
+        index_id: int,
+        reason: str,
+        printer: PrinterInterface,
+        frontend: Frontend,
+    ) -> _InvalidAction:
+        logger = self._get_action_logger(_InvalidAction, index_id)
+        logger.warning("%s", reason)
+        return _InvalidAction(reason, printer, frontend, logger)
 
     def _get_action_logger(self, action_class: type[Action], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{action_class.__name__}.{index_id}")

@@ -3,7 +3,6 @@ import copy
 import logging
 import sys
 import threading
-import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -16,12 +15,22 @@ from octoprint.server.util.flask import restricted_access
 from octoprint.util import RepeatedTimer
 from werkzeug.exceptions import BadRequest
 
-from .actions import ActionError, Actions, GcodeAction, ShellAction
+from .actions import ActionError, Actions, GcodeAction, GcodeConfig, PrinterAction, PrinterConfig, ShellAction
+from .automations import (
+    AutomationError,
+    Automations,
+    FilamentAutomation,
+    GpioInputTrigger,
+    OutputControlReaction,
+    PrinterControlReaction,
+    RuleAutomation,
+    RunActionReaction,
+)
 from .core import Frontend, Settings
 from .core.migrations import migrate_settings
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, gpio
-from .inputs import SensorError, Sensors
+from .inputs import GpioInputError, GpioInputs, PullResistor, SensorError, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
 from .outputs import (
@@ -32,6 +41,7 @@ from .outputs import (
     Outputs,
     PwmOutput,
     RegularOutput,
+    RegularSetState,
 )
 from .utils import (
     clamp,
@@ -42,13 +52,6 @@ from .utils import (
     to_float,
     to_int,
 )
-
-
-# Translates the Pull-Up/Pull-Down GPIO resistor setting to active-low/active-high boolean
-def check_input_active_low(input_pull_resistor):
-    # input_pull_up
-    # input_pull_down
-    return input_pull_resistor == "input_pull_up"
 
 
 class EnclosurePlugin(
@@ -62,6 +65,7 @@ class EnclosurePlugin(
     rpi_outputs = []
     rpi_inputs = []
     actions = []
+    automations = []
     waiting_temperature = []
     rpi_outputs_not_changed = []
     event_queue = []
@@ -69,7 +73,6 @@ class EnclosurePlugin(
     temperature_sensor_data = []
     failing_sensors = set()
     sensors_lock = threading.Lock()
-    last_filament_end_detected = []
     print_complete = False
     development_mode = False
 
@@ -162,12 +165,15 @@ class EnclosurePlugin(
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
         self.rpi_inputs = self._enclosure_settings.rpi_inputs
         self.actions = self._enclosure_settings.actions
+        self.automations = self._enclosure_settings.automations
         # Reset volatile temp_ctr_set_value to 0 on startup (it should not be persisted)
         for rpi_output in self.rpi_outputs:
             rpi_output["temp_ctr_set_value"] = 0
         self.generate_temp_hum_control_status()
         self.configure_outputs()
+        self.configure_gpio_inputs()
         self.configure_actions()
+        self.configure_automations()
         self.setup_gpio()
         self.configure_gpio()
         self.configure_sensors()
@@ -195,7 +201,7 @@ class EnclosurePlugin(
             if identifier == to_int(rpi_input["gpio_pin"]):
                 match_found = True
                 configured_as = "Input"
-                active_low = check_input_active_low(rpi_input["input_pull_resistor"])
+                active_low = rpi_input["input_pull_resistor"] == PullResistor.UP.value
                 pin = to_int(rpi_input["gpio_pin"])
                 val = self.pin_state_human(pin, active_low)
                 label = rpi_input["label"]
@@ -246,7 +252,7 @@ class EnclosurePlugin(
         for rpi_input in self.rpi_inputs:
             index = to_int(rpi_input["index_id"])
             label = rpi_input["label"]
-            active_low = check_input_active_low(rpi_input["input_pull_resistor"])
+            active_low = rpi_input["input_pull_resistor"] == PullResistor.UP.value
             pin = to_int(rpi_input["gpio_pin"])
             val = self.pin_state_human(pin, active_low)
             inputs.append({"index_id": index, "label": label, "GPIO_Pin": pin, "State": val})
@@ -256,7 +262,39 @@ class EnclosurePlugin(
     def get_input_status(self, identifier):
         for rpi_input in self.rpi_inputs:
             if identifier == to_int(rpi_input["index_id"]):
-                return jsonify(rpi_input)
+                out = copy.deepcopy(rpi_input)
+                # In previous versions, the automation of a GPIO input was saved in the rpi_input dict. To keep backward
+                # compatibility, the API returns the input with the keys of its first automation, and the type of the
+                # reaction in action_type. A filament sensor was a printer_control with "filament" in printer_action,
+                # and a rule that runs an action was an output_control with the id of the action in controlled_io.
+                automation_settings = next(
+                    (
+                        item
+                        for item in self.automations
+                        if (item["automation_type"] == "filament" or item["trigger_type"] == "gpio_input")
+                        and to_int(item["input"]) == identifier
+                    ),
+                    None,
+                )
+                if automation_settings is not None:
+                    input_keys = (
+                        "edge",
+                        "controlled_io",
+                        "controlled_io_set_state",
+                        "printer_action",
+                        "filament_sensor_enabled",
+                        "filament_sensor_timeout",
+                    )
+                    out.update({key: automation_settings[key] for key in input_keys if key in automation_settings})
+                    if automation_settings["automation_type"] == "filament":
+                        out["action_type"] = "printer_control"
+                        out["printer_action"] = "filament"
+                    elif automation_settings["reaction_type"] == "run_action":
+                        out["action_type"] = "output_control"
+                        out["controlled_io"] = automation_settings["action"]
+                    else:
+                        out["action_type"] = automation_settings["reaction_type"]
+                return jsonify(out)
         return make_response("", 404)
 
     @octoprint.plugin.BlueprintPlugin.route("/temperature/<int:identifier>", methods=["PATCH"])
@@ -295,11 +333,17 @@ class EnclosurePlugin(
 
         value = data["status"]
 
-        for sensor in self.rpi_inputs:
-            if identifier == to_int(sensor["index_id"]):
-                sensor["filament_sensor_enabled"] = value
+        for automation_settings in self.automations:
+            if (
+                automation_settings["automation_type"] == "filament"
+                and to_int(automation_settings["input"]) == identifier
+            ):
+                automation_settings["filament_sensor_enabled"] = value
+                with contextlib.suppress(AutomationError):
+                    index_id = to_int(automation_settings["index_id"])
+                    self._automations.get(index_id, FilamentAutomation).enabled = bool(value)
                 self._logger.info("Setting filament sensor for input %s to : %s", str(identifier), value)
-        self._enclosure_settings.rpi_inputs = self.rpi_inputs
+        self._enclosure_settings.automations = self.automations
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/outputs", methods=["GET"])
@@ -350,7 +394,7 @@ class EnclosurePlugin(
 
         for rpi_output in self.rpi_outputs:
             if identifier == to_int(rpi_output["index_id"]):
-                self.switch_output(identifier, "on" if value else "off")
+                self.switch_output(identifier, RegularSetState.ON if value else RegularSetState.OFF)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:identifier>/auto-startup", methods=["PATCH"])
@@ -527,8 +571,15 @@ class EnclosurePlugin(
     def configure_outputs(self):
         self._outputs = Outputs(self.rpi_outputs, self._gpio, self._logger)
 
+    def configure_gpio_inputs(self):
+        gpio_inputs = [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "gpio"]
+        self._gpio_inputs = GpioInputs(gpio_inputs, self._gpio, self.handle_gpio_input, self._logger)
+
     def configure_actions(self):
         self._actions = Actions(self.actions, self._printer, self._frontend, self._logger)
+
+    def configure_automations(self):
+        self._automations = Automations(self.automations, self._logger)
 
     # Returns the settings of the output or action with the given id, since outputs and actions share the ids
     def get_output_or_action_settings(self, index_id):
@@ -619,12 +670,12 @@ class EnclosurePlugin(
 
             if output["output_type"] == "regular":
                 if not self.print_complete:
-                    on = self.switch_output(index_id, "on" if first_run else "toggle")
+                    on = self.switch_output(index_id, RegularSetState.ON if first_run else RegularSetState.TOGGLE)
                     time_delay = to_int(output["toggle_timer_on"]) if on else to_int(output["toggle_timer_off"])
                     thread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
                     thread.start()
                 else:
-                    self.switch_output(index_id, "off")
+                    self.switch_output(index_id, RegularSetState.OFF)
                 self.update_ui_outputs()
                 return
 
@@ -738,15 +789,12 @@ class EnclosurePlugin(
     def update_ui_inputs(self):
         try:
             sensor_status = []
-            for sensor in self.rpi_inputs:
-                if (
-                    sensor["input_type"] == "gpio"
-                    and sensor["action_type"] == "printer_control"
-                    and sensor["printer_action"] == "filament"
-                ):
-                    index = to_int(sensor["index_id"])
-                    value = sensor["filament_sensor_enabled"]
-                    sensor_status.append({"index_id": index, "filament_sensor_enabled": value})
+            for automation_settings in self.automations:
+                if automation_settings["automation_type"] == "filament":
+                    index = to_int(automation_settings["index_id"])
+                    with contextlib.suppress(AutomationError):
+                        value = self._automations.get(index, FilamentAutomation).enabled
+                        sensor_status.append({"index_id": index, "filament_sensor_enabled": value})
             self._frontend.update_filament_sensor_status(sensor_status)
         except Exception:
             self._logger.exception("Error sending input status to the UI")
@@ -776,10 +824,15 @@ class EnclosurePlugin(
                     if to_int(temperature_alarm["controlled_io"]) == to_int(
                         rpi_controlled_output["index_id"],
                     ):
-                        self.switch_output(
-                            rpi_controlled_output["index_id"],
-                            temperature_alarm["controlled_io_set_state"],
-                        )
+                        set_state = temperature_alarm["controlled_io_set_state"]
+                        if set_state in [state.value for state in RegularSetState]:
+                            self.switch_output(rpi_controlled_output["index_id"], RegularSetState(set_state))
+                        else:
+                            self._logger.error(
+                                "Unknown state %r for output %s",
+                                set_state,
+                                rpi_controlled_output["index_id"],
+                            )
                         self._notifications.send(
                             NotificationType.TEMPERATURE_ACTION,
                             f"Temperature action: enclosure temperature exceed {temperature_alarm['alarm_set_temp']}",
@@ -897,7 +950,7 @@ class EnclosurePlugin(
                 if current_status != previous_status:
                     if current_status:
                         self._logger.info("Turning gpio to control temperature on.")
-                        self.switch_output(temp_hum_control["index_id"], "on")
+                        self.switch_output(temp_hum_control["index_id"], RegularSetState.ON)
                     else:
                         # Without a value, a print waiting for the temperature (ENC W1) stays paused
                         index_id = temp_hum_control["index_id"]
@@ -908,7 +961,7 @@ class EnclosurePlugin(
                             self._printer.resume_print()
 
                         self._logger.info("Turning gpio to control temperature off.")
-                        self.switch_output(temp_hum_control["index_id"], "off")
+                        self.switch_output(temp_hum_control["index_id"], RegularSetState.OFF)
                     for control_status in self.temp_hum_control_status:
                         if control_status["index_id"] == temp_hum_control["index_id"]:
                             control_status["status"] = current_status
@@ -975,10 +1028,7 @@ class EnclosurePlugin(
                 if gpio_pin not in self.rpi_outputs_not_changed:
                     self._gpio.cleanup(gpio_pin)
 
-            for gpio_in in list(filter(lambda item: item["input_type"] == "gpio", self.rpi_inputs)):
-                with contextlib.suppress(Exception):
-                    self._gpio.remove_event_detect(to_int(gpio_in["gpio_pin"]))
-                self._gpio.cleanup(to_int(gpio_in["gpio_pin"]))
+            self._gpio_inputs.clear()
         except Exception:
             self._logger.exception("Error clearing GPIO")
 
@@ -1000,34 +1050,13 @@ class EnclosurePlugin(
         try:
             for regular_output in self._outputs.get_all(RegularOutput):
                 if regular_output.config.gpio_pin not in self.rpi_outputs_not_changed:
-                    regular_output.setup()
+                    regular_output.setup_pin()
             for pwm_output in self._outputs.get_all(PwmOutput):
                 pwm_output.start()
             for neopixel_output in self._outputs.get_all(NeopixelDirectOutput):
                 self.clear_channel(neopixel_output.config.gpio_pin)
 
-            for rpi_input in list(filter(lambda item: item["input_type"] == "gpio", self.rpi_inputs)):
-                gpio_pin = to_int(rpi_input["gpio_pin"])
-                pull_resistor = (
-                    self._gpio.PUD_UP if rpi_input["input_pull_resistor"] == "input_pull_up" else self._gpio.PUD_DOWN
-                )
-                self._gpio.setup(gpio_pin, self._gpio.IN, pull_resistor)
-                edge = self._gpio.RISING if rpi_input["edge"] == "rise" else self._gpio.FALLING
-
-                inputs_same_gpio = [r_inp for r_inp in self.rpi_inputs if to_int(r_inp["gpio_pin"]) == gpio_pin]
-
-                if len(inputs_same_gpio) > 1:
-                    self._gpio.remove_event_detect(gpio_pin)
-                    for other_input in inputs_same_gpio:
-                        if other_input["edge"] != rpi_input["edge"]:
-                            edge = self._gpio.BOTH
-
-                if rpi_input["action_type"] == "output_control":
-                    self._logger.info("Adding GPIO event detect on pin %s with edge: %s", gpio_pin, edge)
-                    self._gpio.add_event_detect(gpio_pin, edge, callback=self.handle_gpio_control, bouncetime=200)
-                if rpi_input["action_type"] == "printer_control" and rpi_input["printer_action"] != "filament":
-                    self._gpio.add_event_detect(gpio_pin, edge, callback=self.handle_printer_action, bouncetime=200)
-                    self._logger.info("Adding PRINTER CONTROL event detect on pin %s with edge: %s", gpio_pin, edge)
+            self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
 
             for rpi_input in self.get_sensor_inputs():
                 gpio_pin = to_int(rpi_input["gpio_pin"])
@@ -1041,99 +1070,40 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error configuring GPIO")
 
-    def handle_filamment_detection(self, channel):
+    def handle_filament_detection(self, automation, input_id, input_label):
         try:
-            for filament_sensor in list(
-                filter(
-                    lambda item: (
-                        item["input_type"] == "gpio"
-                        and item["action_type"] == "printer_control"
-                        and item["printer_action"] == "filament"
-                        and to_int(item["gpio_pin"]) == to_int(channel)
-                    ),
-                    self.rpi_inputs,
-                ),
-            ):
-                if (filament_sensor["edge"] == "fall") ^ (
-                    self._gpio.input(to_int(filament_sensor["gpio_pin"]))
-                ) and filament_sensor["filament_sensor_enabled"]:
-                    last_detected_time = list(
-                        filter(
-                            lambda item: item["index_id"] == filament_sensor["index_id"],
-                            self.last_filament_end_detected,
-                        ),
-                    ).pop()["time"]
-                    time_now = time.time()
-                    time_difference = to_int(time_now - last_detected_time)
-                    time_out_value = to_int(filament_sensor["filament_sensor_timeout"])
-                    if time_difference > time_out_value:
-                        self._logger.info("Detected end of filament.")
-                        for item in self.last_filament_end_detected:
-                            if item["index_id"] == filament_sensor["index_id"]:
-                                item["time"] = time_now
-                        for line in self._enclosure_settings.filament_sensor_gcode.split("\n"):
-                            if line:
-                                self._printer.commands(line.strip())
-                                self._logger.info("Sending GCODE command: %s", line.strip())
-                                time.sleep(0.2)
-                        self._notifications.send(
-                            NotificationType.FILAMENT_CHANGE,
-                            f"Filament change action caused by sensor: {filament_sensor['label']}",
-                        )
-                    else:
-                        self._logger.info("Prevented end of filament detection, filament sensor timeout not elapsed.")
+            if automation.detect_end():
+                gcode_logger = self._logger.getChild("Actions.GcodeAction")
+                gcode_config = GcodeConfig(self._enclosure_settings.filament_sensor_gcode)
+                GcodeAction(gcode_config, self._printer, self._frontend, gcode_logger).run()
+                self._notifications.send(
+                    NotificationType.FILAMENT_CHANGE,
+                    f"Filament change action caused by sensor: {input_label}",
+                )
         except Exception:
-            self._logger.exception("Error handling filament detection on channel %s", channel)
+            self._logger.exception("Error handling filament detection of input %s", input_id)
 
     def start_filament_detection(self):
         self.stop_filament_detection()
         try:
-            for filament_sensor in list(
-                filter(
-                    lambda item: (
-                        item["input_type"] == "gpio"
-                        and item["action_type"] == "printer_control"
-                        and item["printer_action"] == "filament"
-                    ),
-                    self.rpi_inputs,
-                ),
-            ):
-                edge = self._gpio.RISING if filament_sensor["edge"] == "rise" else self._gpio.FALLING
-                if self._gpio.input(to_int(filament_sensor["gpio_pin"])) == (edge == self._gpio.RISING):
+            for filament_automation in self._automations.get_all(FilamentAutomation):
+                input_id = filament_automation.trigger.config.input
+                try:
+                    level = self._gpio_inputs.get(input_id).read_pin_level()
+                except GpioInputError as error:
+                    self._logger.debug("Can't read GPIO input %s: %s", input_id, error)
+                    continue
+                if filament_automation.is_filament_missing(level):
                     self._printer.pause_print()
                     self._logger.info("Started printing with no filament.")
                 else:
-                    self.last_filament_end_detected.append({"index_id": filament_sensor["index_id"], "time": 0})
-                    self._logger.info(
-                        "Adding GPIO event detect on pin %s with edge: %s",
-                        filament_sensor["gpio_pin"],
-                        edge,
-                    )
-                    self._gpio.add_event_detect(
-                        to_int(filament_sensor["gpio_pin"]),
-                        edge,
-                        callback=self.handle_filamment_detection,
-                        bouncetime=200,
-                    )
+                    filament_automation.arm()
         except Exception:
             self._logger.exception("Error starting filament detection")
 
     def stop_filament_detection(self):
-        try:
-            self.last_filament_end_detected = []
-            for filament_sensor in list(
-                filter(
-                    lambda item: (
-                        item["input_type"] == "gpio"
-                        and item["action_type"] == "printer_control"
-                        and item["printer_action"] == "filament"
-                    ),
-                    self.rpi_inputs,
-                ),
-            ):
-                self._gpio.remove_event_detect(to_int(filament_sensor["gpio_pin"]))
-        except Exception:
-            self._logger.exception("Error stopping filament detection")
+        for filament_automation in self._automations.get_all(FilamentAutomation):
+            filament_automation.disarm()
 
     def cancel_all_events_on_queue(self):
         for task in self.event_queue:
@@ -1144,18 +1114,21 @@ class EnclosurePlugin(
 
     def handle_initial_gpio_control(self):
         try:
-            for rpi_input in list(
-                filter(
-                    lambda item: item["input_type"] == "gpio" and item["action_type"] == "output_control",
-                    self.rpi_inputs,
-                ),
-            ):
-                gpio_pin = to_int(rpi_input["gpio_pin"])
-                controlled_io = to_int(rpi_input["controlled_io"])
-                if (rpi_input["edge"] == "fall") ^ self._gpio.input(gpio_pin):
-                    controlled_settings = self.get_output_or_action_settings(controlled_io)
+            for rule in self._automations.get_all(RuleAutomation):
+                trigger, reaction = rule.trigger, rule.reaction
+                if not isinstance(trigger, GpioInputTrigger) or not isinstance(reaction, OutputControlReaction):
+                    continue
+                input_id = trigger.config.input
+                try:
+                    level = self._gpio_inputs.get(input_id).read_pin_level()
+                except GpioInputError as error:
+                    self._logger.debug("Can't read GPIO input %s: %s", input_id, error)
+                    continue
+                if trigger.matches_level(level):
+                    config = reaction.config
+                    controlled_settings = self.get_output_or_action_settings(config.controlled_io)
                     if controlled_settings.get("output_type") == "regular":
-                        self.switch_output(controlled_io, rpi_input["controlled_io_set_state"])
+                        self.switch_output(config.controlled_io, config.controlled_io_set_state)
         except Exception:
             self._logger.exception("Error handling initial GPIO control")
 
@@ -1167,94 +1140,84 @@ class EnclosurePlugin(
             return
         action.run()
 
-    def handle_gpio_control(self, channel):
-
+    def run_printer_action(self, printer_action):
+        printer_logger = self._logger.getChild("Actions.PrinterAction")
+        action = PrinterAction(PrinterConfig(printer_action), self._printer, self._frontend, printer_logger)
         try:
-            self._logger.debug("GPIO event triggered on channel %s", channel)
-            for rpi_input in list(
-                filter(lambda item: to_int(item["gpio_pin"]) == to_int(channel), self.rpi_inputs),
-            ):
-                gpio_pin = to_int(rpi_input["gpio_pin"])
-                controlled_io = to_int(rpi_input["controlled_io"])
-                if (rpi_input["edge"] == "fall") ^ self._gpio.input(gpio_pin):
-                    controlled_settings = self.get_output_or_action_settings(controlled_io)
-                    if controlled_settings.get("output_type") == "regular":
-                        self.switch_output(controlled_io, rpi_input["controlled_io_set_state"])
-                        self._notifications.send(
-                            NotificationType.GPIO_ACTION,
-                            f"GPIO control action caused by input {rpi_input['label']}. "
-                            f"Setting GPIO{rpi_input['controlled_io']} to: {rpi_input['controlled_io_set_state']}",
-                        )
-                    if controlled_settings.get("action_type") == "gcode_output":
-                        self.run_action(controlled_io, GcodeAction)
-                        self._notifications.send(
-                            NotificationType.GPIO_ACTION,
-                            f"GPIO control action caused by input {rpi_input['label']}. Sending GCODE command",
-                        )
-                    if controlled_settings.get("action_type") == "shell_output":
-                        self.run_action(controlled_io, ShellAction)
-        except Exception:
-            self._logger.exception("Error handling GPIO control on channel %s", channel)
+            action.run()
+        except ActionError as error:
+            self._logger.debug("Can't run printer action %s: %s", printer_action, error)
 
-    def handle_printer_action(self, channel):
+    def handle_gpio_input(self, input_id, level):
+        input_label = next(
+            (rpi_input["label"] for rpi_input in self.rpi_inputs if to_int(rpi_input["index_id"]) == input_id),
+            "",
+        )
+        for automation in self._automations.get_triggered_by_gpio_input(input_id, level):
+            if isinstance(automation, RuleAutomation):
+                if isinstance(automation.reaction, OutputControlReaction):
+                    self.handle_output_control(automation.reaction, input_id, input_label)
+                elif isinstance(automation.reaction, RunActionReaction):
+                    self.handle_run_action(automation.reaction, input_id, input_label)
+                elif isinstance(automation.reaction, PrinterControlReaction):
+                    self.handle_printer_control(automation.reaction, input_id, input_label)
+            elif isinstance(automation, FilamentAutomation):
+                self.handle_filament_detection(automation, input_id, input_label)
+
+    def handle_output_control(self, reaction, input_id, input_label):
+        config = reaction.config
         try:
-            for rpi_input in self.rpi_inputs:
-                if (
-                    channel == to_int(rpi_input["gpio_pin"])
-                    and rpi_input["action_type"] == "printer_control"
-                    and ((rpi_input["edge"] == "fall") ^ self._gpio.input(to_int(rpi_input["gpio_pin"])))
-                ):
-                    if rpi_input["printer_action"] == "resume":
-                        self._logger.info("Printer action resume.")
-                        self._printer.resume_print()
-                    elif rpi_input["printer_action"] == "pause":
-                        self._logger.info("Printer action pause.")
-                        self._printer.pause_print()
-                    elif rpi_input["printer_action"] == "cancel":
-                        self._logger.info("Printer action cancel.")
-                        self._printer.cancel_print()
-                    elif rpi_input["printer_action"] == "toggle":
-                        self._logger.info("Printer action toggle.")
-                        if self._printer.is_operational():
-                            self._printer.toggle_pause_print()
-                        else:
-                            self._printer.connect()
-                    elif rpi_input["printer_action"] == "start":
-                        self._logger.info("Printer action start.")
-                        self._printer.start_print()
-                    elif rpi_input["printer_action"] == "toggle_job":
-                        self._logger.info("Printer action toggle_job.")
-                        if self._printer.is_operational():
-                            if self._printer.is_printing():
-                                self._printer.cancel_print()
-                            elif self._printer.is_ready():
-                                self._printer.start_print()
-                        else:
-                            self._printer.connect()
-                    elif rpi_input["printer_action"] == "stop_temp_hum_control":
-                        self._logger.info("Printer action stopping temperature control.")
-                        for rpi_output in self.rpi_outputs:
-                            if rpi_output["auto_shutdown"] and rpi_output["output_type"] == "temp_hum_control":
-                                rpi_output["temp_ctr_set_value"] = 0
-                        self.handle_temp_hum_control()
-                    self._notifications.send(
-                        NotificationType.PRINTER_ACTION,
-                        f"Printer action: {rpi_input['printer_action']} caused by input: {rpi_input['label']}",
-                    )
+            controlled_settings = self.get_output_or_action_settings(config.controlled_io)
+            if controlled_settings.get("output_type") == "regular":
+                self.switch_output(config.controlled_io, config.controlled_io_set_state)
+                self._notifications.send(
+                    NotificationType.GPIO_ACTION,
+                    f"GPIO control action caused by input {input_label}. "
+                    f"Setting GPIO{config.controlled_io} to: {config.controlled_io_set_state.value}",
+                )
         except Exception:
-            self._logger.exception("Error handling printer action on channel %s", channel)
+            self._logger.exception("Error handling GPIO control of input %s", input_id)
 
-    # Turns a regular output "on" or "off", or toggles it, and returns whether it is on, or None if it fails
+    def handle_run_action(self, reaction, input_id, input_label):
+        config = reaction.config
+        try:
+            action_settings = self.get_output_or_action_settings(config.action)
+            if action_settings.get("action_type") == "gcode_output":
+                self.run_action(config.action, GcodeAction)
+                self._notifications.send(
+                    NotificationType.GPIO_ACTION,
+                    f"GPIO control action caused by input {input_label}. Sending GCODE command",
+                )
+            if action_settings.get("action_type") == "shell_output":
+                self.run_action(config.action, ShellAction)
+        except Exception:
+            self._logger.exception("Error running the action of input %s", input_id)
+
+    def handle_printer_control(self, reaction, input_id, input_label):
+        config = reaction.config
+        try:
+            if config.printer_action == "stop_temp_hum_control":
+                self._logger.info("Printer action stopping temperature control.")
+                for rpi_output in self.rpi_outputs:
+                    if rpi_output["auto_shutdown"] and rpi_output["output_type"] == "temp_hum_control":
+                        rpi_output["temp_ctr_set_value"] = 0
+                self.handle_temp_hum_control()
+            else:
+                self.run_printer_action(config.printer_action)
+            self._notifications.send(
+                NotificationType.PRINTER_ACTION,
+                f"Printer action: {config.printer_action} caused by input: {input_label}",
+            )
+        except Exception:
+            self._logger.exception("Error handling printer action of input %s", input_id)
+
+    # Turns a regular output on or off, or toggles it, and returns whether it is on, or None if it fails
     def switch_output(self, index_id, state, queue_id=None):
-        if state not in ("on", "off", "toggle"):
-            self._logger.error("Unknown state %r for output %s", state, index_id)
-            return None
-
         try:
             regular_output = self._outputs.get(index_id, RegularOutput)
-            if state == "toggle":
+            if state is RegularSetState.TOGGLE:
                 on = regular_output.toggle()
-            elif state == "on":
+            elif state is RegularSetState.ON:
                 regular_output.turn_on()
                 on = True
             else:
@@ -1376,7 +1339,7 @@ class EnclosurePlugin(
     def schedule_auto_shutdown_outputs(self, rpi_output, shutdown_delay_seconds):
         suffix = "auto_shutdown"
         if rpi_output["output_type"] == "regular":
-            self.add_regular_output_to_queue(shutdown_delay_seconds, rpi_output, "off", suffix)
+            self.add_regular_output_to_queue(shutdown_delay_seconds, rpi_output, RegularSetState.OFF, suffix)
         if rpi_output["output_type"] == "ledstrip":
             self.ledstrip_set_rgb(rpi_output)
         if rpi_output["output_type"] == "pwm" and not rpi_output["pwm_temperature_linked"]:
@@ -1410,7 +1373,7 @@ class EnclosurePlugin(
         for rpi_output in self.rpi_outputs:
             if rpi_output["startup_with_server"]:
                 if rpi_output["output_type"] == "regular":
-                    self.switch_output(rpi_output["index_id"], "on")
+                    self.switch_output(rpi_output["index_id"], RegularSetState.ON)
                 if rpi_output["output_type"] == "ledstrip":
                     self.ledstrip_set_rgb(rpi_output)
                 if rpi_output["output_type"] == "pwm" and not rpi_output["pwm_temperature_linked"]:
@@ -1425,7 +1388,7 @@ class EnclosurePlugin(
     def schedule_auto_startup_outputs(self, rpi_output, delay_seconds):
         suffix = "auto_startup"
         if rpi_output["output_type"] == "regular":
-            self.add_regular_output_to_queue(delay_seconds, rpi_output, "on", suffix)
+            self.add_regular_output_to_queue(delay_seconds, rpi_output, RegularSetState.ON, suffix)
         if rpi_output["output_type"] == "ledstrip":
             self.ledstrip_set_rgb(rpi_output)
         if rpi_output["output_type"] == "pwm" and not rpi_output["pwm_temperature_linked"]:
@@ -1520,11 +1483,13 @@ class EnclosurePlugin(
             pwm_output.stop()
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
         self.configure_outputs()
-        self.actions = self._enclosure_settings.actions
-        self.configure_actions()
         with self.sensors_lock:
             self.rpi_inputs = self._enclosure_settings.rpi_inputs
             self.configure_sensors()
+        self.actions = self._enclosure_settings.actions
+        self.configure_actions()
+        self.automations = self._enclosure_settings.automations
+        self.configure_automations()
         outputs_after_save = self.get_output_list()
 
         common_pins = list(set(outputs_before_save) & set(outputs_after_save))
@@ -1534,6 +1499,7 @@ class EnclosurePlugin(
 
         self.rpi_outputs_not_changed = common_pins
         self.clear_gpio()
+        self.configure_gpio_inputs()
 
         self._logger.debug("rpi_outputs: %s", self.rpi_outputs)
         self._logger.debug("rpi_inputs: %s", self.rpi_inputs)
@@ -1546,6 +1512,7 @@ class EnclosurePlugin(
             "rpi_outputs": [],
             "rpi_inputs": [],
             "actions": [],
+            "automations": [],
             "filament_sensor_gcode": (
                 "G91  ;Set Relative Mode \n"
                 "G1 E-5.000000 F500 ;Retract 5mm\n"

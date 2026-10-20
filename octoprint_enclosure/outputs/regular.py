@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 
 from smbus2 import SMBus
 from typing_extensions import override
@@ -9,6 +10,14 @@ from octoprint_enclosure.core import BaseConfig
 from octoprint_enclosure.utils import clamp, get_gcode_param, to_int
 
 from .base import Output
+
+
+class RegularSetState(Enum):
+    """What to do with a regular output: turn it on or off, or toggle it."""
+
+    ON = "on"
+    OFF = "off"
+    TOGGLE = "toggle"
 
 
 @dataclass(frozen=True)
@@ -48,11 +57,13 @@ class RegularOutput(Output[RegularConfig]):
 
     config_class = RegularConfig
 
-    def setup(self) -> None:
-        """Set up the output.
+    def setup_pin(self) -> None:
+        """Set up the pin of the output.
+
+        An output driven through I2C has no pin, so nothing is set up.
 
         Raises:
-            Exception: If the output can't be set up.
+            Exception: If the pin can't be set up.
 
         """
         config = self.config

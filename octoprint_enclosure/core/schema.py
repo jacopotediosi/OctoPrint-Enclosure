@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import MISSING, dataclass, fields
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, NewType, get_type_hints
 
 from octoprint_enclosure.utils import parse_bool, parse_float, parse_hex
@@ -57,9 +58,12 @@ class BaseConfig:
         values = {}
 
         for field in fields(cls):
-            parse = _PARSERS.get(type_hints[field.name])
+            type_hint = type_hints[field.name]
+            parse = _PARSERS.get(type_hint)
+            if parse is None and isinstance(type_hint, type) and issubclass(type_hint, Enum):
+                parse = type_hint
             if parse is None:
-                msg = f"{field.name} has a type that can't be read from settings: {type_hints[field.name]}"
+                msg = f"{field.name} has a type that can't be read from settings: {type_hint}"
                 raise TypeError(msg)
 
             value = settings.get(field.name, "")

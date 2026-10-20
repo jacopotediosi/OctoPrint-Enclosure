@@ -26,11 +26,13 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
     rpi_outputs = settings.get(["rpi_outputs"])
     rpi_inputs = settings.get(["rpi_inputs"])
     actions = settings.get(["actions"])
+    automations = settings.get(["automations"])
 
     logger.info("Old settings:")
     logger.info("rpi_outputs: %s", rpi_outputs)
     logger.info("rpi_inputs: %s", rpi_inputs)
     logger.info("actions: %s", actions)
+    logger.info("automations: %s", automations)
 
     current = 0 if current is None else current
 
@@ -92,6 +94,52 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
         for action in actions:
             action.pop("controlled_io_set_value", None)
 
+        # Up to version 10, a GPIO input also stored what it triggers, with its type in action_type. From version 11,
+        # each GPIO input gets an automation in the automations key, with a new id, the label of the input, and the
+        # keys moved from the input. The automation is a "rule": its trigger_type is "gpio_input", with the id of the
+        # input in input, and its reaction_type is the old action_type. A rule that runs an action gets the
+        # "run_action" reaction_type instead of "output_control", with the id of the action in action instead of
+        # controlled_io. A filament sensor gets the "filament" automation_type instead, and 0 in filament_sensor_timeout
+        # if the key is empty or missing, as it was read up to version 10. A GPIO input that controls nothing, that is
+        # an output_control with an empty controlled_io as new inputs had by default, gets no automation.
+        moved_keys = (
+            "edge",
+            "controlled_io",
+            "controlled_io_set_state",
+            "printer_action",
+            "filament_sensor_enabled",
+            "filament_sensor_timeout",
+        )
+        action_ids = {to_int(action.get("index_id")) for action in actions}
+        next_automation_id = max((to_int(item.get("index_id")) for item in [*rpi_outputs, *actions]), default=0) + 1
+        automations = []
+        for rpi_input in rpi_inputs:
+            action_type = rpi_input.pop("action_type", "")
+            moved = {key: rpi_input.pop(key) for key in moved_keys if key in rpi_input}
+            if rpi_input.get("input_type") != "gpio":
+                continue
+            if action_type == "output_control" and moved.get("controlled_io") in ("", None):
+                continue
+            is_filament = action_type == "printer_control" and moved.get("printer_action") == "filament"
+            automation = {
+                "index_id": next_automation_id,
+                "label": rpi_input.get("label"),
+                "automation_type": "filament" if is_filament else "rule",
+                "trigger_type": "gpio_input",
+                "input": rpi_input.get("index_id"),
+                "reaction_type": action_type,
+                "action": "",
+                **moved,
+            }
+            if action_type == "output_control" and to_int(moved.get("controlled_io")) in action_ids:
+                automation["reaction_type"] = "run_action"
+                automation["action"] = automation["controlled_io"]
+                automation["controlled_io"] = ""
+            if is_filament and automation.get("filament_sensor_timeout") in ("", None):
+                automation["filament_sensor_timeout"] = 0
+            automations.append(automation)
+            next_automation_id += 1
+
         # Up to version 10, the global neopixel_dma key stored the DMA channel of all the NeoPixels connected directly
         # to the Raspberry Pi. From version 11, each output has its own neopixel_dma key with the same value.
         neopixel_dma = settings.get_int(["neopixel_dma"])
@@ -106,8 +154,10 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
     settings.set(["rpi_outputs"], rpi_outputs)
     settings.set(["rpi_inputs"], rpi_inputs)
     settings.set(["actions"], actions)
+    settings.set(["automations"], automations)
 
     logger.info("Migrated settings:")
     logger.info("rpi_outputs: %s", rpi_outputs)
     logger.info("rpi_inputs: %s", rpi_inputs)
     logger.info("actions: %s", actions)
+    logger.info("automations: %s", automations)

@@ -77,9 +77,9 @@ class Sensors:
 
             sensor_class = DummySensor if dummy else SENSORS.get(sensor_input_config.temp_sensor_type)
             if sensor_class is None:
-                sensor: Sensor = _InvalidSensor(
+                sensor: Sensor = self._create_invalid_sensor(
+                    sensor_input_config.index_id,
                     f"Unsupported sensor type: {sensor_input_config.temp_sensor_type!r}",
-                    self._get_sensor_logger(_InvalidSensor, sensor_input_config.index_id),
                 )
             else:
                 sensor = self._create_sensor(sensor_class, sensor_input_config.index_id, sensor_input_settings)
@@ -137,9 +137,14 @@ class Sensors:
         try:
             sensor_config = sensor_class.config_class.from_settings(input_settings)
         except ValueError as error:
-            return _InvalidSensor(f"Invalid settings: {error}", self._get_sensor_logger(_InvalidSensor, index_id))
+            return self._create_invalid_sensor(index_id, f"Invalid settings: {error}")
 
         return sensor_class(sensor_config, self._get_sensor_logger(sensor_class, index_id))
+
+    def _create_invalid_sensor(self, index_id: int, reason: str) -> _InvalidSensor:
+        logger = self._get_sensor_logger(_InvalidSensor, index_id)
+        logger.warning("%s", reason)
+        return _InvalidSensor(reason, logger)
 
     def _get_sensor_logger(self, sensor_class: type[Sensor], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{sensor_class.__name__}.{index_id}")
