@@ -1,5 +1,139 @@
 {% from "enclosure_macros.jinja2" import checkbox_control_group, gpio_alert, radio_control_group, select_control_group, text_control_group %}
 {{ gpio_alert(plugin_enclosure_development_mode, plugin_enclosure_gpio_import_error) }}
+<h4>{{ _("Raspberry Pi Inputs") }}</h4>
+<p>
+    Configure all
+    <strong>inputs</strong>. Inputs get data from gpio or connected sensors to provide additional functionality.
+</p>
+<p>
+    Example of possible inputs are buttons and filament sensors connected to GPIO pins, and temperature and humidity sensors.
+</p>
+<form class="form-horizontal">
+    <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.rpi_inputs">
+        {{ text_control_group("label", _("Label"), "Name of Input") }}
+        {% call radio_control_group("input_type", _("Input Type"), [("gpio", _("GPIO Input")), ("temperature_sensor", _("Temperature Sensor"))]) %}
+            <div class="control-group">
+                <div class="controls">
+                    <span class="help-inline" data-bind="visible: input_type() == 'gpio'">
+                        <span class="label label-info">Info:</span> GPIO will input status of the pin, HIGH / LOW </span>
+                    <span class="help-inline"
+                          data-bind="visible: input_type() == 'temperature_sensor'">
+                        <span class="label label-info">Info:</span> Temperature Sensors will input temperature and humidity data.
+                    </span>
+                </div>
+            </div>
+        {% endcall %}
+        <div data-bind="if: input_type() == 'temperature_sensor'">
+            {% call select_control_group("temp_sensor_type", _("Sensor Type"), [
+                ("", "Select Sensor"),
+                ("11", "DHT11"),
+                ("20", "DHT20"),
+                ("22", "DHT22"),
+                ("2302", "AM2302"),
+                ("18b20", "DS18B20"),
+                ("si7021", "SI7021"),
+                ("bme280", "BME280"),
+                ("bme680", "BME680"),
+                ("am2320", "AM2320"),
+                ("aht10", "AHT10"),
+                ("tmp102", "TMP102"),
+                ("max31855", "MAX31855"),
+                ("rpi", "Raspberry Pi CPU"),
+                ("mcp9808", "MCP9808"),
+                ("temp_raw_i2c", "Raw I2C Temperature"),
+                ("hum_raw_i2c", "Raw I2C Humidity"),
+            ], allow_unset=true) %}
+                <span class="help-inline">
+                    <span class="label label-important">Attention</span> You need to install and configure the necessary libraries for the temperature sensor, check
+                    the documentation on
+                    <a href="https://github.com/jacopotediosi/OctoPrint-Enclosure">github</a> page</span>
+            {% endcall %}
+            <div data-bind="if: temp_sensor_type() == 'temp_raw_i2c' || temp_sensor_type() == 'hum_raw_i2c'">
+                {{ text_control_group("temp_i2c_bus", _("I2C Bus"), "This value should remain 1 unless you've used dtoverlay=i2c-gpio or you are using another bus.") }}
+                {% call text_control_group("temp_i2c_address", _("I2C Address")) %}
+                    <span class="help-inline">I2C address in HEX value, you can find it by running
+                        <code>i2cdetect -y 1</code> on your Raspberry Pi</span>
+                {% endcall %}
+                {{ text_control_group("temp_i2c_register", _("I2C Register"), "I2C register in HEX value") }}
+            </div>
+            <div data-bind="if: temp_sensor_type() == '18b20'">
+                {{ text_control_group("gpio_pin", _("Sensor Pin"), "GPIO pin for temperature sensor, recommended to use 4 as DS18B20 has default support to pin #4 (BCM)") }}
+                {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("", "None"), ("input_pull_up", "Input Pullup")], "Whether to enable the built-in pullup for this temperature sensor. If set, then no external pullup is needed.") }}
+                {{ text_control_group("ds18b20_serial", _("DS18B20 Serial"), "DS18B20 serial value, needs to be used to have support for multiple sensors, read documentation on github page for more information. The serial is typically in the form of 28-0123456789ab.") }}
+            </div>
+            <div data-bind="if: temp_sensor_type() == 'si7021' || temp_sensor_type() == '20' || temp_sensor_type() == 'bme280' || temp_sensor_type() == 'am2320' || temp_sensor_type() == 'aht10' || temp_sensor_type() == 'tmp102' || temp_sensor_type() == 'mcp9808'">
+                <div class="control-group">
+                    <label class="control-label">{{ _("Sensor Pin") }}</label>
+                    <div class="controls">
+                        <input type="text"
+                               class="input-block-level"
+                               value="SCL / SDA"
+                               disabled="true">
+                        <span class="help-inline">GPIO pin for temperature sensor need to connect the sensor to I2C. SCL Clock to GPIO 3 (SCL) and SDA Data to GPIO
+                            2 (SDA)
+                        </span>
+                    </div>
+                </div>
+                {% call text_control_group("temp_sensor_address", _("Sensor Address")) %}
+                    <span class="help-inline">Sensor address in HEX value, you can find it by running
+                        <code>i2cdetect -y 1</code> on your Raspberry Pi</span>
+                {% endcall %}
+                {{ text_control_group("temp_sensor_i2cbus", _("i2c Bus"), "This value should remain 1 unless you've used dtoverlay=i2c-gpio.") }}
+            </div>
+            <div data-bind="if: temp_sensor_type() == 'max31855'">
+                <div class="control-group">
+                    <label class="control-label">{{ _("Sensor Pin") }}</label>
+                    <div class="controls">
+                        <input type="text"
+                               class="input-block-level"
+                               value="MISO / SCLK"
+                               disabled="true">
+                        <span class="help-inline">GPIO pin for temperature sensor need to connect the sensor to SPI. Serial Clock to GPIO 1 (SCLK) and Master In/Slave Out Data to GPIO
+                            9 (MISO)
+                        </span>
+                    </div>
+                </div>
+                {{ select_control_group("temp_sensor_address", _("Sensor Address (CE Select)"), [("", "Select CE"), ("0", "CE0"), ("1", "CE1")], "CE select: CE0 on GPIO 8 or CE1 on GPIO 7") }}
+            </div>
+            <div data-bind="ifnot: temp_sensor_type() == 'rpi' || temp_sensor_type() == '18b20' || temp_sensor_type() == 'si7021' || temp_sensor_type() == 'bme280' || temp_sensor_type() == 'am2320' || temp_sensor_type() == 'tmp102' || temp_sensor_type() == 'max31855' || temp_sensor_type() == 'mcp9808' || temp_sensor_type() == 'temp_raw_i2c' || temp_sensor_type() == 'hum_raw_i2c'">
+                {{ text_control_group("gpio_pin", _("Sensor Pin"), "GPIO pin for temperature sensor, recommended to use 4 as DS18B20 only works on pin 4") }}
+            </div>
+            {{ checkbox_control_group("use_fahrenheit", _("Use Fahrenheit Unit"), "Choose if you want to work with Celsius or Fahrenheit") }}
+        </div>
+        <div data-bind="if: input_type() == 'gpio'">
+            {{ text_control_group("gpio_pin", _("Input IO Number"), "Input GPIO that will detect the event that should trigger the automations. For example if you have a filament sensor you put the GPIO pin that the sensor is connected. This can also be a press of a button or any other signal that you want to detect. You can not use GPIO 4 here if you are using temperature sensor DS18B20") }}
+            {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("input_pull_up", "Input Pullup"), ("input_pull_down", "Input Pulldown")], "Choose what type of pull resistors that you want on the input. If your signal is active low, that means it should trigger the automations when receive a low signal (ground), you should choose PULL UP resistors.", allow_unset=true) }}
+        </div>
+        <div data-bind="if: input_type() == 'temperature_sensor'">
+            {{ checkbox_control_group("temp_sensor_navbar", _("Show temperature on navbar"), "Enable and disable temperature on navbar") }}
+            {% call checkbox_control_group("show_graph_temp", _("Show temperature in graph"), "Enable to show temperature in temperature graph, when a printer is connected.") %}
+                <p data-bind="visible: show_graph_temp()"><i><strong>Note:</strong> This feature currently requires a custom graph plugin like <a href="https://github.com/jneilliii/OctoPrint-PlotlyTempGraph"
+    target="_blank">PlotlyTempGraph</a></i></p>
+            {% endcall %}
+            {% call checkbox_control_group("show_graph_humidity", _("Show humidity in graph"), "Enable to show humidity in temperature graph, when a printer is connected.") %}
+                <p data-bind="visible: show_graph_humidity()"><i><strong>Note:</strong> This feature currently requires a custom graph plugin like <a href="https://github.com/jneilliii/OctoPrint-PlotlyTempGraph"
+    target="_blank">PlotlyTempGraph</a></i></p>
+            {% endcall %}
+        </div>
+        <div class="control-group">
+            <a title="Delete IO"
+               class="btn btn-danger pull-right"
+               data-bind="click: function() { $parent.removeRpiInput($data) }">
+                <i class="icon-trash"></i>
+            </a>
+        </div>
+        <div class="control-group">
+            <div class="controls">
+                <hr />
+            </div>
+        </div>
+    </div>
+    <div class="control-group">
+        <button type="button"
+                class="btn pull-right"
+                data-bind="click: function() { $root.addRpiInput(); }">Add Inputs...</button>
+    </div>
+</form>
 <h4>{{ _("Raspberry Pi Outputs") }}</h4>
 <p>
     Configure all
@@ -155,140 +289,6 @@
         <button type="button"
                 class="btn pull-right"
                 data-bind="click: function() { $root.addRpiOutput(); }">Add Outputs...</button>
-    </div>
-</form>
-<h4>{{ _("Raspberry Pi Inputs") }}</h4>
-<p>
-    Configure all
-    <strong>inputs</strong>. Inputs get data from gpio or connected sensors to provide additional functionality.
-</p>
-<p>
-    Example of possible inputs are buttons and filament sensors connected to GPIO pins, and temperature and humidity sensors.
-</p>
-<form class="form-horizontal">
-    <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.rpi_inputs">
-        {{ text_control_group("label", _("Label"), "Name of Input") }}
-        {% call radio_control_group("input_type", _("Input Type"), [("gpio", _("GPIO Input")), ("temperature_sensor", _("Temperature Sensor"))]) %}
-            <div class="control-group">
-                <div class="controls">
-                    <span class="help-inline" data-bind="visible: input_type() == 'gpio'">
-                        <span class="label label-info">Info:</span> GPIO will input status of the pin, HIGH / LOW </span>
-                    <span class="help-inline"
-                          data-bind="visible: input_type() == 'temperature_sensor'">
-                        <span class="label label-info">Info:</span> Temperature Sensors will input temperature and humidity data.
-                    </span>
-                </div>
-            </div>
-        {% endcall %}
-        <div data-bind="if: input_type() == 'temperature_sensor'">
-            {% call select_control_group("temp_sensor_type", _("Sensor Type"), [
-                ("", "Select Sensor"),
-                ("11", "DHT11"),
-                ("20", "DHT20"),
-                ("22", "DHT22"),
-                ("2302", "AM2302"),
-                ("18b20", "DS18B20"),
-                ("si7021", "SI7021"),
-                ("bme280", "BME280"),
-                ("bme680", "BME680"),
-                ("am2320", "AM2320"),
-                ("aht10", "AHT10"),
-                ("tmp102", "TMP102"),
-                ("max31855", "MAX31855"),
-                ("rpi", "Raspberry Pi CPU"),
-                ("mcp9808", "MCP9808"),
-                ("temp_raw_i2c", "Raw I2C Temperature"),
-                ("hum_raw_i2c", "Raw I2C Humidity"),
-            ], allow_unset=true) %}
-                <span class="help-inline">
-                    <span class="label label-important">Attention</span> You need to install and configure the necessary libraries for the temperature sensor, check
-                    the documentation on
-                    <a href="https://github.com/jacopotediosi/OctoPrint-Enclosure">github</a> page</span>
-            {% endcall %}
-            <div data-bind="if: temp_sensor_type() == 'temp_raw_i2c' || temp_sensor_type() == 'hum_raw_i2c'">
-                {{ text_control_group("temp_i2c_bus", _("I2C Bus"), "This value should remain 1 unless you've used dtoverlay=i2c-gpio or you are using another bus.") }}
-                {% call text_control_group("temp_i2c_address", _("I2C Address")) %}
-                    <span class="help-inline">I2C address in HEX value, you can find it by running
-                        <code>i2cdetect -y 1</code> on your Raspberry Pi</span>
-                {% endcall %}
-                {{ text_control_group("temp_i2c_register", _("I2C Register"), "I2C register in HEX value") }}
-            </div>
-            <div data-bind="if: temp_sensor_type() == '18b20'">
-                {{ text_control_group("gpio_pin", _("Sensor Pin"), "GPIO pin for temperature sensor, recommended to use 4 as DS18B20 has default support to pin #4 (BCM)") }}
-                {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("", "None"), ("input_pull_up", "Input Pullup")], "Whether to enable the built-in pullup for this temperature sensor. If set, then no external pullup is needed.") }}
-                {{ text_control_group("ds18b20_serial", _("DS18B20 Serial"), "DS18B20 serial value, needs to be used to have support for multiple sensors, read documentation on github page for more information. The serial is typically in the form of 28-0123456789ab.") }}
-            </div>
-            <div data-bind="if: temp_sensor_type() == 'si7021' || temp_sensor_type() == '20' || temp_sensor_type() == 'bme280' || temp_sensor_type() == 'am2320' || temp_sensor_type() == 'aht10' || temp_sensor_type() == 'tmp102' || temp_sensor_type() == 'mcp9808'">
-                <div class="control-group">
-                    <label class="control-label">{{ _("Sensor Pin") }}</label>
-                    <div class="controls">
-                        <input type="text"
-                               class="input-block-level"
-                               value="SCL / SDA"
-                               disabled="true">
-                        <span class="help-inline">GPIO pin for temperature sensor need to connect the sensor to I2C. SCL Clock to GPIO 3 (SCL) and SDA Data to GPIO
-                            2 (SDA)
-                        </span>
-                    </div>
-                </div>
-                {% call text_control_group("temp_sensor_address", _("Sensor Address")) %}
-                    <span class="help-inline">Sensor address in HEX value, you can find it by running
-                        <code>i2cdetect -y 1</code> on your Raspberry Pi</span>
-                {% endcall %}
-                {{ text_control_group("temp_sensor_i2cbus", _("i2c Bus"), "This value should remain 1 unless you've used dtoverlay=i2c-gpio.") }}
-            </div>
-            <div data-bind="if: temp_sensor_type() == 'max31855'">
-                <div class="control-group">
-                    <label class="control-label">{{ _("Sensor Pin") }}</label>
-                    <div class="controls">
-                        <input type="text"
-                               class="input-block-level"
-                               value="MISO / SCLK"
-                               disabled="true">
-                        <span class="help-inline">GPIO pin for temperature sensor need to connect the sensor to SPI. Serial Clock to GPIO 1 (SCLK) and Master In/Slave Out Data to GPIO
-                            9 (MISO)
-                        </span>
-                    </div>
-                </div>
-                {{ select_control_group("temp_sensor_address", _("Sensor Address (CE Select)"), [("", "Select CE"), ("0", "CE0"), ("1", "CE1")], "CE select: CE0 on GPIO 8 or CE1 on GPIO 7") }}
-            </div>
-            <div data-bind="ifnot: temp_sensor_type() == 'rpi' || temp_sensor_type() == '18b20' || temp_sensor_type() == 'si7021' || temp_sensor_type() == 'bme280' || temp_sensor_type() == 'am2320' || temp_sensor_type() == 'tmp102' || temp_sensor_type() == 'max31855' || temp_sensor_type() == 'mcp9808' || temp_sensor_type() == 'temp_raw_i2c' || temp_sensor_type() == 'hum_raw_i2c'">
-                {{ text_control_group("gpio_pin", _("Sensor Pin"), "GPIO pin for temperature sensor, recommended to use 4 as DS18B20 only works on pin 4") }}
-            </div>
-            {{ checkbox_control_group("use_fahrenheit", _("Use Fahrenheit Unit"), "Choose if you want to work with Celsius or Fahrenheit") }}
-        </div>
-        <div data-bind="if: input_type() == 'gpio'">
-            {{ text_control_group("gpio_pin", _("Input IO Number"), "Input GPIO that will detect the event that should trigger the automations. For example if you have a filament sensor you put the GPIO pin that the sensor is connected. This can also be a press of a button or any other signal that you want to detect. You can not use GPIO 4 here if you are using temperature sensor DS18B20") }}
-            {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("input_pull_up", "Input Pullup"), ("input_pull_down", "Input Pulldown")], "Choose what type of pull resistors that you want on the input. If your signal is active low, that means it should trigger the automations when receive a low signal (ground), you should choose PULL UP resistors.", allow_unset=true) }}
-        </div>
-        <div data-bind="if: input_type() == 'temperature_sensor'">
-            {{ checkbox_control_group("temp_sensor_navbar", _("Show temperature on navbar"), "Enable and disable temperature on navbar") }}
-            {% call checkbox_control_group("show_graph_temp", _("Show temperature in graph"), "Enable to show temperature in temperature graph, when a printer is connected.") %}
-                <p data-bind="visible: show_graph_temp()"><i><strong>Note:</strong> This feature currently requires a custom graph plugin like <a href="https://github.com/jneilliii/OctoPrint-PlotlyTempGraph"
-    target="_blank">PlotlyTempGraph</a></i></p>
-            {% endcall %}
-            {% call checkbox_control_group("show_graph_humidity", _("Show humidity in graph"), "Enable to show humidity in temperature graph, when a printer is connected.") %}
-                <p data-bind="visible: show_graph_humidity()"><i><strong>Note:</strong> This feature currently requires a custom graph plugin like <a href="https://github.com/jneilliii/OctoPrint-PlotlyTempGraph"
-    target="_blank">PlotlyTempGraph</a></i></p>
-            {% endcall %}
-        </div>
-        <div class="control-group">
-            <a title="Delete IO"
-               class="btn btn-danger pull-right"
-               data-bind="click: function() { $parent.removeRpiInput($data) }">
-                <i class="icon-trash"></i>
-            </a>
-        </div>
-        <div class="control-group">
-            <div class="controls">
-                <hr />
-            </div>
-        </div>
-    </div>
-    <div class="control-group">
-        <button type="button"
-                class="btn pull-right"
-                data-bind="click: function() { $root.addRpiInput(); }">Add Inputs...</button>
     </div>
 </form>
 <h4>{{ _("Actions") }}</h4>

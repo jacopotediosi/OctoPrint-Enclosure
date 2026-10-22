@@ -23,14 +23,14 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
     logger = logger.getChild("Migration")
     logger.warning("Start migration from %s to %s", current, target)
 
-    rpi_outputs = settings.get(["rpi_outputs"])
     rpi_inputs = settings.get(["rpi_inputs"])
+    rpi_outputs = settings.get(["rpi_outputs"])
     actions = settings.get(["actions"])
     automations = settings.get(["automations"])
 
     logger.info("Old settings:")
-    logger.info("rpi_outputs: %s", rpi_outputs)
     logger.info("rpi_inputs: %s", rpi_inputs)
+    logger.info("rpi_outputs: %s", rpi_outputs)
     logger.info("actions: %s", actions)
     logger.info("automations: %s", automations)
 
@@ -249,13 +249,13 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
         # with sudo. From version 11, the plugin decides it by itself, and the key is removed.
         settings.remove(["use_sudo"])
 
-    settings.set(["rpi_outputs"], rpi_outputs)
     settings.set(["rpi_inputs"], rpi_inputs)
+    settings.set(["rpi_outputs"], rpi_outputs)
     settings.set(["actions"], actions)
     settings.set(["automations"], automations)
 
     logger.info("Migrated settings:")
-    logger.info("rpi_outputs: %s", rpi_outputs)
     logger.info("rpi_inputs: %s", rpi_inputs)
+    logger.info("rpi_outputs: %s", rpi_outputs)
     logger.info("actions: %s", actions)
     logger.info("automations: %s", automations)

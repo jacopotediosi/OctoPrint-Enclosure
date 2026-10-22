@@ -32,12 +32,34 @@ $(function () {
     self.connectionViewModel = parameters[1];
     self.printerStateViewModel = parameters[2];
 
-    self.rpi_outputs = ko.observableArray();
     self.rpi_inputs = ko.observableArray();
+    self.rpi_outputs = ko.observableArray();
     self.actions = ko.observableArray();
     self.automations = ko.observableArray();
 
     self.settingsOpen = false;
+
+    self.settings_gpio_inputs = ko.pureComputed(function () {
+      return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs(), function (item) {
+        return (item.input_type() === "gpio");
+      });
+    });
+
+    self.settings_temperature_sensors = ko.pureComputed(function () {
+      return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs(), function (item) {
+        return (item.input_type() === "temperature_sensor");
+      });
+    });
+
+    self.settings_hum_sensors = ko.pureComputed(function () {
+      return ko.utils.arrayFilter(self.settings_temperature_sensors(), function (sensor) {
+        return (self.humidityCapableSensor(sensor.temp_sensor_type()));
+      });
+    });
+
+    self.humidityCapableSensor = function (sensor) {
+      return ['11', '20', '22', '2302', 'bme280', 'bme680', 'am2320', 'aht10', 'si7021', 'hum_raw_i2c', 'temp_raw_i2c'].indexOf(sensor) >= 0;
+    };
 
     self.settings_outputs_regular = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs(), function (item) {
@@ -57,6 +79,12 @@ $(function () {
       });
     });
 
+    self.navbar_temperature_sensors = ko.pureComputed(function () {
+      return ko.utils.arrayFilter(self.rpi_inputs_temperature_sensors(), function (item) {
+        return (item.temp_sensor_navbar());
+      });
+    });
+
     self.navbar_items = ko.pureComputed(function () {
       var outputs = ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
         return (item.output_type() === "regular" && item.show_on_navbar());
@@ -70,12 +98,6 @@ $(function () {
     self.navbarItemType = function (item) {
       return ko.unwrap(item.output_type || item.action_type);
     };
-
-    self.navbar_temperature_sensors = ko.pureComputed(function () {
-      return ko.utils.arrayFilter(self.rpi_inputs_temperature_sensors(), function (item) {
-        return (item.temp_sensor_navbar());
-      });
-    });
 
     self.tab_temperature_table_rows = ko.pureComputed(function () {
       var rows = [];
@@ -109,28 +131,6 @@ $(function () {
         return (item.automation_type() === "filament" && item.input() !== "");
       });
     });
-
-    self.settings_gpio_inputs = ko.pureComputed(function () {
-      return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs(), function (item) {
-        return (item.input_type() === "gpio");
-      });
-    });
-
-    self.settings_temperature_sensors = ko.pureComputed(function () {
-      return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs(), function (item) {
-        return (item.input_type() === "temperature_sensor");
-      });
-    });
-
-    self.settings_hum_sensors = ko.pureComputed(function () {
-      return ko.utils.arrayFilter(self.settings_temperature_sensors(), function (sensor) {
-        return (self.humidityCapableSensor(sensor.temp_sensor_type()));
-      });
-    });
-
-    self.humidityCapableSensor = function (sensor) {
-      return ['11', '20', '22', '2302', 'bme280', 'bme680', 'am2320', 'aht10', 'si7021', 'hum_raw_i2c', 'temp_raw_i2c'].indexOf(sensor) >= 0;
-    };
 
     self.isRegularOutput = function (index_id) {
       return self.settingsViewModel.settings.plugins.enclosure.rpi_outputs().some(function (output) {
@@ -314,8 +314,8 @@ $(function () {
     }
 
     self.bindFromSettings = function(){
-      self.rpi_outputs(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs());
       self.rpi_inputs(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs());
+      self.rpi_outputs(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs());
       self.actions(self.settingsViewModel.settings.plugins.enclosure.actions());
       self.automations(self.settingsViewModel.settings.plugins.enclosure.automations());
     };
@@ -387,6 +387,36 @@ $(function () {
           type: "error"
         });
       }
+    };
+
+    self.addRpiInput = function () {
+      var arrRelaysLength = self.settingsViewModel.settings.plugins.enclosure.rpi_inputs().length;
+      var nextIndex = arrRelaysLength == 0 ? 1 : self.settingsViewModel.settings.plugins.enclosure.rpi_inputs()[arrRelaysLength - 1].index_id() + 1;
+
+      self.settingsViewModel.settings.plugins.enclosure.rpi_inputs.push({
+        index_id: ko.observable(nextIndex),
+        label: ko.observable("Input " + nextIndex),
+        input_type: ko.observable("gpio"),
+        gpio_pin: ko.observable(0),
+        input_pull_resistor: ko.observable("input_pull_up"),
+        temp_sensor_type: ko.observable(""),
+        temp_sensor_address: ko.observable(""),
+        temp_sensor_temp: ko.observable(""),
+        temp_sensor_humidity: ko.observable(""),
+        ds18b20_serial: ko.observable(""),
+        use_fahrenheit: ko.observable(false),
+        temp_sensor_navbar: ko.observable(true),
+        temp_sensor_i2cbus: ko.observable(1),
+        temp_i2c_bus: ko.observable(1),
+        temp_i2c_address: ko.observable(1),
+        temp_i2c_register: ko.observable(1),
+        show_graph_temp: ko.observable(false),
+        show_graph_humidity: ko.observable(false)
+      });
+    };
+
+    self.removeRpiInput = function (definition) {
+      self.settingsViewModel.settings.plugins.enclosure.rpi_inputs.remove(definition);
     };
 
     // Outputs, actions and automations share the ids, because many actions and automations used to be inputs/outputs and keep their ids
@@ -476,36 +506,6 @@ $(function () {
 
     self.removeAction = function (data) {
       self.settingsViewModel.settings.plugins.enclosure.actions.remove(data);
-    };
-
-    self.addRpiInput = function () {
-      var arrRelaysLength = self.settingsViewModel.settings.plugins.enclosure.rpi_inputs().length;
-      var nextIndex = arrRelaysLength == 0 ? 1 : self.settingsViewModel.settings.plugins.enclosure.rpi_inputs()[arrRelaysLength - 1].index_id() + 1;
-
-      self.settingsViewModel.settings.plugins.enclosure.rpi_inputs.push({
-        index_id: ko.observable(nextIndex),
-        label: ko.observable("Input " + nextIndex),
-        input_type: ko.observable("gpio"),
-        gpio_pin: ko.observable(0),
-        input_pull_resistor: ko.observable("input_pull_up"),
-        temp_sensor_type: ko.observable(""),
-        temp_sensor_address: ko.observable(""),
-        temp_sensor_temp: ko.observable(""),
-        temp_sensor_humidity: ko.observable(""),
-        ds18b20_serial: ko.observable(""),
-        use_fahrenheit: ko.observable(false),
-        temp_sensor_navbar: ko.observable(true),
-        temp_sensor_i2cbus: ko.observable(1),
-        temp_i2c_bus: ko.observable(1),
-        temp_i2c_address: ko.observable(1),
-        temp_i2c_register: ko.observable(1),
-        show_graph_temp: ko.observable(false),
-        show_graph_humidity: ko.observable(false)
-      });
-    };
-
-    self.removeRpiInput = function (definition) {
-      self.settingsViewModel.settings.plugins.enclosure.rpi_inputs.remove(definition);
     };
 
     self.addAutomation = function () {

@@ -21,20 +21,6 @@ class Settings:
         self.write_lock = threading.RLock()
 
     ##########
-    ### Outputs
-    ##########
-
-    @property
-    def rpi_outputs(self) -> list[dict]:
-        """The configured outputs."""
-        return self._settings.get(["rpi_outputs"])
-
-    @rpi_outputs.setter
-    def rpi_outputs(self, value: list[dict]) -> None:
-        with self.write_lock:
-            self._settings.set(["rpi_outputs"], value)
-
-    ##########
     ### Inputs
     ##########
 
@@ -47,6 +33,20 @@ class Settings:
     def rpi_inputs(self, value: list[dict]) -> None:
         with self.write_lock:
             self._settings.set(["rpi_inputs"], value)
+
+    ##########
+    ### Outputs
+    ##########
+
+    @property
+    def rpi_outputs(self) -> list[dict]:
+        """The configured outputs."""
+        return self._settings.get(["rpi_outputs"])
+
+    @rpi_outputs.setter
+    def rpi_outputs(self, value: list[dict]) -> None:
+        with self.write_lock:
+            self._settings.set(["rpi_outputs"], value)
 
     ##########
     ### Actions

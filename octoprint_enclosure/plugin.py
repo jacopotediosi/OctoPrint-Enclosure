@@ -67,8 +67,8 @@ class EnclosurePlugin(
     octoprint.plugin.BlueprintPlugin,
     octoprint.plugin.EventHandlerPlugin,
 ):
-    rpi_outputs = []
     rpi_inputs = []
+    rpi_outputs = []
     actions = []
     automations = []
     waiting_temperature = set()
@@ -164,20 +164,22 @@ class EnclosurePlugin(
 
         self.event_queue = []
         self.rpi_outputs_not_changed = []
-        self.rpi_outputs = self._enclosure_settings.rpi_outputs
         self.rpi_inputs = self._enclosure_settings.rpi_inputs
+        self.rpi_outputs = self._enclosure_settings.rpi_outputs
         self.actions = self._enclosure_settings.actions
         self.automations = self._enclosure_settings.automations
         # Reset volatile temp_ctr_set_value to 0 on startup (it should not be persisted)
         for rpi_output in self.rpi_outputs:
             rpi_output["temp_ctr_set_value"] = 0
-        self.configure_outputs()
+        self.configure_sensors()
         self.configure_gpio_inputs()
+        self.configure_outputs()
+        if self.development_mode:
+            self.link_dummy_sensors()
         self.configure_actions()
         self.configure_automations()
         self.setup_gpio()
         self.configure_gpio()
-        self.configure_sensors()
         self.update_ui()
         self.start_outpus_with_server()
         self.handle_initial_gpio_control()
@@ -625,15 +627,34 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error sending neopixel command for output %s", index_id)
 
+    def get_sensor_inputs(self):
+        return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "temperature_sensor"]
+
+    def configure_sensors(self):
+        self._sensors = Sensors(self.get_sensor_inputs(), self._logger, dummy=self.development_mode)
+
+    def configure_gpio_inputs(self):
+        gpio_inputs = [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "gpio"]
+        self._gpio_inputs = GpioInputs(gpio_inputs, self._gpio, self.handle_gpio_input, self._logger)
+
     def configure_outputs(self):
         self._outputs = Outputs(self.rpi_outputs, self._gpio, self._i2c, self._logger)
         for rpi_output in self.rpi_outputs:
             if rpi_output["output_type"] == "temp_hum_control":
                 self.set_temp_hum_control_target(to_int(rpi_output["index_id"]), rpi_output.get("temp_ctr_set_value"))
 
-    def configure_gpio_inputs(self):
-        gpio_inputs = [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "gpio"]
-        self._gpio_inputs = GpioInputs(gpio_inputs, self._gpio, self.handle_gpio_input, self._logger)
+    def link_dummy_sensors(self):
+        for control in self._outputs.get_all(TempHumControlOutput):
+            try:
+                dummy = self._sensors.get_dummy(control.config.linked_temp_sensor)
+            except LookupError:
+                continue
+            if control.config.temp_ctr_type is TempHumControlType.HEATER:
+                dummy.is_heater_on = control.is_on
+            elif control.config.temp_ctr_type is TempHumControlType.COOLER:
+                dummy.is_cooler_on = control.is_on
+            elif control.config.temp_ctr_type is TempHumControlType.DEHUMIDIFIER:
+                dummy.is_dehumidifier_on = control.is_on
 
     def configure_actions(self):
         self._actions = Actions(self.actions, self._printer, self._frontend, self._logger)
@@ -657,27 +678,6 @@ class EnclosurePlugin(
 
     def is_pwm_linked(self, index_id):
         return bool(self.get_pwm_temperature_linked_settings(to_int(index_id)))
-
-    def get_sensor_inputs(self):
-        return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "temperature_sensor"]
-
-    def configure_sensors(self):
-        self._sensors = Sensors(self.get_sensor_inputs(), self._logger, dummy=self.development_mode)
-        if self.development_mode:
-            self.link_dummy_sensors()
-
-    def link_dummy_sensors(self):
-        for control in self._outputs.get_all(TempHumControlOutput):
-            try:
-                dummy = self._sensors.get_dummy(control.config.linked_temp_sensor)
-            except LookupError:
-                continue
-            if control.config.temp_ctr_type is TempHumControlType.HEATER:
-                dummy.is_heater_on = control.is_on
-            elif control.config.temp_ctr_type is TempHumControlType.COOLER:
-                dummy.is_cooler_on = control.is_on
-            elif control.config.temp_ctr_type is TempHumControlType.DEHUMIDIFIER:
-                dummy.is_dehumidifier_on = control.is_on
 
     def check_enclosure_temp(self):
         try:
@@ -786,13 +786,26 @@ class EnclosurePlugin(
                 return
 
     def update_ui(self):
-        self.update_ui_outputs()
         self.update_ui_current_temperature()
-        self.update_ui_set_temperature()
         self.update_ui_inputs()
+        self.update_ui_outputs()
+        self.update_ui_set_temperature()
 
     def update_ui_current_temperature(self):
         self._frontend.update_sensor_data(self.temperature_sensor_data)
+
+    def update_ui_inputs(self):
+        try:
+            sensor_status = []
+            for automation_settings in self.automations:
+                if automation_settings["automation_type"] == "filament":
+                    index = to_int(automation_settings["index_id"])
+                    with contextlib.suppress(AutomationError):
+                        value = self._automations.get(index, FilamentAutomation).enabled
+                        sensor_status.append({"index_id": index, "filament_sensor_enabled": value})
+            self._frontend.update_filament_sensor_status(sensor_status)
+        except Exception:
+            self._logger.exception("Error sending input status to the UI")
 
     def update_ui_set_temperature(self):
         result = []
@@ -867,19 +880,6 @@ class EnclosurePlugin(
             )
         except Exception:
             self._logger.exception("Error sending outputs status to the UI")
-
-    def update_ui_inputs(self):
-        try:
-            sensor_status = []
-            for automation_settings in self.automations:
-                if automation_settings["automation_type"] == "filament":
-                    index = to_int(automation_settings["index_id"])
-                    with contextlib.suppress(AutomationError):
-                        value = self._automations.get(index, FilamentAutomation).enabled
-                        sensor_status.append({"index_id": index, "filament_sensor_enabled": value})
-            self._frontend.update_filament_sensor_status(sensor_status)
-        except Exception:
-            self._logger.exception("Error sending input status to the UI")
 
     def convert_reading(self, sensor, reading):
         temperature = reading.temperature
@@ -971,6 +971,7 @@ class EnclosurePlugin(
             current_mode = self._gpio.getmode()
             set_mode = self._gpio.BOARD if self._enclosure_settings.use_board_pin_number else self._gpio.BCM
             if current_mode is None:
+                inputs = list(filter(lambda item: item["input_type"] == "gpio", self.rpi_inputs))
                 outputs = list(
                     filter(
                         lambda item: (
@@ -985,8 +986,7 @@ class EnclosurePlugin(
                         self.rpi_outputs,
                     ),
                 )
-                inputs = list(filter(lambda item: item["input_type"] == "gpio", self.rpi_inputs))
-                gpios = outputs + inputs
+                gpios = inputs + outputs
                 if gpios:
                     self._gpio.setmode(set_mode)
                     tempstr = "BOARD" if set_mode == self._gpio.BOARD else "BCM"
@@ -1499,11 +1499,13 @@ class EnclosurePlugin(
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
         for pwm_output in self._outputs.get_all(PwmOutput):
             pwm_output.stop()
-        self.rpi_outputs = self._enclosure_settings.rpi_outputs
-        self.configure_outputs()
         with self.sensors_lock:
             self.rpi_inputs = self._enclosure_settings.rpi_inputs
             self.configure_sensors()
+        self.rpi_outputs = self._enclosure_settings.rpi_outputs
+        self.configure_outputs()
+        if self.development_mode:
+            self.link_dummy_sensors()
         self.actions = self._enclosure_settings.actions
         self.configure_actions()
         self.automations = self._enclosure_settings.automations
@@ -1519,15 +1521,15 @@ class EnclosurePlugin(
         self.clear_gpio()
         self.configure_gpio_inputs()
 
-        self._logger.debug("rpi_outputs: %s", self.rpi_outputs)
         self._logger.debug("rpi_inputs: %s", self.rpi_inputs)
+        self._logger.debug("rpi_outputs: %s", self.rpi_outputs)
         self.setup_gpio()
         self.configure_gpio()
 
     def get_settings_defaults(self):
         return {
-            "rpi_outputs": [],
             "rpi_inputs": [],
+            "rpi_outputs": [],
             "actions": [],
             "automations": [],
             "filament_sensor_gcode": (
@@ -1566,11 +1568,17 @@ class EnclosurePlugin(
         return [
             {"type": "settings", "custom_bindings": True},
             {"type": "tab", "custom_bindings": True},
-            {"type": "navbar", "custom_bindings": True, "suffix": "_1", "classes": ["dropdown"]},
             {
                 "type": "navbar",
                 "custom_bindings": True,
                 "template": "enclosure_navbar_input.jinja2",
+                "suffix": "_1",
+                "classes": ["dropdown"],
+            },
+            {
+                "type": "navbar",
+                "custom_bindings": True,
+                "template": "enclosure_navbar.jinja2",
                 "suffix": "_2",
                 "classes": ["dropdown"],
             },

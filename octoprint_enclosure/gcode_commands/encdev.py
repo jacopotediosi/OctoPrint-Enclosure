@@ -274,6 +274,11 @@ class EncDevHandler:
             if pin != "":
                 labels.setdefault(to_int(pin), []).append(label)
 
+        for config in self._plugin.rpi_inputs:
+            if config["input_type"] == "gpio":
+                add(config["gpio_pin"], f"Input {config['index_id']} ({config['label']})")
+            elif config["input_type"] == "temperature_sensor":
+                add(config["gpio_pin"], f"Sensor {config['index_id']} ({config['label']})")
         for config in self._plugin.rpi_outputs:
             output_type = config["output_type"]
             label = f"Output {config['index_id']} ({config['label']})"
@@ -284,11 +289,6 @@ class EncDevHandler:
             elif output_type == "ledstrip":
                 add(config["ledstrip_gpio_clk"], f"{label} CLK")
                 add(config["ledstrip_gpio_dat"], f"{label} DAT")
-        for config in self._plugin.rpi_inputs:
-            if config["input_type"] == "gpio":
-                add(config["gpio_pin"], f"Input {config['index_id']} ({config['label']})")
-            elif config["input_type"] == "temperature_sensor":
-                add(config["gpio_pin"], f"Sensor {config['index_id']} ({config['label']})")
 
         return {pin: ", ".join(pin_labels) for pin, pin_labels in labels.items()}
 
