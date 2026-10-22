@@ -11,12 +11,13 @@
         </div>
     </div>
 {% endmacro %}
-{% macro select_control_group(value_binding, label, options, help="", allow_unset=false) %}
+{% macro select_control_group(value_binding, label, options, help="", placeholder="") %}
     <div class="control-group">
         <label class="control-label">{{ label }}</label>
         <div class="controls">
-            <select data-bind="{% if options is string %}options: {{ options }}, optionsText: 'label', optionsValue: 'index_id', {% endif %}value: {{ value_binding }}{% if allow_unset %}, valueAllowUnset: true{% endif %}">
+            <select data-bind="{% if options is string %}options: {{ options }}, optionsText: 'label', optionsValue: 'index_id', {% if placeholder %}optionsCaption: '{{ placeholder }}', optionsAfterRender: $root.disablePlaceholderOption, {% endif %}{% endif %}value: {{ value_binding }}{% if placeholder %}, valueAllowUnset: true, placeholderWhenUnset: true{% endif %}">
                 {% if options is not string %}
+                    {% if placeholder %}<option value="" disabled>{{ placeholder }}</option>{% endif %}
                     {% for value, text in options %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
                 {% endif %}
             </select>
@@ -35,22 +36,6 @@
             {% if help %}<span class="help-inline">{{ help }}</span>{% endif %}
             {% if caller is defined %}{{ caller() }}{% endif %}
         </div>
-    </div>
-{% endmacro %}
-{% macro radio_control_group(checked_binding, label, choices) %}
-    <div class="control-group">
-        <label class="control-label">{{ label }}</label>
-        {% for value, text in choices %}
-            <div class="controls">
-                <label class="radio">
-                    <input type="radio"
-                           value="{{ value }}"
-                           data-bind="checked: {{ checked_binding }}, attr: {name: '{{ checked_binding }}_' + $index()}">
-                    {{ text }}
-                </label>
-            </div>
-        {% endfor %}
-        {% if caller is defined %}{{ caller() }}{% endif %}
     </div>
 {% endmacro %}
 {% macro gpio_alert(development_mode, gpio_import_error) %}

@@ -23,6 +23,19 @@ $(function () {
     }
   };
 
+  ko.bindingHandlers.placeholderWhenUnset = {
+    after: ["options", "value"],
+    update: function (element, valueAccessor, allBindings) {
+      ko.unwrap(allBindings.get("value"));
+      ko.unwrap(allBindings.get("options"));
+      setTimeout(function () {
+        if (element.selectedIndex === -1) {
+          element.selectedIndex = 0;
+        }
+      }, 0);
+    }
+  };
+
   function EnclosureViewModel(parameters) {
     var self = this;
 
@@ -61,6 +74,12 @@ $(function () {
       return ['11', '20', '22', '2302', 'bme280', 'bme680', 'am2320', 'aht10', 'si7021', 'hum_raw_i2c', 'temp_raw_i2c'].indexOf(sensor) >= 0;
     };
 
+    self.disablePlaceholderOption = function (option, item) {
+      if (item === undefined) {
+        option.disabled = true;
+      }
+    };
+
     self.settings_outputs_regular = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs(), function (item) {
         return (item.output_type() === "regular" && !item.toggle_timer());
@@ -90,7 +109,7 @@ $(function () {
         return (item.output_type() === "regular" && item.show_on_navbar());
       });
       var actions = ko.utils.arrayFilter(self.actions(), function (item) {
-        return (item.show_on_navbar());
+        return (item.action_type() !== "" && item.show_on_navbar());
       });
       return outputs.concat(actions);
     });
@@ -116,13 +135,13 @@ $(function () {
 
     self.tab_outputs = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
-        return (!item.hide_btn_ui());
+        return (item.output_type() !== "" && !item.hide_btn_ui());
       });
     });
 
     self.tab_actions = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.actions(), function (item) {
-        return (!item.hide_btn_ui());
+        return (item.action_type() !== "" && !item.hide_btn_ui());
       });
     });
 
@@ -396,7 +415,7 @@ $(function () {
       self.settingsViewModel.settings.plugins.enclosure.rpi_inputs.push({
         index_id: ko.observable(nextIndex),
         label: ko.observable("Input " + nextIndex),
-        input_type: ko.observable("gpio"),
+        input_type: ko.observable(""),
         gpio_pin: ko.observable(0),
         input_pull_resistor: ko.observable("input_pull_up"),
         temp_sensor_type: ko.observable(""),
@@ -434,7 +453,7 @@ $(function () {
       self.settingsViewModel.settings.plugins.enclosure.rpi_outputs.push({
         index_id: ko.observable(nextIndex),
         label: ko.observable("Output " + nextIndex),
-        output_type: ko.observable("regular"),
+        output_type: ko.observable(""),
         gpio_pin: ko.observable(0),
         gpio_status: ko.observable(false),
         hide_btn_ui: ko.observable(false),
@@ -449,7 +468,7 @@ $(function () {
         shutdown_on_failed: ko.observable(false),
         shutdown_time: ko.observable(0),
         linked_temp_sensor: ko.observable(""),
-        temp_ctr_type: ko.observable("heater"),
+        temp_ctr_type: ko.observable(""),
         temp_ctr_deadband: ko.observable(0),
         temp_ctr_set_value: ko.observable(0),
         temp_ctr_new_set_value: ko.observable(""),
@@ -495,7 +514,7 @@ $(function () {
       self.settingsViewModel.settings.plugins.enclosure.actions.push({
         index_id: ko.observable(nextIndex),
         label: ko.observable("Action " + nextIndex),
-        action_type: ko.observable("gcode_output"),
+        action_type: ko.observable(""),
         gcode: ko.observable(""),
         shell_script: ko.observable(""),
         printer_action: ko.observable("pause"),
@@ -514,14 +533,14 @@ $(function () {
       self.settingsViewModel.settings.plugins.enclosure.automations.push({
         index_id: ko.observable(nextIndex),
         label: ko.observable("Automation " + nextIndex),
-        automation_type: ko.observable("rule"),
-        trigger_type: ko.observable("gpio_input"),
+        automation_type: ko.observable(""),
+        trigger_type: ko.observable(""),
         input: ko.observable(""),
         edge: ko.observable("fall"),
         linked_temp_sensor: ko.observable(""),
         alarm_set_temp: ko.observable(""),
         repeat_while_above: ko.observable(false),
-        reaction_type: ko.observable("output_control"),
+        reaction_type: ko.observable(""),
         controlled_io: ko.observable(""),
         controlled_io_set_state: ko.observable("on"),
         action: ko.observable(""),
