@@ -70,8 +70,11 @@ class EncDevHandler:
                 method=self._input,
             ),
             _Command(
-                pattern=rf"SENSOR (\d+)((?: (?:T|MIN|MAX|DELTA)={NUMBER_REGEX})*)",
-                usage="SENSOR <id> [T=<value>] [MIN=<value>] [MAX=<value>] [DELTA=<value>]",
+                pattern=rf"SENSOR (\d+)((?: [TH](?:MIN|MAX|DELTA)?={NUMBER_REGEX})*)",
+                usage=(
+                    "SENSOR <id> [T=<value>] [TMIN=<value>] [TMAX=<value>] [TDELTA=<value>]"
+                    " [H=<value>] [HMIN=<value>] [HMAX=<value>] [HDELTA=<value>]"
+                ),
                 method=self._set_sensor,
             ),
             _Command(
@@ -185,19 +188,19 @@ class EncDevHandler:
             key, _, value = item.partition("=")
             new_values[key] = float(value)
 
-        value = new_values.get("T", sensor.value)
-        value_min = new_values.get("MIN", sensor.value_min)
-        value_max = new_values.get("MAX", sensor.value_max)
-        value_delta = new_values.get("DELTA", sensor.value_delta)
+        simulated_values = (("T", sensor.temperature), ("H", sensor.humidity))
+        for prefix, simulated in simulated_values:
+            minimum = new_values.get(f"{prefix}MIN", simulated.minimum)
+            maximum = new_values.get(f"{prefix}MAX", simulated.maximum)
+            if minimum >= maximum:
+                msg = f"{prefix}MIN={minimum} must be lower than {prefix}MAX={maximum}"
+                raise _CommandError(msg)
 
-        if value_min >= value_max:
-            msg = f"MIN={value_min} must be lower than MAX={value_max}"
-            raise _CommandError(msg)
-        if not value_min <= value <= value_max:
-            msg = f"T={value} must be between MIN={value_min} and MAX={value_max}"
-            raise _CommandError(msg)
-
-        sensor.value, sensor.value_min, sensor.value_max, sensor.value_delta = value, value_min, value_max, value_delta
+        for prefix, simulated in simulated_values:
+            simulated.value = new_values.get(prefix, simulated.value)
+            simulated.minimum = new_values.get(f"{prefix}MIN", simulated.minimum)
+            simulated.maximum = new_values.get(f"{prefix}MAX", simulated.maximum)
+            simulated.delta = new_values.get(f"{prefix}DELTA", simulated.delta)
         sensor.failing = False
 
         send_reply(self._describe_sensor(config))
@@ -244,7 +247,11 @@ class EncDevHandler:
         except _CommandError:
             return f"{description}: not set up"
 
-        state = f"T={sensor.value} MIN={sensor.value_min} MAX={sensor.value_max} DELTA={sensor.value_delta}"
+        state = " ".join(
+            f"{prefix}={simulated.value} {prefix}MIN={simulated.minimum} {prefix}MAX={simulated.maximum}"
+            f" {prefix}DELTA={simulated.delta}"
+            for prefix, simulated in (("T", sensor.temperature), ("H", sensor.humidity))
+        )
         if sensor.failing:
             state += ", failing"
 

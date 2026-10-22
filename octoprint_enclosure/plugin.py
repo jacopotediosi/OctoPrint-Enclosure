@@ -46,6 +46,7 @@ from .outputs import (
     RegularSetState,
     TempHumControlOutput,
     TempHumControlStatus,
+    TempHumControlType,
 )
 from .utils import (
     is_hhmm,
@@ -659,6 +660,21 @@ class EnclosurePlugin(
 
     def configure_sensors(self):
         self._sensors = Sensors(self.get_sensor_inputs(), self._logger, dummy=self.development_mode)
+        if self.development_mode:
+            self.link_dummy_sensors()
+
+    def link_dummy_sensors(self):
+        for control in self._outputs.get_all(TempHumControlOutput):
+            try:
+                dummy = self._sensors.get_dummy(control.config.linked_temp_sensor)
+            except LookupError:
+                continue
+            if control.config.temp_ctr_type is TempHumControlType.HEATER:
+                dummy.is_heater_on = control.is_on
+            elif control.config.temp_ctr_type is TempHumControlType.COOLER:
+                dummy.is_cooler_on = control.is_on
+            elif control.config.temp_ctr_type is TempHumControlType.DEHUMIDIFIER:
+                dummy.is_dehumidifier_on = control.is_on
 
     def check_enclosure_temp(self):
         try:
