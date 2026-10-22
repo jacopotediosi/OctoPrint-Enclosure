@@ -37,8 +37,8 @@ class _InvalidOutput(Output[BaseConfig]):
     reason: str
     """Why the output can't be set up."""
 
-    def __init__(self, reason: str, gpio: ModuleType, logger: logging.Logger) -> None:
-        super().__init__(BaseConfig(), gpio, logger)
+    def __init__(self, reason: str, gpio: ModuleType, i2c: ModuleType, logger: logging.Logger) -> None:
+        super().__init__(BaseConfig(), gpio, i2c, logger)
         self.reason = reason
 
     @override
@@ -54,12 +54,19 @@ class Outputs:
     _outputs: dict[int, Output]
     """The output with each id."""
 
-    def __init__(self, outputs_settings: Iterable[dict], gpio: ModuleType, logger: logging.Logger) -> None:
+    def __init__(
+        self,
+        outputs_settings: Iterable[dict],
+        gpio: ModuleType,
+        i2c: ModuleType,
+        logger: logging.Logger,
+    ) -> None:
         """Set up some outputs.
 
         Args:
             outputs_settings (Iterable[dict]): The settings of the outputs.
             gpio (ModuleType): The GPIO backend, with the API of RPi.GPIO.
+            i2c (ModuleType): The I2C backend, with the API of smbus2.
             logger (logging.Logger): The logger to write to.
 
         """
@@ -79,9 +86,10 @@ class Outputs:
                     output_config.index_id,
                     f"Unsupported output type: {output_config.output_type!r}",
                     gpio,
+                    i2c,
                 )
             else:
-                output = self._create_output(output_class, output_config.index_id, output_settings, gpio)
+                output = self._create_output(output_class, output_config.index_id, output_settings, gpio, i2c)
 
             self._outputs[output_config.index_id] = output
 
@@ -147,18 +155,19 @@ class Outputs:
         index_id: int,
         output_settings: dict,
         gpio: ModuleType,
+        i2c: ModuleType,
     ) -> _OutputT | _InvalidOutput:
         try:
             output_config = output_class.config_class.from_settings(output_settings)
         except ValueError as error:
-            return self._create_invalid_output(index_id, f"Invalid settings: {error}", gpio)
+            return self._create_invalid_output(index_id, f"Invalid settings: {error}", gpio, i2c)
 
-        return output_class(output_config, gpio, self._get_output_logger(output_class, index_id))
+        return output_class(output_config, gpio, i2c, self._get_output_logger(output_class, index_id))
 
-    def _create_invalid_output(self, index_id: int, reason: str, gpio: ModuleType) -> _InvalidOutput:
+    def _create_invalid_output(self, index_id: int, reason: str, gpio: ModuleType, i2c: ModuleType) -> _InvalidOutput:
         logger = self._get_output_logger(_InvalidOutput, index_id)
         logger.warning("%s", reason)
-        return _InvalidOutput(reason, gpio, logger)
+        return _InvalidOutput(reason, gpio, i2c, logger)
 
     def _get_output_logger(self, output_class: type[Output], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{output_class.__name__}.{index_id}")

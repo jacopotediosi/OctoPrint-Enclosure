@@ -28,19 +28,24 @@ class Output(ABC, Generic[_ConfigT]):
     _gpio: ModuleType
     """The GPIO backend."""
 
+    _i2c: ModuleType
+    """The I2C backend."""
+
     _logger: logging.Logger
 
-    def __init__(self, config: _ConfigT, gpio: ModuleType, logger: logging.Logger) -> None:
+    def __init__(self, config: _ConfigT, gpio: ModuleType, i2c: ModuleType, logger: logging.Logger) -> None:
         """Set up the output.
 
         Args:
             config (_ConfigT): The configuration of the output.
             gpio (ModuleType): The GPIO backend.
+            i2c (ModuleType): The I2C backend.
             logger (logging.Logger): The logger to write to.
 
         """
         self.config = config
         self._gpio = gpio
+        self._i2c = i2c
         self._logger = logger
 
     @abstractmethod

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from octoprint.events import Events
 
-from octoprint_enclosure.hardware import dummy_gpio
+from octoprint_enclosure.hardware import dummy_gpio, dummy_i2c
 from octoprint_enclosure.inputs import PullResistor
 from octoprint_enclosure.utils import to_int
 
@@ -150,6 +150,10 @@ class EncDevHandler:
                 pwm_state = "running" if status.pwm.running else "stopped"
                 line += f", PWM {pwm_state} at {status.pwm.duty_cycle}% and {status.pwm.frequency} Hz"
             send_reply(line)
+
+        # I2C registers
+        for (bus, address, register), value in sorted(dummy_i2c.get_registers().items()):
+            send_reply(f"I2C bus {bus}, address {address:#04x}, register {register}: {value}")
 
         # Sensors
         for config in self._plugin.rpi_inputs:

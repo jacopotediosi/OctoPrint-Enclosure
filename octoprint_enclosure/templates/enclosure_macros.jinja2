@@ -56,7 +56,7 @@
 {% macro gpio_alert(development_mode, gpio_import_error) %}
     {% if development_mode %}
         <div class="alert alert-error enclosure-gpio-alert">
-            <strong>{{ _("Development mode is enabled:") }}</strong> {{ _("GPIO (pins, sensors, etc) are simulated.") }}
+            <strong>{{ _("Development mode is enabled:") }}</strong> {{ _("GPIO and I2C (pins, sensors, etc) are simulated.") }}
         </div>
     {% elif gpio_import_error %}
         <div class="alert alert-error enclosure-gpio-alert">

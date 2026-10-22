@@ -63,16 +63,17 @@ class TempHumControlOutput(SwitchOutput[TempHumControlConfig]):
     _status: TempHumControlStatus
     """What the control is doing."""
 
-    def __init__(self, config: TempHumControlConfig, gpio: ModuleType, logger: logging.Logger) -> None:
+    def __init__(self, config: TempHumControlConfig, gpio: ModuleType, i2c: ModuleType, logger: logging.Logger) -> None:
         """Set up the temperature or humidity output control.
 
         Args:
             config (TempHumControlConfig): The configuration of the output control.
             gpio (ModuleType): The GPIO backend.
+            i2c (ModuleType): The I2C backend.
             logger (logging.Logger): The logger to write to.
 
         """
-        super().__init__(config, gpio, logger)
+        super().__init__(config, gpio, i2c, logger)
         self._target = 0.0
         self._status = TempHumControlStatus.IDLE
 

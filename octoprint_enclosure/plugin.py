@@ -8,6 +8,7 @@ from pathlib import Path
 
 import octoprint.plugin
 import octoprint.util
+import smbus2
 from flask import jsonify, make_response, request
 from octoprint.events import Events
 from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
@@ -31,7 +32,7 @@ from .automations import (
 from .core import Frontend, Settings
 from .core.migrations import migrate_settings
 from .gcode_commands import EncDevHandler, EncHandler
-from .hardware import dummy_gpio, gpio
+from .hardware import dummy_gpio, dummy_i2c, gpio
 from .inputs import GpioInputError, GpioInputs, PullResistor, SensorError, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
@@ -110,9 +111,11 @@ class EnclosurePlugin(
         self.development_mode = self._enclosure_settings.development_mode
         if self.development_mode:
             self._gpio = dummy_gpio
-            self._logger.warning("Development mode is enabled: GPIO (pins, sensors, etc) are simulated")
+            self._i2c = dummy_i2c
+            self._logger.warning("Development mode is enabled: GPIO and I2C (pins, sensors, etc) are simulated")
         else:
             self._gpio = gpio
+            self._i2c = smbus2
 
         # Init G-code command handlers
         self._enc_handler = EncHandler(self)
@@ -623,7 +626,7 @@ class EnclosurePlugin(
             self._logger.exception("Error sending neopixel command for output %s", index_id)
 
     def configure_outputs(self):
-        self._outputs = Outputs(self.rpi_outputs, self._gpio, self._logger)
+        self._outputs = Outputs(self.rpi_outputs, self._gpio, self._i2c, self._logger)
         for rpi_output in self.rpi_outputs:
             if rpi_output["output_type"] == "temp_hum_control":
                 self.set_temp_hum_control_target(to_int(rpi_output["index_id"]), rpi_output.get("temp_ctr_set_value"))

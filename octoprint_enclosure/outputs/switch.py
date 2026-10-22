@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TypeVar
 
-from smbus2 import SMBus
-
 from octoprint_enclosure.core import BaseConfig
 
 from .base import Output
@@ -79,7 +77,7 @@ class SwitchOutput(Output[_ConfigT]):
         config = self.config
 
         if config.gpio_i2c_enabled:
-            with SMBus(config.gpio_i2c_bus) as bus:
+            with self._i2c.SMBus(config.gpio_i2c_bus) as bus:
                 data = bus.read_i2c_block_data(config.gpio_i2c_address, config.gpio_i2c_register_status, 1)
             self._logger.debug("Read %s from register %s", data, config.gpio_i2c_register_status)
             high = data[0] == config.gpio_i2c_data_on
@@ -94,7 +92,7 @@ class SwitchOutput(Output[_ConfigT]):
 
         if config.gpio_i2c_enabled:
             data = config.gpio_i2c_data_on if high else config.gpio_i2c_data_off
-            with SMBus(config.gpio_i2c_bus) as bus:
+            with self._i2c.SMBus(config.gpio_i2c_bus) as bus:
                 bus.write_i2c_block_data(config.gpio_i2c_address, config.gpio_i2c_register, [data])
             self._logger.debug(
                 "Writing on GPIO (i2c): %s/%s value %s",

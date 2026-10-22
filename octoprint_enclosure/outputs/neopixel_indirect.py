@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from smbus2 import SMBus
 from typing_extensions import override
 
 from octoprint_enclosure.core import BaseConfig, HexInt
@@ -51,7 +50,7 @@ class NeopixelIndirectOutput(Output[NeopixelIndirectConfig]):
         # The microcontroller reads pin, count, brightness, red, green and blue from register 0
         data = [config.gpio_pin, config.neopixel_count, config.neopixel_brightness, red, green, blue]
         self._logger.debug("Writing %s to I2C address %s", data, config.microcontroller_address)
-        with SMBus(BUS) as bus:
+        with self._i2c.SMBus(BUS) as bus:
             bus.write_i2c_block_data(config.microcontroller_address, 0, data)
 
     @override

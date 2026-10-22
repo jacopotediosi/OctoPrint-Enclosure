@@ -40,8 +40,8 @@ class PwmOutput(Output[PwmConfig]):
     _duty_cycle: float
     """The duty cycle of the PWM, from 0 to 100."""
 
-    def __init__(self, config: PwmConfig, gpio: ModuleType, logger: logging.Logger) -> None:
-        super().__init__(config, gpio, logger)
+    def __init__(self, config: PwmConfig, gpio: ModuleType, i2c: ModuleType, logger: logging.Logger) -> None:
+        super().__init__(config, gpio, i2c, logger)
         self._pwm = None
         self._duty_cycle = config.default_duty_cycle
 
