@@ -1,9 +1,10 @@
 from .automations import Automations
 from .base import AutomationError
 from .filament import FilamentAutomation
-from .reactions import OutputControlReaction, PrinterControlReaction, RunActionReaction
+from .pwm_temperature_linked import PwmTemperatureLinkedAutomation
+from .reactions import OutputControlReaction, RunActionReaction, StopTempHumControlReaction
 from .rule import RuleAutomation
-from .triggers import GpioInputTrigger
+from .triggers import GpioInputTrigger, TemperatureTrigger
 
 __all__ = [
     "AutomationError",
@@ -11,7 +12,9 @@ __all__ = [
     "FilamentAutomation",
     "GpioInputTrigger",
     "OutputControlReaction",
-    "PrinterControlReaction",
+    "PwmTemperatureLinkedAutomation",
     "RuleAutomation",
     "RunActionReaction",
+    "StopTempHumControlReaction",
+    "TemperatureTrigger",
 ]

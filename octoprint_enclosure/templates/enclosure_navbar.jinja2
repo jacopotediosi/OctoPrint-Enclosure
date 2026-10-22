@@ -27,4 +27,10 @@
             <span class="badge badge-info">shell</span>
         </a>
     </li>
+    <li data-bind="if: $root.navbarItemType($data) == 'printer'">
+        <a href="#" data-bind="click: $root.handlePrinterAction">
+            <span data-bind="text: label"></span>
+            <span class="badge badge-info">printer</span>
+        </a>
+    </li>
 </ul>

@@ -21,13 +21,10 @@
             ("neopixel_direct", _("NeoPixel Direct")),
             ("ledstrip", _("RGB LED Strip")),
             ("temp_hum_control", _("Temperature / Humidity Control")),
-            ("temperature_alarm", _("Temperature Alarm")),
         ]) }}
-        <div data-bind="if: output_type() != 'temperature_alarm'">
-            {{ text_control_group("label", _("Label"), "Name displayed on Enclosure Tab") }}
-        </div>
+        {{ text_control_group("label", _("Label"), "Name displayed on Enclosure Tab") }}
         {{ text_control_group("index_id", _("Id"), "Id used for API control", disabled=true) }}
-        <div data-bind="ifnot: output_type() == 'temperature_alarm' || output_type() == 'ledstrip' || (output_type() == 'regular' && gpio_i2c_enabled())">
+        <div data-bind="ifnot: output_type() == 'ledstrip' || (output_type() == 'regular' && gpio_i2c_enabled())">
             {% call text_control_group("gpio_pin", _("IO Number")) %}
                 <span class="help-inline"
                       data-bind="visible: output_type() != 'neopixel_indirect'">GPIO number that will be controlled.</span>
@@ -39,16 +36,7 @@
                 </span>
             {% endcall %}
         </div>
-        <div data-bind="if: output_type() == 'pwm'">
-            {{ checkbox_control_group("pwm_temperature_linked", _("Link PWM to Temperature"), "Link PWM output to temperature. PWM output will be interpolated between the point from duty A, temperature A -> duty B, temperature B. This output will automatically start when a print starts and will default to the default duty cycle when print is complete.") }}
-        </div>
-        <div data-bind="if: output_type() == 'pwm' && pwm_temperature_linked()">
-            {{ text_control_group("duty_a", _("Duty A")) }}
-            {{ text_control_group("temperature_a", _("Temperature A")) }}
-            {{ text_control_group("duty_b", _("Duty B")) }}
-            {{ text_control_group("temperature_b", _("Temperature B")) }}
-        </div>
-        <div data-bind="if: output_type() == 'regular' || (output_type() == 'pwm' && !pwm_temperature_linked())">
+        <div data-bind="if: output_type() == 'regular' || (output_type() == 'pwm' && !$root.isPwmLinked(index_id()))">
             {{ checkbox_control_group("toggle_timer", _("Timer Toggle"), "Toggle output every amount of seconds. It will start when the print starts and stop when print is complete. For PWM pins it will use the default PWM value when ON.") }}
             <div data-bind="if: toggle_timer()">
                 {{ text_control_group("toggle_timer_on", _("On Time"), "Time in seconds that the GPIO will remain ON") }}
@@ -56,29 +44,23 @@
             </div>
         </div>
         <div data-bind="ifnot: (output_type() == 'regular' || output_type() == 'pwm') && toggle_timer()">
-            <div data-bind="ifnot: output_type() == 'temperature_alarm'">
-                <div data-bind="ifnot: output_type() == 'pwm' && pwm_temperature_linked()">
-                    {{ checkbox_control_group("startup_with_server", _("Start with server"), "Choose if output should turn on automatically when octoprint starts") }}
-                    {{ checkbox_control_group("auto_startup", _("Auto Startup"), "Choose if output should turn on automatically when print starts") }}
-                </div>
-                <div data-bind="if: $data.auto_startup">
-                    {{ text_control_group("startup_time", _("Startup Delay / Hour"), "Time delay in seconds to turn on GPIO when print starts OR exact time that the event should happen, note that events will only be scheduled after a print starts, time should be formatted as HH:MM on a 24 hours format, don't forget to check timezone of your Raspberry Pi.") }}
-                </div>
+            <div data-bind="ifnot: output_type() == 'pwm' && $root.isPwmLinked(index_id())">
+                {{ checkbox_control_group("startup_with_server", _("Start with server"), "Choose if output should turn on automatically when octoprint starts") }}
+                {{ checkbox_control_group("auto_startup", _("Auto Startup"), "Choose if output should turn on automatically when print starts") }}
             </div>
-            <div data-bind="ifnot: output_type() == 'temperature_alarm'">
-                {{ checkbox_control_group("auto_shutdown", _("Auto Shutdown"), "Choose if output should turn off automatically when print finishes") }}
+            <div data-bind="if: $data.auto_startup">
+                {{ text_control_group("startup_time", _("Startup Delay / Hour"), "Time delay in seconds to turn on GPIO when print starts OR exact time that the event should happen, note that events will only be scheduled after a print starts, time should be formatted as HH:MM on a 24 hours format, don't forget to check timezone of your Raspberry Pi.") }}
             </div>
+            {{ checkbox_control_group("auto_shutdown", _("Auto Shutdown"), "Choose if output should turn off automatically when print finishes") }}
             <div data-bind="if: $data.auto_shutdown">
                 {{ checkbox_control_group("shutdown_on_failed", _("Shutdown on Failed or Canceled"), "Choose if output should turn off automatically when print is canceled or fails") }}
                 {% call text_control_group("shutdown_time", _("Shutdown Delay / Hour"), "Time delay in seconds to turn off GPIO when print starts OR exact time that the event should happen, note that events will only be scheduled after a print starts, time should be formatted as HH:MM on a 24 hours format, don't forget to check timezone of your raspberry pi.") %}
                     <span class="label label-important">Attention</span>
-                    <span> Hour schedule does not work with
-                        <b>Link PWM to Temperature</b> option</span>
+                    <span> Hour schedule does not work with PWM outputs driven by a
+                        <b>PWM Linked to Temperature</b> automation</span>
                 {% endcall %}
             </div>
-            <div data-bind="ifnot: output_type() == 'temperature_alarm'">
-                {{ checkbox_control_group("shutdown_on_error", _("Auto Shutdown on Serial Connection Error"), "Choose if output should turn off automatically when an error or disconnect was detected. Shutdown Delay will be ignored in this case") }}
-            </div>
+            {{ checkbox_control_group("shutdown_on_error", _("Auto Shutdown on Serial Connection Error"), "Choose if output should turn off automatically when an error or disconnect was detected. Shutdown Delay will be ignored in this case") }}
         </div>
         <div data-bind="if: output_type() == 'regular' || output_type() == 'temp_hum_control'">
             {{ checkbox_control_group("active_low", _("Active Low"), "Active low means that the GPIO will turn on when receive a low signal (ground) from Raspberry PI") }}
@@ -101,8 +83,8 @@
                 {{ checkbox_control_group("show_on_navbar", _("Show Button on Navbar"), "Add shortcut on navbar to toggle output") }}
             </div>
         </div>
-        <div data-bind="if: output_type() == 'temperature_alarm' || output_type() == 'temp_hum_control' || (output_type() == 'pwm' && pwm_temperature_linked())">
-            <div data-bind="if: temp_ctr_type() == 'heater' || temp_ctr_type() == 'cooler' || (output_type() == 'pwm' && pwm_temperature_linked())">
+        <div data-bind="if: output_type() == 'temp_hum_control'">
+            <div data-bind="if: temp_ctr_type() == 'heater' || temp_ctr_type() == 'cooler'">
                 {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_temperature_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", allow_unset=true) }}
             </div>
             <div data-bind="if: temp_ctr_type() == 'dehumidifier'">
@@ -118,11 +100,6 @@
             <div data-bind="if: temp_ctr_type() == 'heater'">
                 {{ text_control_group("temp_ctr_max_temp", _("Maximum Temperature"), "Maximum temperature that the enclosure should reach, if this temperature is hit, the heater will be disabled until it's set temperature is set again.") }}
             </div>
-        </div>
-        <div data-bind="if: output_type() == 'temperature_alarm'">
-            {{ text_control_group("alarm_set_temp", _("Set Temperature"), "Set temperature that will trigger the event") }}
-            {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settings_outputs_regular", "When the event happen, you want control which IO?", allow_unset=true) }}
-            {{ select_control_group("controlled_io_set_state", _("Set Controlled IO State"), [("on", "On"), ("off", "Off")], "When the event happen, you want to turn the controlled IO on or off?") }}
         </div>
         <div data-bind="if: output_type() == 'pwm'">
             {{ text_control_group("pwm_frequency", _("PWM Frequency"), "Value is in Hz") }}
@@ -317,14 +294,15 @@
 <h4>{{ _("Actions") }}</h4>
 <p>
     Configure all
-    <strong>actions</strong>. Actions send gcode to the printer or run a shell script, from a button on the Enclosure tab or on the
-    navbar, or from an automation.
+    <strong>actions</strong>. Actions send gcode or a command to the printer, or run a shell script, from a button on the Enclosure tab
+    or on the navbar, or from an automation.
 </p>
 <form class="form-horizontal">
     <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.actions">
         {{ radio_control_group("action_type", _("Action Type"), [
             ("gcode_output", _("Gcode")),
             ("shell_output", _("Shell Script")),
+            ("printer", _("Printer")),
         ]) }}
         {{ text_control_group("label", _("Label"), "Name displayed on Enclosure Tab") }}
         {{ text_control_group("index_id", _("Id"), "Id used for API control", disabled=true) }}
@@ -340,6 +318,16 @@
                         <code>ENTER</code> on the end of every line sent to the printer</span>
                 </div>
             </div>
+        </div>
+        <div data-bind="if: action_type() == 'printer'">
+            {{ select_control_group("printer_action", _("Printer Action"), [
+                ("resume", "Printer Resume"),
+                ("pause", "Printer Pause"),
+                ("cancel", "Printer Cancel"),
+                ("start", "Start Print"),
+                ("toggle", "Printer Toggle (Connect / Pause / Resume)"),
+                ("toggle_job", "Job Toggle (Connect / Start / Cancel)"),
+            ], "Command sent to the printer.") }}
         </div>
         {{ checkbox_control_group("hide_btn_ui", _("Hide UI Button"), "If you plan to use a physical button (INPUT) and want to hide the button from enclosure tab check this.") }}
         {{ checkbox_control_group("show_on_navbar", _("Show Button on Navbar"), "Add shortcut on navbar to run the action") }}
@@ -365,26 +353,34 @@
 <h4>{{ _("Automations") }}</h4>
 <p>
     Configure all
-    <strong>automations</strong>. A rule reacts to a trigger, such as a GPIO input that changes: it controls an output, runs an action or
-    controls the printer. A filament sensor detects the end of the filament during a print.
+    <strong>automations</strong>. A rule reacts to a trigger, such as a GPIO input that changes or a temperature above a threshold: it
+    controls an output, runs an action or stops the temperature controls. A filament sensor detects the end of the filament during a
+    print. A PWM linked to temperature sets the duty cycle of a PWM output from a temperature.
 </p>
 <form class="form-horizontal">
     <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.automations">
         {% call radio_control_group("automation_type", _("Automation Type"), [
-            ("rule", _("Rule")),
+            ("rule", _("Rule (Trigger-Reaction)")),
             ("filament", _("Filament Sensor")),
+            ("pwm_temperature_linked", _("PWM Linked to Temperature")),
         ]) %}
             <div class="control-group">
                 <div class="controls">
                     <span class="help-inline" data-bind="visible: automation_type() == 'rule'">
                         <span class="label label-info">Info:</span> Does something when its trigger happens, for example controls an output when a button connected to a
-                        GPIO input is pressed.
+                        GPIO input is pressed, or when the temperature goes above a threshold.
                     </span>
                     <span class="help-inline"
                           data-bind="visible: automation_type() == 'filament'">
                         <span class="label label-info">Info:</span> Sends the Filament Change Gcode of the advanced options when the sensor detects the end of the
                         filament during a print. Set up the input GPIO according to your sensor, for example, if your filament sensor connects to ground
                         when detects the end of the filament, you should choose PULL UP resistors and detect the event on the falling edge.
+                    </span>
+                    <span class="help-inline"
+                          data-bind="visible: automation_type() == 'pwm_temperature_linked'">
+                        <span class="label label-info">Info:</span> Sets the duty cycle of a PWM output from the temperature read by a sensor, interpolated between the
+                        point from duty A, temperature A -> duty B, temperature B. It starts when a print starts, and the output goes back to the default
+                        duty cycle when the print is complete.
                     </span>
                 </div>
             </div>
@@ -393,17 +389,23 @@
         <div data-bind="if: automation_type() == 'rule'">
             {{ radio_control_group("trigger_type", _("Trigger"), [
                 ("gpio_input", _("GPIO Input")),
+                ("temperature", _("Temperature")),
             ]) }}
         </div>
-        <div data-bind="if: automation_type() == 'filament' || trigger_type() == 'gpio_input'">
+        <div data-bind="if: automation_type() == 'filament' || (automation_type() == 'rule' && trigger_type() == 'gpio_input')">
             {{ select_control_group("input", _("Input"), "$root.settings_gpio_inputs", "GPIO input that triggers the automation. Configured on the input side of the plugin.", allow_unset=true) }}
             {{ select_control_group("edge", _("Event Trigger"), [("rise", "Rise"), ("fall", "Fall")], "Do you want to trigger the event on the rise or falling edge? If you signal is active low, that means it should run the automation when it receives a low signal (ground), you should choose FALLING EDGE.") }}
+        </div>
+        <div data-bind="if: automation_type() == 'rule' && trigger_type() == 'temperature'">
+            {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_temperature_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", allow_unset=true) }}
+            {{ text_control_group("alarm_set_temp", _("Set Temperature"), "Temperature above which the automation runs.") }}
+            {{ checkbox_control_group("repeat_while_above", _("Repeat while above"), "Run the automation at every reading above the set temperature, instead of only when the temperature goes above it the first time.") }}
         </div>
         <div data-bind="if: automation_type() == 'rule'">
             {% call radio_control_group("reaction_type", _("Reaction"), [
                 ("output_control", _("Output Control")),
                 ("run_action", _("Run Action")),
-                ("printer_control", _("Printer")),
+                ("stop_temp_hum_control", _("Stop Temperature Control")),
             ]) %}
                 <div class="control-group">
                     <div class="controls">
@@ -415,13 +417,13 @@
                         </span>
                         <span class="help-inline"
                               data-bind="visible: reaction_type() == 'run_action'">
-                            <span class="label label-info">Info:</span> Will run an action when a condition is met, for example send gcode to the printer or run a shell
-                            script when a button is pressed.
+                            <span class="label label-info">Info:</span> Will run an action when a condition is met, for example send gcode or a command to the printer, or
+                            run a shell script, when a button is pressed.
                         </span>
                         <span class="help-inline"
-                              data-bind="visible: reaction_type() == 'printer_control'">
-                            <span class="label label-info">Info:</span> PRINTER actions when a condition is met, for example the press of a button. Actions can be Pause
-                            \ Resume \ Cancel a print job or disable Temperature Control.
+                              data-bind="visible: reaction_type() == 'stop_temp_hum_control'">
+                            <span class="label label-info">Info:</span> Will stop all the Temperature / Humidity Controls with Auto Shutdown when a condition is met, for
+                            example the press of a button.
                         </span>
                     </div>
                 </div>
@@ -435,21 +437,18 @@
             <div data-bind="if: reaction_type() == 'run_action'">
                 {{ select_control_group("action", _("Action"), "$root.settingsViewModel.settings.plugins.enclosure.actions", "Action to run when the event happens. Configured on the actions side of the plugin.", allow_unset=true) }}
             </div>
-            <div data-bind="if: reaction_type() == 'printer_control'">
-                {{ select_control_group("printer_action", _("Printer Action"), [
-                    ("resume", "Printer Resume"),
-                    ("pause", "Printer Pause"),
-                    ("cancel", "Printer Cancel"),
-                    ("start", "Start Print"),
-                    ("toggle", "Printer Toggle (Connect / Pause / Resume)"),
-                    ("toggle_job", "Job Toggle (Connect / Start / Cancel)"),
-                    ("stop_temp_hum_control", "Stop Temperature Control"),
-                ], "You can add buttons to resume and pause the print job.") }}
-            </div>
         </div>
         <div data-bind="if: automation_type() == 'filament'">
             {{ checkbox_control_group("filament_sensor_enabled", _("Enable"), "Enable and disable filament sensors") }}
             {{ text_control_group("filament_sensor_timeout", _("Filament detection timeout"), "Time in seconds that filament sensor will be inactive after sensing end of filament. This is to avoid sending multiple commands to the printer.") }}
+        </div>
+        <div data-bind="if: automation_type() == 'pwm_temperature_linked'">
+            {{ select_control_group("output", _("Controlled IO"), "$root.settings_outputs_pwm", "PWM output whose duty cycle follows the temperature. Configured on the output side of the plugin.", allow_unset=true) }}
+            {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_temperature_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", allow_unset=true) }}
+            {{ text_control_group("duty_a", _("Duty A")) }}
+            {{ text_control_group("temperature_a", _("Temperature A")) }}
+            {{ text_control_group("duty_b", _("Duty B")) }}
+            {{ text_control_group("temperature_b", _("Temperature B")) }}
         </div>
         <div class="control-group">
             <a title="Delete Automation"

@@ -75,9 +75,13 @@ class Outputs:
 
             output_class = OUTPUTS.get(output_config.output_type)
             if output_class is None:
-                continue
-
-            output = self._create_output(output_class, output_config.index_id, output_settings, gpio)
+                output: Output = self._create_invalid_output(
+                    output_config.index_id,
+                    f"Unsupported output type: {output_config.output_type!r}",
+                    gpio,
+                )
+            else:
+                output = self._create_output(output_class, output_config.index_id, output_settings, gpio)
 
             self._outputs[output_config.index_id] = output
 

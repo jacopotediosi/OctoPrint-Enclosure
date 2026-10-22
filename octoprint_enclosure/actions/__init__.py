@@ -1,7 +1,7 @@
 from .actions import Actions
 from .base import ActionError
 from .gcode import GcodeAction, GcodeConfig
-from .printer import PrinterAction, PrinterConfig
+from .printer import PrinterAction
 from .shell import ShellAction
 
 __all__ = [
@@ -10,6 +10,5 @@ __all__ = [
     "GcodeAction",
     "GcodeConfig",
     "PrinterAction",
-    "PrinterConfig",
     "ShellAction",
 ]

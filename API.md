@@ -342,3 +342,16 @@ Response (204): No-Content
 
 Error Responses:
 - none
+
+## Send printer command
+
+Endpoint: **POST** `/printer/<id>`
+
+*Note: id needs to be int (index_id) of a printer action*
+
+Body: empty
+
+Response (204): No-Content
+
+Error Responses:
+- none

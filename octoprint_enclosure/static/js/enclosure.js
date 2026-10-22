@@ -45,6 +45,12 @@ $(function () {
       });
     });
 
+    self.settings_outputs_pwm = ko.pureComputed(function () {
+      return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs(), function (item) {
+        return (item.output_type() === "pwm");
+      });
+    });
+
     self.rpi_inputs_temperature_sensors = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.rpi_inputs(), function (item) {
         return (item.input_type() === "temperature_sensor");
@@ -129,6 +135,12 @@ $(function () {
     self.isRegularOutput = function (index_id) {
       return self.settingsViewModel.settings.plugins.enclosure.rpi_outputs().some(function (output) {
         return output.index_id() == index_id && output.output_type() == "regular";
+      });
+    };
+
+    self.isPwmLinked = function (index_id) {
+      return self.settingsViewModel.settings.plugins.enclosure.automations().some(function (automation) {
+        return automation.automation_type() == "pwm_temperature_linked" && automation.output() == index_id;
       });
     };
 
@@ -397,20 +409,16 @@ $(function () {
         gpio_status: ko.observable(false),
         hide_btn_ui: ko.observable(false),
         active_low: ko.observable(true),
-        pwm_temperature_linked: ko.observable(false),
         toggle_timer: ko.observable(false),
         toggle_timer_on: ko.observable(0),
         toggle_timer_off: ko.observable(0),
         startup_with_server: ko.observable(false),
         auto_startup: ko.observable(false),
-        controlled_io: ko.observable(0),
-        controlled_io_set_state: ko.observable("on"),
         startup_time: ko.observable(0),
         auto_shutdown: ko.observable(false),
         shutdown_on_failed: ko.observable(false),
         shutdown_time: ko.observable(0),
         linked_temp_sensor: ko.observable(""),
-        alarm_set_temp: ko.observable(0),
         temp_ctr_type: ko.observable("heater"),
         temp_ctr_deadband: ko.observable(0),
         temp_ctr_set_value: ko.observable(0),
@@ -420,10 +428,6 @@ $(function () {
         pwm_frequency: ko.observable(50),
         pwm_status: ko.observable(50),
         duty_cycle: ko.observable(0),
-        duty_a: ko.observable(0),
-        duty_b: ko.observable(0),
-        temperature_a: ko.observable(0),
-        temperature_b: ko.observable(0),
         default_duty_cycle: ko.observable(0),
         new_duty_cycle: ko.observable(""),
         neopixel_color: ko.observable("rgb(0,0,0)"),
@@ -464,6 +468,7 @@ $(function () {
         action_type: ko.observable("gcode_output"),
         gcode: ko.observable(""),
         shell_script: ko.observable(""),
+        printer_action: ko.observable("pause"),
         hide_btn_ui: ko.observable(false),
         show_on_navbar: ko.observable(false)
       });
@@ -513,13 +518,20 @@ $(function () {
         trigger_type: ko.observable("gpio_input"),
         input: ko.observable(""),
         edge: ko.observable("fall"),
+        linked_temp_sensor: ko.observable(""),
+        alarm_set_temp: ko.observable(""),
+        repeat_while_above: ko.observable(false),
         reaction_type: ko.observable("output_control"),
-        action: ko.observable(""),
         controlled_io: ko.observable(""),
         controlled_io_set_state: ko.observable("on"),
-        printer_action: ko.observable("pause"),
+        action: ko.observable(""),
         filament_sensor_enabled: ko.observable(true),
-        filament_sensor_timeout: ko.observable(120)
+        filament_sensor_timeout: ko.observable(120),
+        output: ko.observable(""),
+        temperature_a: ko.observable(0),
+        duty_a: ko.observable(0),
+        temperature_b: ko.observable(0),
+        duty_b: ko.observable(0)
       });
     };
 
@@ -564,6 +576,10 @@ $(function () {
 
     self.handleShellOutput = function (item, form) {
       OctoPrint.post(self.buildPluginUrl("shell/" + item.index_id()));
+    };
+
+    self.handlePrinterAction = function (item, form) {
+      OctoPrint.post(self.buildPluginUrl("printer/" + item.index_id()));
     };
 
     self.switchAutoStartUp = function (item) {

@@ -5,6 +5,7 @@ from .neopixel_indirect import NeopixelIndirectOutput
 from .outputs import Outputs
 from .pwm import PwmOutput
 from .regular import RegularOutput, RegularSetState
+from .temp_hum_control import TempHumControlOutput, TempHumControlStatus
 
 __all__ = [
     "LedstripOutput",
@@ -15,4 +16,6 @@ __all__ = [
     "PwmOutput",
     "RegularOutput",
     "RegularSetState",
+    "TempHumControlOutput",
+    "TempHumControlStatus",
 ]

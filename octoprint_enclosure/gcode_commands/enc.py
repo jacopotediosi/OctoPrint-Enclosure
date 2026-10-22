@@ -51,8 +51,8 @@ class EncHandler:
             temperature = to_float(get_gcode_param(cmd, "S"))
             if to_int(get_gcode_param(cmd, "W")) == 1 and plugin._printer.is_printing():
                 plugin._printer.pause_print()
-                plugin.waiting_temperature.append(index_id)
-            output["temp_ctr_set_value"] = temperature
+                plugin.waiting_temperature.add(index_id)
+            plugin.set_temp_hum_control_target(index_id, temperature)
             plugin.update_ui_set_temperature()
             plugin.handle_temp_hum_control()
             comm_instance._log(f"Setting TEMP/HUM control output {index_id} to value {temperature}")

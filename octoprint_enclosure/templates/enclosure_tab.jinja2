@@ -122,7 +122,7 @@
                        data-bind="value: new_duty_cycle, valueUpdate: 'input', attr: {placeholder:$root.getDutyCycle(duty_cycle())}">
                 <button type="button"
                         class="btn btn-input-inc"
-                        data-bind="enable: $root.isUser() && !pwm_temperature_linked(), click: $root.handlePWM, attr: {title: pwm_temperature_linked() ? 'Temperature controlled PWM' : 'Set PWM'}">
+                        data-bind="enable: $root.isUser() && !$root.isPwmLinked(index_id()), click: $root.handlePWM, attr: {title: $root.isPwmLinked(index_id()) ? 'Temperature controlled PWM' : 'Set PWM'}">
                     <i class="fa fa-check"></i>
                 </button>
             </div>
@@ -158,7 +158,7 @@
                       data-bind="text: gpio_status() ? 'on' : 'off', css: {'badge-success': gpio_status(), 'badge-important': !gpio_status()}"></span>
             </h4>
         </div>
-        <div data-bind="if: !(output_type() == 'pwm' && pwm_temperature_linked()) && !((output_type() == 'regular' || output_type() == 'pwm') && toggle_timer()) && !(output_type() == 'temperature_alarm')">
+        <div data-bind="if: !(output_type() == 'pwm' && $root.isPwmLinked(index_id())) && !((output_type() == 'regular' || output_type() == 'pwm') && toggle_timer())">
             <h5 data-bind="if: $root.isUser()">
                 <span>Auto Startup</span>
                 <a href="#"
@@ -205,6 +205,17 @@
                 <button type="button"
                         data-bind="enable: $root.isUser(), click: $root.handleShellOutput"
                         class="btn">Execute Script</button>
+            </div>
+        </div>
+        <div data-bind="if: action_type() == 'printer'">
+            <h4>
+                <span data-bind="text: label"></span>
+                <span class="badge">printer action</span>
+            </h4>
+            <div>
+                <button type="button"
+                        data-bind="enable: $root.isUser(), click: $root.handlePrinterAction"
+                        class="btn">Send command</button>
             </div>
         </div>
     </div>
