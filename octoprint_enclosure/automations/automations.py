@@ -61,6 +61,22 @@ class Automations:
         self._logger = logger.getChild("Automations")
         self._automations = {}
 
+        self.reload(automations_settings)
+
+    def reload(self, automations_settings: Iterable[dict]) -> tuple[list[Automation], list[Automation]]:
+        """Set up some automations again, after their settings changed.
+
+        An automation whose settings didn't change is kept as it is, with its state.
+
+        Args:
+            automations_settings (Iterable[dict]): The settings of the automations.
+
+        Returns:
+            tuple[list[Automation], list[Automation]]: The automations kept as they were, and the ones dropped.
+
+        """
+        automations: dict[int, Automation] = {}
+
         for automation_settings in automations_settings:
             try:
                 automation_config = AutomationConfig.from_settings(automation_settings)
@@ -77,7 +93,13 @@ class Automations:
             else:
                 automation = self._create_automation(automation_class, automation_config.index_id, automation_settings)
 
-            self._automations[automation_config.index_id] = automation
+            automations[automation_config.index_id] = automation
+
+        automations_kept = [item for item in automations.values() if item in self._automations.values()]
+        automations_dropped = [item for item in self._automations.values() if item not in automations.values()]
+        self._automations = automations
+
+        return automations_kept, automations_dropped
 
     def get(self, index_id: int, automation_class: type[_AutomationT]) -> _AutomationT:
         """Get an automation.
@@ -155,6 +177,11 @@ class Automations:
             )
         except ValueError as error:
             return self._create_invalid_automation(index_id, f"Invalid settings: {error}")
+
+        # An automation whose settings didn't change is kept, with its state
+        old_automation = self._automations.get(index_id)
+        if isinstance(old_automation, automation_class) and old_automation.has_same_config(automation):
+            return old_automation
 
         return automation
 

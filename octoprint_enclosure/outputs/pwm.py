@@ -58,6 +58,9 @@ class PwmOutput(Output[PwmConfig]):
             Exception: If the PWM can't be started.
 
         """
+        if self._pwm is not None:
+            return
+
         pin = self.config.gpio_pin
         self._logger.debug("Starting PWM on pin %s at %s Hz", pin, self.config.pwm_frequency)
 

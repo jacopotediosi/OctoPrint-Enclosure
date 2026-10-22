@@ -67,6 +67,14 @@ class FilamentAutomation(Automation[FilamentConfig]):
         """The GPIO input of the filament sensor, with the edge that means that the filament is missing."""
         return self._trigger
 
+    @override
+    def has_same_config(self, other: Automation) -> bool:
+        return (
+            isinstance(other, FilamentAutomation)
+            and super().has_same_config(other)
+            and other.trigger.config == self.trigger.config
+        )
+
     @classmethod
     @override
     def from_settings(cls, settings: dict, logger: logging.Logger) -> Self:

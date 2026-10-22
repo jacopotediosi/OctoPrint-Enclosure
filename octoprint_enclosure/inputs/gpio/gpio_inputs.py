@@ -72,6 +72,19 @@ class GpioInputs:
         self._logger = logger.getChild("GpioInputs")
         self._gpio_inputs = {}
 
+        self.reload(gpio_inputs_settings)
+
+    def reload(self, gpio_inputs_settings: Iterable[dict]) -> None:
+        """Set up some GPIO inputs again, after their settings changed.
+
+        An input whose settings didn't change is kept as it is.
+
+        Args:
+            gpio_inputs_settings (Iterable[dict]): The settings of the GPIO inputs.
+
+        """
+        gpio_inputs: dict[int, GpioInput | _InvalidGpioInput] = {}
+
         for gpio_input_settings in gpio_inputs_settings:
             try:
                 gpio_input_config = GpioInputConfig.from_settings(gpio_input_settings)
@@ -81,7 +94,9 @@ class GpioInputs:
 
             gpio_input = self._create_gpio_input(gpio_input_config.index_id, gpio_input_settings)
 
-            self._gpio_inputs[gpio_input_config.index_id] = gpio_input
+            gpio_inputs[gpio_input_config.index_id] = gpio_input
+
+        self._gpio_inputs = gpio_inputs
 
     def get(self, index_id: int) -> GpioInput:
         """Get a GPIO input.
@@ -176,6 +191,11 @@ class GpioInputs:
             gpio_config = GpioInput.config_class.from_settings(gpio_input_settings)
         except ValueError as error:
             return self._create_invalid_gpio_input(index_id, f"Invalid settings: {error}")
+
+        # An input whose settings didn't change is kept as it is
+        gpio_input = self._gpio_inputs.get(index_id)
+        if isinstance(gpio_input, GpioInput) and gpio_input.config == gpio_config:
+            return gpio_input
 
         return GpioInput(gpio_config, self._gpio, self._get_gpio_input_logger(index_id))
 

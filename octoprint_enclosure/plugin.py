@@ -72,11 +72,9 @@ class EnclosurePlugin(
     actions = []
     automations = []
     waiting_temperature = set()
-    rpi_outputs_not_changed = []
     event_queue = []
     temperature_sensor_data = []
     failing_sensors = set()
-    sensors_lock = threading.Lock()
     print_complete = False
     development_mode = False
 
@@ -163,7 +161,6 @@ class EnclosurePlugin(
         self._mqtt.load_helpers()
 
         self.event_queue = []
-        self.rpi_outputs_not_changed = []
         self.rpi_inputs = self._enclosure_settings.rpi_inputs
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
         self.actions = self._enclosure_settings.actions
@@ -633,15 +630,28 @@ class EnclosurePlugin(
     def configure_sensors(self):
         self._sensors = Sensors(self.get_sensor_inputs(), self._logger, dummy=self.development_mode)
 
+    def get_gpio_inputs(self):
+        return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "gpio"]
+
     def configure_gpio_inputs(self):
-        gpio_inputs = [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "gpio"]
-        self._gpio_inputs = GpioInputs(gpio_inputs, self._gpio, self.handle_gpio_input, self._logger)
+        self._gpio_inputs = GpioInputs(self.get_gpio_inputs(), self._gpio, self.handle_gpio_input, self._logger)
 
     def configure_outputs(self):
         self._outputs = Outputs(self.rpi_outputs, self._gpio, self._i2c, self._logger)
+        self.set_temp_hum_control_targets()
+
+    def set_temp_hum_control_targets(self, outputs_not_changed=()):
         for rpi_output in self.rpi_outputs:
             if rpi_output["output_type"] == "temp_hum_control":
-                self.set_temp_hum_control_target(to_int(rpi_output["index_id"]), rpi_output.get("temp_ctr_set_value"))
+                index_id = to_int(rpi_output["index_id"])
+                # A control kept as it was by a settings save keeps its target
+                try:
+                    control = self._outputs.get(index_id, TempHumControlOutput)
+                except OutputError:
+                    control = None
+                if control in outputs_not_changed:
+                    continue
+                self.set_temp_hum_control_target(index_id, rpi_output.get("temp_ctr_set_value"))
 
     def link_dummy_sensors(self):
         for control in self._outputs.get_all(TempHumControlOutput):
@@ -681,14 +691,12 @@ class EnclosurePlugin(
 
     def check_enclosure_temp(self):
         try:
-            with self.sensors_lock:
-                sensor_inputs = self.get_sensor_inputs()
-                sensors = self._sensors
+            sensor_inputs = self.get_sensor_inputs()
 
             sensor_data = []
             for sensor in sensor_inputs:
                 try:
-                    reading = sensors.read(sensor["index_id"])
+                    reading = self._sensors.read(sensor["index_id"])
                 except Exception as error:
                     self.handle_sensor_failure(sensor, error)
                     sensor["temp_sensor_temp"] = ""
@@ -1006,10 +1014,11 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error setting up GPIO mode")
 
-    def clear_gpio(self):
+    def clear_gpio(self, removed_outputs):
         try:
-            for gpio_out in list(
-                filter(
+            pins_in_use = [
+                to_int(gpio_out["gpio_pin"])
+                for gpio_out in filter(
                     lambda item: (
                         (
                             item["output_type"] == "regular"
@@ -1020,11 +1029,19 @@ class EnclosurePlugin(
                         and not item["gpio_i2c_enabled"]
                     ),
                     self.rpi_outputs,
-                ),
-            ):
-                gpio_pin = to_int(gpio_out["gpio_pin"])
-                if gpio_pin not in self.rpi_outputs_not_changed:
-                    self._gpio.cleanup(gpio_pin)
+                )
+            ]
+
+            # The pin of an output dropped by a settings save is released, unless another output drives it
+            for output in removed_outputs:
+                if isinstance(output, PwmOutput):
+                    output.stop()
+                if isinstance(output, (RegularOutput, TempHumControlOutput)) and output.config.gpio_i2c_enabled:
+                    continue
+                if isinstance(output, (RegularOutput, TempHumControlOutput, PwmOutput, NeopixelDirectOutput)):
+                    gpio_pin = output.config.gpio_pin
+                    if gpio_pin not in pins_in_use:
+                        self._gpio.cleanup(gpio_pin)
 
             self._gpio_inputs.clear()
         except Exception:
@@ -1037,18 +1054,19 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error clearing channel %s", channel)
 
-    def configure_gpio(self):
+    def configure_gpio(self, outputs_not_changed=()):
         try:
             for regular_output in self._outputs.get_all(RegularOutput):
-                if regular_output.config.gpio_pin not in self.rpi_outputs_not_changed:
+                if regular_output not in outputs_not_changed:
                     regular_output.setup_pin()
             for temp_hum_control in self._outputs.get_all(TempHumControlOutput):
-                if temp_hum_control.config.gpio_pin not in self.rpi_outputs_not_changed:
+                if temp_hum_control not in outputs_not_changed:
                     temp_hum_control.setup_pin()
             for pwm_output in self._outputs.get_all(PwmOutput):
                 pwm_output.start()
             for neopixel_output in self._outputs.get_all(NeopixelDirectOutput):
-                self.clear_channel(neopixel_output.config.gpio_pin)
+                if neopixel_output not in outputs_not_changed:
+                    self.clear_channel(neopixel_output.config.gpio_pin)
 
             self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
 
@@ -1077,10 +1095,13 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error handling filament detection of input %s", input_id)
 
-    def start_filament_detection(self):
-        self.stop_filament_detection()
+    def start_filament_detection(self, automations_not_changed=()):
         try:
             for filament_automation in self._automations.get_all(FilamentAutomation):
+                # An automation kept as it was by a settings save goes on detecting as it is
+                if filament_automation in automations_not_changed:
+                    continue
+                filament_automation.disarm()
                 input_id = filament_automation.trigger.config.input
                 try:
                     level = self._gpio_inputs.get(input_id).read_pin_level()
@@ -1266,11 +1287,6 @@ class EnclosurePlugin(
             self._logger.debug("Can't write PWM on output %s: %s", index_id, error)
         except Exception:
             self._logger.exception("Error writing PWM on output %s", index_id)
-
-    def get_output_list(self):
-        return [
-            to_int(rpi_output["gpio_pin"]) for rpi_output in self.rpi_outputs if rpi_output["output_type"] == "regular"
-        ]
 
     # ~~ EventPlugin mixin
     def on_event(self, event, payload):
@@ -1495,36 +1511,29 @@ class EnclosurePlugin(
 
     # ~~ SettingsPlugin mixin
     def on_settings_save(self, data):
-        outputs_before_save = self.get_output_list()
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
-        for pwm_output in self._outputs.get_all(PwmOutput):
-            pwm_output.stop()
-        with self.sensors_lock:
-            self.rpi_inputs = self._enclosure_settings.rpi_inputs
-            self.configure_sensors()
+        self.rpi_inputs = self._enclosure_settings.rpi_inputs
+        self._sensors.reload(self.get_sensor_inputs())
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
-        self.configure_outputs()
+        outputs_not_changed, removed_outputs = self._outputs.reload(self.rpi_outputs)
+        self.set_temp_hum_control_targets(outputs_not_changed)
         if self.development_mode:
             self.link_dummy_sensors()
         self.actions = self._enclosure_settings.actions
-        self.configure_actions()
+        self._actions.reload(self.actions)
         self.automations = self._enclosure_settings.automations
-        self.configure_automations()
-        outputs_after_save = self.get_output_list()
-
-        common_pins = list(set(outputs_before_save) & set(outputs_after_save))
-
-        for pin in (pin for pin in outputs_before_save if pin not in common_pins):
-            self.clear_channel(pin)
-
-        self.rpi_outputs_not_changed = common_pins
-        self.clear_gpio()
-        self.configure_gpio_inputs()
+        automations_not_changed, _ = self._automations.reload(self.automations)
+        self.clear_gpio(removed_outputs)
+        self._gpio_inputs.reload(self.get_gpio_inputs())
 
         self._logger.debug("rpi_inputs: %s", self.rpi_inputs)
         self._logger.debug("rpi_outputs: %s", self.rpi_outputs)
         self.setup_gpio()
-        self.configure_gpio()
+        self.configure_gpio(outputs_not_changed)
+
+        # A filament automation added or changed during a print starts detecting now
+        if self._printer.is_printing():
+            self.start_filament_detection(automations_not_changed)
 
     def get_settings_defaults(self):
         return {

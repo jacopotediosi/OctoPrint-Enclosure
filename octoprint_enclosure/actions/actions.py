@@ -52,6 +52,12 @@ class _InvalidAction(Action[BaseConfig]):
 class Actions:
     """The actions."""
 
+    _printer: PrinterInterface
+    """The OctoPrint printer interface."""
+
+    _frontend: Frontend
+    """The frontend handler."""
+
     _logger: logging.Logger
 
     _actions: dict[int, Action]
@@ -73,8 +79,23 @@ class Actions:
             logger (logging.Logger): The logger to write to.
 
         """
+        self._printer = printer
+        self._frontend = frontend
         self._logger = logger.getChild("Actions")
         self._actions = {}
+
+        self.reload(actions_settings)
+
+    def reload(self, actions_settings: Iterable[dict]) -> None:
+        """Set up some actions again, after their settings changed.
+
+        An action whose settings didn't change is kept as it is.
+
+        Args:
+            actions_settings (Iterable[dict]): The settings of the actions.
+
+        """
+        actions: dict[int, Action] = {}
 
         for action_settings in actions_settings:
             try:
@@ -88,13 +109,13 @@ class Actions:
                 action: Action = self._create_invalid_action(
                     action_config.index_id,
                     f"Unsupported action type: {action_config.action_type!r}",
-                    printer,
-                    frontend,
                 )
             else:
-                action = self._create_action(action_class, action_config.index_id, action_settings, printer, frontend)
+                action = self._create_action(action_class, action_config.index_id, action_settings)
 
-            self._actions[action_config.index_id] = action
+            actions[action_config.index_id] = action
+
+        self._actions = actions
 
     def get(self, index_id: int, action_class: type[_ActionT]) -> _ActionT:
         """Get an action.
@@ -142,26 +163,28 @@ class Actions:
         action_class: type[_ActionT],
         index_id: int,
         action_settings: dict,
-        printer: PrinterInterface,
-        frontend: Frontend,
     ) -> _ActionT | _InvalidAction:
         try:
             action_config = action_class.config_class.from_settings(action_settings)
         except ValueError as error:
-            return self._create_invalid_action(index_id, f"Invalid settings: {error}", printer, frontend)
+            return self._create_invalid_action(index_id, f"Invalid settings: {error}")
 
-        return action_class(action_config, printer, frontend, self._get_action_logger(action_class, index_id))
+        # An action whose settings didn't change is kept as it is
+        action = self._actions.get(index_id)
+        if isinstance(action, action_class) and action.config == action_config:
+            return action
 
-    def _create_invalid_action(
-        self,
-        index_id: int,
-        reason: str,
-        printer: PrinterInterface,
-        frontend: Frontend,
-    ) -> _InvalidAction:
+        return action_class(
+            action_config,
+            self._printer,
+            self._frontend,
+            self._get_action_logger(action_class, index_id),
+        )
+
+    def _create_invalid_action(self, index_id: int, reason: str) -> _InvalidAction:
         logger = self._get_action_logger(_InvalidAction, index_id)
         logger.warning("%s", reason)
-        return _InvalidAction(reason, printer, frontend, logger)
+        return _InvalidAction(reason, self._printer, self._frontend, logger)
 
     def _get_action_logger(self, action_class: type[Action], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{action_class.__name__}.{index_id}")

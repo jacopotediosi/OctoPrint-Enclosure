@@ -45,6 +45,18 @@ class Automation(Generic[_ConfigT]):
         """What starts the automation, or None if no trigger does."""
         return None
 
+    def has_same_config(self, other: Automation) -> bool:
+        """Check whether another automation has the same configuration.
+
+        Args:
+            other (Automation): The other automation.
+
+        Returns:
+            bool: Whether the other automation is of the same type and has the same configuration.
+
+        """
+        return type(other) is type(self) and other.config == self.config
+
     @classmethod
     def from_settings(cls, settings: dict, logger: logging.Logger) -> Self:
         """Create the automation from its settings.

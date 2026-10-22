@@ -62,6 +62,17 @@ class RuleAutomation(Automation[RuleConfig]):
         """What starts the rule."""
         return self._trigger
 
+    @override
+    def has_same_config(self, other: Automation) -> bool:
+        return (
+            isinstance(other, RuleAutomation)
+            and super().has_same_config(other)
+            and type(other.trigger) is type(self.trigger)
+            and other.trigger.config == self.trigger.config
+            and type(other.reaction) is type(self.reaction)
+            and other.reaction.config == self.reaction.config
+        )
+
     @classmethod
     @override
     def from_settings(cls, settings: dict, logger: logging.Logger) -> Self:

@@ -50,6 +50,12 @@ class _InvalidOutput(Output[BaseConfig]):
 class Outputs:
     """The outputs that drive a device."""
 
+    _gpio: GpioBackend
+    """The GPIO backend."""
+
+    _i2c: I2cBackend
+    """The I2C backend."""
+
     _logger: logging.Logger
 
     _outputs: dict[int, Output]
@@ -71,8 +77,27 @@ class Outputs:
             logger (logging.Logger): The logger to write to.
 
         """
+        self._gpio = gpio
+        self._i2c = i2c
         self._logger = logger.getChild("Outputs")
         self._outputs = {}
+
+        self.reload(outputs_settings)
+
+    def reload(self, outputs_settings: Iterable[dict]) -> tuple[list[Output], list[Output]]:
+        """Set up some outputs again, after their settings changed.
+
+        An output whose settings didn't change is kept as it is, with its state and the hardware it drives.
+
+        Args:
+            outputs_settings (Iterable[dict]): The settings of the outputs.
+
+        Returns:
+            tuple[list[Output], list[Output]]: The outputs kept as they were, and the ones dropped, which still drive
+                their hardware until it's released.
+
+        """
+        outputs: dict[int, Output] = {}
 
         for output_settings in outputs_settings:
             try:
@@ -86,13 +111,17 @@ class Outputs:
                 output: Output = self._create_invalid_output(
                     output_config.index_id,
                     f"Unsupported output type: {output_config.output_type!r}",
-                    gpio,
-                    i2c,
                 )
             else:
-                output = self._create_output(output_class, output_config.index_id, output_settings, gpio, i2c)
+                output = self._create_output(output_class, output_config.index_id, output_settings)
 
-            self._outputs[output_config.index_id] = output
+            outputs[output_config.index_id] = output
+
+        outputs_kept = [output for output in outputs.values() if output in self._outputs.values()]
+        outputs_dropped = [output for output in self._outputs.values() if output not in outputs.values()]
+        self._outputs = outputs
+
+        return outputs_kept, outputs_dropped
 
     def get(self, index_id: int, output_class: type[_OutputT]) -> _OutputT:
         """Get an output.
@@ -155,20 +184,23 @@ class Outputs:
         output_class: type[_OutputT],
         index_id: int,
         output_settings: dict,
-        gpio: GpioBackend,
-        i2c: I2cBackend,
     ) -> _OutputT | _InvalidOutput:
         try:
             output_config = output_class.config_class.from_settings(output_settings)
         except ValueError as error:
-            return self._create_invalid_output(index_id, f"Invalid settings: {error}", gpio, i2c)
+            return self._create_invalid_output(index_id, f"Invalid settings: {error}")
 
-        return output_class(output_config, gpio, i2c, self._get_output_logger(output_class, index_id))
+        # An output whose settings didn't change is kept, with its state and the hardware it drives
+        output = self._outputs.get(index_id)
+        if isinstance(output, output_class) and output.config == output_config:
+            return output
 
-    def _create_invalid_output(self, index_id: int, reason: str, gpio: GpioBackend, i2c: I2cBackend) -> _InvalidOutput:
+        return output_class(output_config, self._gpio, self._i2c, self._get_output_logger(output_class, index_id))
+
+    def _create_invalid_output(self, index_id: int, reason: str) -> _InvalidOutput:
         logger = self._get_output_logger(_InvalidOutput, index_id)
         logger.warning("%s", reason)
-        return _InvalidOutput(reason, gpio, i2c, logger)
+        return _InvalidOutput(reason, self._gpio, self._i2c, logger)
 
     def _get_output_logger(self, output_class: type[Output], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{output_class.__name__}.{index_id}")

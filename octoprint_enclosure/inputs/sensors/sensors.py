@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeVar
 
@@ -53,8 +54,14 @@ class Sensors:
 
     _logger: logging.Logger
 
+    _dummy: bool
+    """Whether every sensor is replaced by the dummy sensor."""
+
     _sensors: dict[int, Sensor]
     """The sensor of each input, by the id of the input."""
+
+    _lock: threading.Lock
+    """Held while the sensors are replaced, and while one is picked to be read."""
 
     def __init__(self, sensor_inputs_settings: Iterable[dict], logger: logging.Logger, *, dummy: bool) -> None:
         """Set up the sensors of some inputs.
@@ -66,7 +73,22 @@ class Sensors:
 
         """
         self._logger = logger.getChild("Sensors")
+        self._dummy = dummy
         self._sensors = {}
+        self._lock = threading.Lock()
+
+        self.reload(sensor_inputs_settings)
+
+    def reload(self, sensor_inputs_settings: Iterable[dict]) -> None:
+        """Set up the sensors of some inputs again, after their settings changed.
+
+        An input whose settings didn't change keeps its sensor as it is, with its state.
+
+        Args:
+            sensor_inputs_settings (Iterable[dict]): The settings of the inputs with a temperature sensor.
+
+        """
+        sensors: dict[int, Sensor] = {}
 
         for sensor_input_settings in sensor_inputs_settings:
             try:
@@ -75,7 +97,7 @@ class Sensors:
                 self._logger.warning("Invalid settings for an input with a temperature sensor: %s", error)
                 continue
 
-            sensor_class = DummySensor if dummy else SENSORS.get(sensor_input_config.temp_sensor_type)
+            sensor_class = DummySensor if self._dummy else SENSORS.get(sensor_input_config.temp_sensor_type)
             if sensor_class is None:
                 sensor: Sensor = self._create_invalid_sensor(
                     sensor_input_config.index_id,
@@ -84,7 +106,10 @@ class Sensors:
             else:
                 sensor = self._create_sensor(sensor_class, sensor_input_config.index_id, sensor_input_settings)
 
-            self._sensors[sensor_input_config.index_id] = sensor
+            sensors[sensor_input_config.index_id] = sensor
+
+        with self._lock:
+            self._sensors = sensors
 
     def read(self, index_id: int) -> Reading:
         """Read the sensor of an input.
@@ -99,7 +124,8 @@ class Sensors:
             Exception: If the sensor can't be read.
 
         """
-        sensor = self._sensors.get(index_id)
+        with self._lock:
+            sensor = self._sensors.get(index_id)
         if sensor is None:
             msg = "The sensor is not set up"
             raise SensorError(msg)
@@ -121,7 +147,8 @@ class Sensors:
             LookupError: If the input has no dummy sensor.
 
         """
-        sensor = self._sensors.get(index_id)
+        with self._lock:
+            sensor = self._sensors.get(index_id)
         if isinstance(sensor, DummySensor):
             return sensor
 
@@ -138,6 +165,11 @@ class Sensors:
             sensor_config = sensor_class.config_class.from_settings(input_settings)
         except ValueError as error:
             return self._create_invalid_sensor(index_id, f"Invalid settings: {error}")
+
+        # An input whose settings didn't change keeps its sensor, with its state
+        sensor = self._sensors.get(index_id)
+        if isinstance(sensor, sensor_class) and sensor.config == sensor_config:
+            return sensor
 
         return sensor_class(sensor_config, self._get_sensor_logger(sensor_class, index_id))
 
