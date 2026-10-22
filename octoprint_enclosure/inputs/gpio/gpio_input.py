@@ -8,7 +8,8 @@ from octoprint_enclosure.inputs.pull_resistor import PullResistor
 
 if TYPE_CHECKING:
     import logging
-    from types import ModuleType
+
+    from octoprint_enclosure.hardware import GpioBackend
 
 
 class GpioInputError(Exception):
@@ -35,17 +36,17 @@ class GpioInput:
     config: GpioConfig
     """The configuration of the input."""
 
-    _gpio: ModuleType
+    _gpio: GpioBackend
     """The GPIO backend."""
 
     _logger: logging.Logger
 
-    def __init__(self, config: GpioConfig, gpio: ModuleType, logger: logging.Logger) -> None:
+    def __init__(self, config: GpioConfig, gpio: GpioBackend, logger: logging.Logger) -> None:
         """Set up the input.
 
         Args:
             config (GpioConfig): The configuration of the input.
-            gpio (ModuleType): The GPIO backend.
+            gpio (GpioBackend): The GPIO backend.
             logger (logging.Logger): The logger to write to.
 
         """

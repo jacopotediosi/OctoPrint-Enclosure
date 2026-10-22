@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .i2c_backend import I2cBus
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -13,7 +15,7 @@ _registers: dict[tuple[int, int, int], int] = {}
 """The value of each register written so far, by bus, device address and register."""
 
 
-class SMBus:
+class SMBus(I2cBus):
     """A dummy I2C bus."""
 
     bus: int
@@ -29,36 +31,17 @@ class SMBus:
         self.bus = bus
 
     def __enter__(self) -> Self:
-        """Open the bus in a with statement."""
+        """Enter the with statement, returning the bus."""
         return self
 
     def __exit__(self, *exc_info: object) -> None:
         """Close the bus at the end of the with statement."""
 
     def write_i2c_block_data(self, i2c_addr: int, register: int, data: Sequence[int]) -> None:
-        """Write some bytes to a device, each one to the register after the previous one.
-
-        Args:
-            i2c_addr (int): The address of the device.
-            register (int): The register of the first byte.
-            data (Sequence[int]): The bytes to write.
-
-        """
         for offset, value in enumerate(data):
             _registers[(self.bus, i2c_addr, register + offset)] = value
 
     def read_i2c_block_data(self, i2c_addr: int, register: int, length: int) -> list[int]:
-        """Read some bytes from a device, each one from the register after the previous one.
-
-        Args:
-            i2c_addr (int): The address of the device.
-            register (int): The register of the first byte.
-            length (int): How many bytes to read.
-
-        Returns:
-            list[int]: The bytes read, 0 for a register never written.
-
-        """
         return [_registers.get((self.bus, i2c_addr, register + offset), 0) for offset in range(length)]
 
 

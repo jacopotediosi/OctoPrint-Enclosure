@@ -13,7 +13,8 @@ from .registry import OUTPUTS
 if TYPE_CHECKING:
     import logging
     from collections.abc import Iterable
-    from types import ModuleType
+
+    from octoprint_enclosure.hardware import GpioBackend, I2cBackend
 
 _OutputT = TypeVar("_OutputT", bound=Output)
 
@@ -37,7 +38,7 @@ class _InvalidOutput(Output[BaseConfig]):
     reason: str
     """Why the output can't be set up."""
 
-    def __init__(self, reason: str, gpio: ModuleType, i2c: ModuleType, logger: logging.Logger) -> None:
+    def __init__(self, reason: str, gpio: GpioBackend, i2c: I2cBackend, logger: logging.Logger) -> None:
         super().__init__(BaseConfig(), gpio, i2c, logger)
         self.reason = reason
 
@@ -57,16 +58,16 @@ class Outputs:
     def __init__(
         self,
         outputs_settings: Iterable[dict],
-        gpio: ModuleType,
-        i2c: ModuleType,
+        gpio: GpioBackend,
+        i2c: I2cBackend,
         logger: logging.Logger,
     ) -> None:
         """Set up some outputs.
 
         Args:
             outputs_settings (Iterable[dict]): The settings of the outputs.
-            gpio (ModuleType): The GPIO backend, with the API of RPi.GPIO.
-            i2c (ModuleType): The I2C backend, with the API of smbus2.
+            gpio (GpioBackend): The GPIO backend, with the API of RPi.GPIO.
+            i2c (I2cBackend): The I2C backend, with the API of smbus2.
             logger (logging.Logger): The logger to write to.
 
         """
@@ -154,8 +155,8 @@ class Outputs:
         output_class: type[_OutputT],
         index_id: int,
         output_settings: dict,
-        gpio: ModuleType,
-        i2c: ModuleType,
+        gpio: GpioBackend,
+        i2c: I2cBackend,
     ) -> _OutputT | _InvalidOutput:
         try:
             output_config = output_class.config_class.from_settings(output_settings)
@@ -164,7 +165,7 @@ class Outputs:
 
         return output_class(output_config, gpio, i2c, self._get_output_logger(output_class, index_id))
 
-    def _create_invalid_output(self, index_id: int, reason: str, gpio: ModuleType, i2c: ModuleType) -> _InvalidOutput:
+    def _create_invalid_output(self, index_id: int, reason: str, gpio: GpioBackend, i2c: I2cBackend) -> _InvalidOutput:
         logger = self._get_output_logger(_InvalidOutput, index_id)
         logger.warning("%s", reason)
         return _InvalidOutput(reason, gpio, i2c, logger)

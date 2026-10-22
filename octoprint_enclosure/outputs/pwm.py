@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
@@ -12,7 +12,8 @@ from .base import Output, OutputError
 
 if TYPE_CHECKING:
     import logging
-    from types import ModuleType
+
+    from octoprint_enclosure.hardware import GpioBackend, GpioPwm, I2cBackend
 
 
 @dataclass(frozen=True)
@@ -34,13 +35,13 @@ class PwmOutput(Output[PwmConfig]):
 
     config_class = PwmConfig
 
-    _pwm: Any
+    _pwm: GpioPwm | None
     """The PWM of the GPIO backend, or None if it isn't started."""
 
     _duty_cycle: float
     """The duty cycle of the PWM, from 0 to 100."""
 
-    def __init__(self, config: PwmConfig, gpio: ModuleType, i2c: ModuleType, logger: logging.Logger) -> None:
+    def __init__(self, config: PwmConfig, gpio: GpioBackend, i2c: I2cBackend, logger: logging.Logger) -> None:
         super().__init__(config, gpio, i2c, logger)
         self._pwm = None
         self._duty_cycle = config.default_duty_cycle

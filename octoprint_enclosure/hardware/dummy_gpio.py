@@ -5,14 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .gpio_backend import GpioPwm
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from typing_extensions import Final, Literal, TypeAlias
+    from typing_extensions import Final
 
-    _PinNumbering: TypeAlias = Literal[10, 11]  # BOARD or BCM
-    _Direction: TypeAlias = Literal[0, 1]  # OUT or IN
-    _Level: TypeAlias = Literal[0, 1] | bool  # LOW or HIGH, or False or True
+    from .gpio_backend import Channel, Direction, Level, PinNumbering
 
 HIGH: Final = 1
 LOW: Final = 0
@@ -35,7 +35,7 @@ BOTH: Final = 33
 class _PinState:
     """The state of the dummy pins."""
 
-    mode: _PinNumbering | None
+    mode: PinNumbering | None
     levels: dict[int, int]
     event_edges: dict[int, int]
     event_callbacks: dict[int, Callable[[int], object] | None]
@@ -52,11 +52,11 @@ class _PinState:
         self.pwms = {}
 
 
-class PWM:
+class PWM(GpioPwm):
     """Dummy software PWM on a pin."""
 
     def __init__(self, channel: int, frequency: float) -> None:
-        """Set up the PWM,.
+        """Set up the PWM.
 
         Args:
             channel (int): The pin the PWM runs on.
@@ -70,16 +70,13 @@ class PWM:
         _pin_state.pwms[channel] = self
 
     def start(self, dutycycle: float) -> None:
-        """Start the PWM with a duty cycle, from 0 to 100."""
         self.duty_cycle = dutycycle
         self.running = True
 
     def ChangeDutyCycle(self, dutycycle: float) -> None:  # noqa: N802 - same name as RPi.GPIO.PWM.ChangeDutyCycle
-        """Change the duty cycle, from 0 to 100."""
         self.duty_cycle = dutycycle
 
     def stop(self) -> None:
-        """Stop the PWM."""
         self.running = False
 
 
@@ -100,7 +97,7 @@ class PinStatus:
 _pin_state = _PinState()
 
 
-def _as_list(channel: int | list[int] | tuple[int, ...]) -> list[int]:
+def _as_list(channel: Channel) -> list[int]:
     return list(channel) if isinstance(channel, (list, tuple)) else [channel]
 
 
@@ -108,20 +105,15 @@ def setwarnings(gpio_warnings: bool) -> None:  # noqa: FBT001 - same signature a
     pass
 
 
-def setmode(mode: _PinNumbering) -> None:
+def setmode(mode: PinNumbering) -> None:
     _pin_state.mode = mode
 
 
-def getmode() -> _PinNumbering | None:
+def getmode() -> PinNumbering | None:
     return _pin_state.mode
 
 
-def setup(
-    channel: int | list[int] | tuple[int, ...],
-    direction: _Direction,
-    pull_up_down: int = PUD_OFF,
-    initial: int = -1,
-) -> None:
+def setup(channel: Channel, direction: Direction, pull_up_down: int = PUD_OFF, initial: int = -1) -> None:
     for pin in _as_list(channel):
         if direction == OUT:
             _pin_state.levels[pin] = _pin_state.levels.get(pin, LOW) if initial == -1 else (HIGH if initial else LOW)
@@ -129,10 +121,7 @@ def setup(
             _pin_state.levels[pin] = HIGH if pull_up_down == PUD_UP else LOW
 
 
-def output(
-    channel: int | list[int] | tuple[int, ...],
-    value: _Level | list[_Level] | tuple[_Level, ...],
-) -> None:
+def output(channel: Channel, value: Level | list[Level] | tuple[Level, ...]) -> None:
     pins = _as_list(channel)
     values = list(value) if isinstance(value, (list, tuple)) else [value] * len(pins)
     for pin, pin_value in zip(pins, values):
@@ -143,7 +132,7 @@ def input(channel: int) -> int:  # noqa: A001 - same name as RPi.GPIO.input
     return _pin_state.levels.get(channel, LOW)
 
 
-def cleanup(channel: int | list[int] | tuple[int, ...] | None = None) -> None:
+def cleanup(channel: Channel | None = None) -> None:
     if channel is None:
         _pin_state.reset()
         return

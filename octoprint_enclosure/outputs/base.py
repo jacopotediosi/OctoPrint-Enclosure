@@ -7,7 +7,8 @@ from octoprint_enclosure.core import BaseConfig
 
 if TYPE_CHECKING:
     import logging
-    from types import ModuleType
+
+    from octoprint_enclosure.hardware import GpioBackend, I2cBackend
 
 _ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
 
@@ -25,21 +26,21 @@ class Output(ABC, Generic[_ConfigT]):
     config: _ConfigT
     """The configuration of the output."""
 
-    _gpio: ModuleType
+    _gpio: GpioBackend
     """The GPIO backend."""
 
-    _i2c: ModuleType
+    _i2c: I2cBackend
     """The I2C backend."""
 
     _logger: logging.Logger
 
-    def __init__(self, config: _ConfigT, gpio: ModuleType, i2c: ModuleType, logger: logging.Logger) -> None:
+    def __init__(self, config: _ConfigT, gpio: GpioBackend, i2c: I2cBackend, logger: logging.Logger) -> None:
         """Set up the output.
 
         Args:
             config (_ConfigT): The configuration of the output.
-            gpio (ModuleType): The GPIO backend.
-            i2c (ModuleType): The I2C backend.
+            gpio (GpioBackend): The GPIO backend.
+            i2c (I2cBackend): The I2C backend.
             logger (logging.Logger): The logger to write to.
 
         """

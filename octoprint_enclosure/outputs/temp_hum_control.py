@@ -10,7 +10,8 @@ from .switch import SwitchConfig, SwitchOutput
 
 if TYPE_CHECKING:
     import logging
-    from types import ModuleType
+
+    from octoprint_enclosure.hardware import GpioBackend, I2cBackend
 
 
 class TempHumControlType(Enum):
@@ -63,13 +64,19 @@ class TempHumControlOutput(SwitchOutput[TempHumControlConfig]):
     _status: TempHumControlStatus
     """What the control is doing."""
 
-    def __init__(self, config: TempHumControlConfig, gpio: ModuleType, i2c: ModuleType, logger: logging.Logger) -> None:
+    def __init__(
+        self,
+        config: TempHumControlConfig,
+        gpio: GpioBackend,
+        i2c: I2cBackend,
+        logger: logging.Logger,
+    ) -> None:
         """Set up the temperature or humidity output control.
 
         Args:
             config (TempHumControlConfig): The configuration of the output control.
-            gpio (ModuleType): The GPIO backend.
-            i2c (ModuleType): The I2C backend.
+            gpio (GpioBackend): The GPIO backend.
+            i2c (I2cBackend): The I2C backend.
             logger (logging.Logger): The logger to write to.
 
         """

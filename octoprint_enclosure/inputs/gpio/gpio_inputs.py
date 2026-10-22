@@ -12,7 +12,8 @@ from .gpio_input import GpioInput, GpioInputError
 if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Collection, Iterable, Mapping
-    from types import ModuleType
+
+    from octoprint_enclosure.hardware import GpioBackend
 
 BOUNCE_TIME_MS = 200
 
@@ -38,7 +39,7 @@ class _InvalidGpioInput:
 class GpioInputs:
     """The GPIO inputs."""
 
-    _gpio: ModuleType
+    _gpio: GpioBackend
     """The GPIO backend."""
 
     _on_edge: Callable[[int, int], object]
@@ -52,7 +53,7 @@ class GpioInputs:
     def __init__(
         self,
         gpio_inputs_settings: Iterable[dict],
-        gpio: ModuleType,
+        gpio: GpioBackend,
         on_edge: Callable[[int, int], object],
         logger: logging.Logger,
     ) -> None:
@@ -60,7 +61,7 @@ class GpioInputs:
 
         Args:
             gpio_inputs_settings (Iterable[dict]): The settings of the GPIO inputs.
-            gpio (ModuleType): The GPIO backend, with the API of RPi.GPIO.
+            gpio (GpioBackend): The GPIO backend, with the API of RPi.GPIO.
             on_edge (Callable[[int, int], object]): The function called when an edge is detected on the pin of an
                 input, with the id of the input and the level of the pin, 1 if high or 0 if low.
             logger (logging.Logger): The logger to write to.
