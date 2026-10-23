@@ -1,4 +1,4 @@
-from .base import OutputError
+from .base import Output, OutputError
 from .ledstrip import LedstripOutput
 from .neopixel_direct import NeopixelDirectOutput
 from .neopixel_indirect import NeopixelIndirectOutput
@@ -11,6 +11,7 @@ __all__ = [
     "LedstripOutput",
     "NeopixelDirectOutput",
     "NeopixelIndirectOutput",
+    "Output",
     "OutputError",
     "Outputs",
     "PwmOutput",

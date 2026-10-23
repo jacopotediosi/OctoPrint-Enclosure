@@ -60,16 +60,13 @@ class Automations:
         self._logger = logger.getChild("Automations")
         self._automations = {}
 
-    def load(self, automations_settings: Iterable[dict]) -> tuple[list[Automation], list[Automation]]:
+    def load(self, automations_settings: Iterable[dict]) -> None:
         """Load some automations from their settings.
 
         An automation whose settings didn't change is kept as it is, with its state.
 
         Args:
             automations_settings (Iterable[dict]): The settings of the automations.
-
-        Returns:
-            tuple[list[Automation], list[Automation]]: The automations kept as they were, and the ones dropped.
 
         """
         automations: dict[int, Automation] = {}
@@ -92,11 +89,7 @@ class Automations:
 
             automations[automation_config.index_id] = automation
 
-        automations_kept = [item for item in automations.values() if item in self._automations.values()]
-        automations_dropped = [item for item in self._automations.values() if item not in automations.values()]
         self._automations = automations
-
-        return automations_kept, automations_dropped
 
     def get(self, index_id: int, automation_class: type[_AutomationT]) -> _AutomationT:
         """Get an automation.

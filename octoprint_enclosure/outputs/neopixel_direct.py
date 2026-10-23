@@ -39,6 +39,11 @@ class NeopixelDirectOutput(ColorOutput[NeopixelDirectConfig]):
 
     config_class = NeopixelDirectConfig
 
+    @property
+    @override
+    def gpio_pins(self) -> frozenset[int]:
+        return frozenset({self.config.gpio_pin})
+
     @override
     def _write_color(self, red: int, green: int, blue: int) -> None:
         config = self.config

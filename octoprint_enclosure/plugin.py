@@ -40,6 +40,7 @@ from .outputs import (
     LedstripOutput,
     NeopixelDirectOutput,
     NeopixelIndirectOutput,
+    Output,
     OutputError,
     Outputs,
     PwmOutput,
@@ -1062,39 +1063,6 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error setting up GPIO mode")
 
-    def clear_gpio(self, removed_outputs):
-        try:
-            pins_in_use = [
-                to_int(gpio_out["gpio_pin"])
-                for gpio_out in filter(
-                    lambda item: (
-                        (
-                            item["output_type"] == "regular"
-                            or item["output_type"] == "pwm"
-                            or item["output_type"] == "temp_hum_control"
-                            or item["output_type"] == "neopixel_direct"
-                        )
-                        and not item["gpio_i2c_enabled"]
-                    ),
-                    self.rpi_outputs,
-                )
-            ]
-
-            # The pin of an output dropped by a settings save is released, unless another output drives it
-            for output in removed_outputs:
-                if isinstance(output, PwmOutput):
-                    output.stop()
-                if isinstance(output, (RegularOutput, TempHumControlOutput)) and output.config.gpio_i2c_enabled:
-                    continue
-                if isinstance(output, (RegularOutput, TempHumControlOutput, PwmOutput, NeopixelDirectOutput)):
-                    gpio_pin = output.config.gpio_pin
-                    if gpio_pin not in pins_in_use:
-                        self._gpio.cleanup(gpio_pin)
-
-            self._gpio_inputs.clear()
-        except Exception:
-            self._logger.exception("Error clearing GPIO")
-
     def clear_channel(self, channel):
         try:
             self._gpio.cleanup(to_int(channel))
@@ -1527,27 +1495,54 @@ class EnclosurePlugin(
 
     # ~~ SettingsPlugin mixin
     def on_settings_save(self, data):
+        # Save the settings
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
+
+        # Read from the saved settings
         self.rpi_inputs = self._enclosure_settings.rpi_inputs
+        self._logger.debug("New rpi_inputs: %s", self.rpi_inputs)
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
+        self._logger.debug("New rpi_outputs: %s", self.rpi_outputs)
+        self.actions = self._enclosure_settings.actions
+        self._logger.debug("New actions: %s", self.actions)
+        self.automations = self._enclosure_settings.automations
+        self._logger.debug("New automations: %s", self.automations)
+
+        # Update the sensor poller
         self._sensor_poller.load(self.get_sensor_inputs())
-        outputs_not_changed, removed_outputs = self._outputs.load(self.rpi_outputs)
+
+        # Update outputs
+        outputs_before = self._outputs.get_all(Output)
+        self._outputs.load(self.rpi_outputs)
+        outputs_not_changed = [output for output in self._outputs.get_all(Output) if output in outputs_before]
         self.set_temp_hum_control_targets(outputs_not_changed)
+
+        # Link outputs to dummy sensors
         if self.development_mode:
             self.link_dummy_sensors()
-        self.actions = self._enclosure_settings.actions
-        self._actions.load(self.actions)
-        self.automations = self._enclosure_settings.automations
-        automations_not_changed, _ = self._automations.load(self.automations)
-        self.clear_gpio(removed_outputs)
-        self._gpio_inputs.load(self.get_gpio_inputs())
 
-        self._logger.debug("rpi_inputs: %s", self.rpi_inputs)
-        self._logger.debug("rpi_outputs: %s", self.rpi_outputs)
+        # Update actions
+        self._actions.load(self.actions)
+
+        # Update automations
+        filament_automations_before = self._automations.get_all(FilamentAutomation)
+        self._automations.load(self.automations)
+        automations_not_changed = [
+            automation
+            for automation in self._automations.get_all(FilamentAutomation)
+            if automation in filament_automations_before
+        ]
+
+        # Restart GPIO
+        try:
+            self._gpio_inputs.clear()
+        except Exception:
+            self._logger.exception("Error clearing GPIO")
+        self._gpio_inputs.load(self.get_gpio_inputs())
         self.setup_gpio()
         self.configure_gpio(outputs_not_changed)
 
-        # A filament automation added or changed during a print starts detecting now
+        # Start a filament automation added or changed during a print
         if self._printer.is_printing():
             self.start_filament_detection(automations_not_changed)
 

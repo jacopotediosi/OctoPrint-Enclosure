@@ -75,21 +75,20 @@ class Outputs:
         self._logger = logger.getChild("Outputs")
         self._outputs = {}
 
-    def load(self, outputs_settings: Iterable[dict]) -> tuple[list[Output], list[Output]]:
+    def load(self, outputs_settings: Iterable[dict]) -> None:
         """Load some outputs from their settings.
 
         An output whose settings didn't change is kept as it is, with its state and the hardware it drives.
+        An output that is gone, or whose settings changed, is stopped, and its pins are released unless another
+        output drives them.
 
         Args:
             outputs_settings (Iterable[dict]): The settings of the outputs.
 
-        Returns:
-            tuple[list[Output], list[Output]]: The outputs kept as they were, and the ones dropped, which still drive
-                their hardware until it's released.
-
         """
         outputs: dict[int, Output] = {}
 
+        # Create new outputs
         for output_settings in outputs_settings:
             try:
                 output_config = OutputConfig.from_settings(output_settings)
@@ -108,11 +107,20 @@ class Outputs:
 
             outputs[output_config.index_id] = output
 
-        outputs_kept = [output for output in outputs.values() if output in self._outputs.values()]
-        outputs_dropped = [output for output in self._outputs.values() if output not in outputs.values()]
+        outputs_before = self._outputs
         self._outputs = outputs
 
-        return outputs_kept, outputs_dropped
+        # Stop unused hardware and clear unused GPIO pins
+        pins_in_use = {pin for output in outputs.values() for pin in output.gpio_pins}
+        for index_id, output in outputs_before.items():
+            if output in outputs.values():
+                continue
+            try:
+                output.stop()
+                for pin in output.gpio_pins - pins_in_use:
+                    self._gpio.cleanup(pin)
+            except Exception:
+                self._logger.exception("Error releasing the hardware of output %s", index_id)
 
     def get(self, index_id: int, output_class: type[_OutputT]) -> _OutputT:
         """Get an output.

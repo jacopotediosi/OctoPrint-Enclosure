@@ -51,6 +51,11 @@ class PwmOutput(Output[PwmConfig]):
         """The duty cycle of the PWM, from 0 to 100."""
         return self._duty_cycle
 
+    @property
+    @override
+    def gpio_pins(self) -> frozenset[int]:
+        return frozenset({self.config.gpio_pin})
+
     def start(self) -> None:
         """Set up the pin and start the PWM with the default duty cycle.
 
@@ -69,6 +74,7 @@ class PwmOutput(Output[PwmConfig]):
         pwm.start(self.config.default_duty_cycle)
         self._pwm = pwm
 
+    @override
     def stop(self) -> None:
         """Stop the PWM."""
         if self._pwm is not None:

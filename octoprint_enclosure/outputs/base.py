@@ -49,6 +49,19 @@ class Output(ABC, Generic[_ConfigT]):
         self._i2c = i2c
         self._logger = logger
 
+    @property
+    def gpio_pins(self) -> frozenset[int]:
+        """The GPIO pins the output drives, empty for an output that drives none."""
+        return frozenset()
+
+    def stop(self) -> None:
+        """Stop driving the hardware, so that the GPIO pins of the output can be released.
+
+        Raises:
+            Exception: If the hardware can't be stopped.
+
+        """
+
     @abstractmethod
     def run_enc_command(self, command: str) -> str | None:
         """Apply an ENC command to the output.

@@ -36,6 +36,11 @@ class LedstripOutput(ColorOutput[LedstripConfig]):
 
     config_class = LedstripConfig
 
+    @property
+    @override
+    def gpio_pins(self) -> frozenset[int]:
+        return frozenset({self.config.ledstrip_gpio_clk, self.config.ledstrip_gpio_dat})
+
     @override
     def _write_color(self, red: int, green: int, blue: int) -> None:
         self._gpio.setwarnings(False)

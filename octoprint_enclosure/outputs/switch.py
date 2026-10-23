@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TypeVar
 
+from typing_extensions import override
+
 from octoprint_enclosure.core import BaseConfig
 
 from .base import Output
@@ -45,6 +47,13 @@ _ConfigT = TypeVar("_ConfigT", bound=SwitchConfig)
 
 class SwitchOutput(Output[_ConfigT]):
     """An output with a switch that is either on or off, on a GPIO pin or driven by a device on the I2C bus."""
+
+    @property
+    @override
+    def gpio_pins(self) -> frozenset[int]:
+        if self.config.gpio_i2c_enabled:
+            return frozenset()
+        return frozenset({self.config.gpio_pin})
 
     def setup_pin(self) -> None:
         """Set up the pin of the output switch.
