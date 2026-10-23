@@ -379,6 +379,11 @@ class EnclosurePlugin(
         if out["output_type"] == "temp_hum_control":
             with contextlib.suppress(OutputError):
                 out["temp_ctr_set_value"] = self._outputs.get(identifier, TempHumControlOutput).target
+        if out["output_type"] in ("neopixel_indirect", "neopixel_direct"):
+            neopixel_class = NeopixelDirectOutput if out["output_type"] == "neopixel_direct" else NeopixelIndirectOutput
+            out["neopixel_color"] = self.output_color(identifier, neopixel_class, out["neopixel_color"])
+        if out["output_type"] == "ledstrip":
+            out["ledstrip_color"] = self.output_color(identifier, LedstripOutput, out["ledstrip_color"])
         if out["output_type"] in ("regular", "temp_hum_control"):
             output_class = RegularOutput if out["output_type"] == "regular" else TempHumControlOutput
             out["current_value"] = self.output_state_boolean(identifier, output_class)
@@ -607,8 +612,6 @@ class EnclosurePlugin(
         """
         index_id = output["index_id"]
         try:
-            output["neopixel_color"] = f"rgb({red},{green},{blue})"
-
             if queue_id is not None:
                 self._logger.debug("running scheduled queue id %s", queue_id)
 
@@ -623,6 +626,16 @@ class EnclosurePlugin(
             self._logger.debug("Can't set the color of output %s: %s", index_id, error)
         except Exception:
             self._logger.exception("Error sending neopixel command for output %s", index_id)
+
+    def output_color(self, index_id, output_class, saved_color):
+        try:
+            color = self._outputs.get(index_id, output_class).color
+        except OutputError:
+            return saved_color
+        if color is None:
+            return saved_color
+        red, green, blue = color
+        return f"rgb({red},{green},{blue})"
 
     def get_sensor_inputs(self):
         return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "temperature_sensor"]
@@ -859,12 +872,15 @@ class EnclosurePlugin(
                         {"index_id": index, "status": val, "auto_startup": startup, "auto_shutdown": shutdown},
                     )
                 if output["output_type"] == "neopixel_indirect" or output["output_type"] == "neopixel_direct":
-                    val = output["neopixel_color"]
+                    neopixel_class = (
+                        NeopixelDirectOutput if output["output_type"] == "neopixel_direct" else NeopixelIndirectOutput
+                    )
+                    val = self.output_color(index, neopixel_class, output["neopixel_color"])
                     neopixel_status.append(
                         {"index_id": index, "color": val, "auto_startup": startup, "auto_shutdown": shutdown},
                     )
                 if output["output_type"] == "ledstrip":
-                    val = output["ledstrip_color"]
+                    val = self.output_color(index, LedstripOutput, output["ledstrip_color"])
                     ledstrip_status.append(
                         {"index_id": index, "color": val, "auto_startup": startup, "auto_shutdown": shutdown},
                     )
@@ -1400,7 +1416,6 @@ class EnclosurePlugin(
 
             self._logger.info("LEDSTRIP set rgb color: %s, %s, %s", red, green, blue)
             ledstrip.set_color(to_int(red), to_int(green), to_int(blue))
-            rpi_output["ledstrip_color"] = f"rgb({red},{green},{blue})"
 
     def start_outpus_with_server(self):
         for rpi_output in self.rpi_outputs:

@@ -15,7 +15,7 @@ from typing_extensions import override
 
 from octoprint_enclosure.core import BaseConfig
 
-from .base import Output
+from .color import ColorOutput
 
 FRAME_BITS = 32
 
@@ -31,23 +31,13 @@ class LedstripConfig(BaseConfig):
     """The GPIO pin of the data signal (DAT)."""
 
 
-class LedstripOutput(Output[LedstripConfig]):
+class LedstripOutput(ColorOutput[LedstripConfig]):
     """An Open-Smart RGB LED strip output."""
 
     config_class = LedstripConfig
 
-    def set_color(self, red: int, green: int, blue: int) -> None:
-        """Set the color of the strip.
-
-        Args:
-            red (int): The red component, from 0 to 255.
-            green (int): The green component, from 0 to 255.
-            blue (int): The blue component, from 0 to 255.
-
-        Raises:
-            Exception: If the color can't be set.
-
-        """
+    @override
+    def _write_color(self, red: int, green: int, blue: int) -> None:
         self._gpio.setwarnings(False)
         self._gpio.setmode(self._gpio.BCM)
         self._gpio.setup(self.config.ledstrip_gpio_clk, self._gpio.OUT)

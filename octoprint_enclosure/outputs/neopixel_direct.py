@@ -9,8 +9,9 @@ from subprocess import Popen
 from typing_extensions import override
 
 from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.utils import get_gcode_param, to_int
 
-from .base import Output
+from .color import ColorOutput
 
 WORKER_PATH = Path(__file__).with_name("neopixel_direct_worker.py")
 SPI_PIN = 10
@@ -33,23 +34,13 @@ class NeopixelDirectConfig(BaseConfig):
     """The DMA channel used to drive the NeoPixels."""
 
 
-class NeopixelDirectOutput(Output[NeopixelDirectConfig]):
+class NeopixelDirectOutput(ColorOutput[NeopixelDirectConfig]):
     """NeoPixels connected directly to a GPIO pin of the Raspberry Pi."""
 
     config_class = NeopixelDirectConfig
 
-    def set_color(self, red: int, green: int, blue: int) -> None:
-        """Set the color of all the NeoPixels.
-
-        Args:
-            red (int): The red component, from 0 to 255.
-            green (int): The green component, from 0 to 255.
-            blue (int): The blue component, from 0 to 255.
-
-        Raises:
-            Exception: If setting color fails.
-
-        """
+    @override
+    def _write_color(self, red: int, green: int, blue: int) -> None:
         config = self.config
 
         command = [
@@ -72,5 +63,10 @@ class NeopixelDirectOutput(Output[NeopixelDirectConfig]):
         Popen(command)
 
     @override
-    def run_enc_command(self, command: str) -> None:
-        return None
+    def run_enc_command(self, command: str) -> str:
+        index_id = to_int(get_gcode_param(command, "O"))
+        red, green, blue = (int(get_gcode_param(command, letter)) for letter in "RGB")
+
+        self.set_color(red, green, blue)
+
+        return f"Setting NEOPIXEL output {index_id} to red: {red} green: {green} blue: {blue}"

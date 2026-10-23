@@ -5,8 +5,9 @@ from dataclasses import dataclass
 from typing_extensions import override
 
 from octoprint_enclosure.core import BaseConfig, HexInt
+from octoprint_enclosure.utils import get_gcode_param, to_int
 
-from .base import Output
+from .color import ColorOutput
 
 BUS = 1
 
@@ -28,23 +29,13 @@ class NeopixelIndirectConfig(BaseConfig):
     """The I2C address of the microcontroller."""
 
 
-class NeopixelIndirectOutput(Output[NeopixelIndirectConfig]):
+class NeopixelIndirectOutput(ColorOutput[NeopixelIndirectConfig]):
     """NeoPixels driven by a microcontroller on the I2C bus."""
 
     config_class = NeopixelIndirectConfig
 
-    def set_color(self, red: int, green: int, blue: int) -> None:
-        """Set the color of all the NeoPixels.
-
-        Args:
-            red (int): The red component, from 0 to 255.
-            green (int): The green component, from 0 to 255.
-            blue (int): The blue component, from 0 to 255.
-
-        Raises:
-            Exception: If the color can't be sent to the microcontroller.
-
-        """
+    @override
+    def _write_color(self, red: int, green: int, blue: int) -> None:
         config = self.config
 
         # The microcontroller reads pin, count, brightness, red, green and blue from register 0
@@ -54,5 +45,10 @@ class NeopixelIndirectOutput(Output[NeopixelIndirectConfig]):
             bus.write_i2c_block_data(config.microcontroller_address, 0, data)
 
     @override
-    def run_enc_command(self, command: str) -> None:
-        return None
+    def run_enc_command(self, command: str) -> str:
+        index_id = to_int(get_gcode_param(command, "O"))
+        red, green, blue = (int(get_gcode_param(command, letter)) for letter in "RGB")
+
+        self.set_color(red, green, blue)
+
+        return f"Setting NEOPIXEL output {index_id} to red: {red} green: {green} blue: {blue}"

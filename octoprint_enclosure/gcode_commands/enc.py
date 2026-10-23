@@ -43,11 +43,7 @@ class EncHandler:
             return
 
         output_type = output["output_type"]
-        if output_type in ("neopixel_indirect", "neopixel_direct"):
-            red, green, blue = (get_gcode_param(cmd, letter) for letter in "RGB")
-            plugin.send_neopixel_command(output, red, green, blue)
-            comm_instance._log(f"Setting NEOPIXEL output {index_id} to red: {red} green: {green} blue: {blue}")
-        elif output_type == "temp_hum_control":
+        if output_type == "temp_hum_control":
             temperature = to_float(get_gcode_param(cmd, "S"))
             if to_int(get_gcode_param(cmd, "W")) == 1 and plugin._printer.is_printing():
                 plugin._printer.pause_print()
