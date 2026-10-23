@@ -43,6 +43,8 @@ class PluginContext:
     actions: Actions
     automations: Automations
 
-    # Integrations
+    # Notifications
     notifications: Notifications
+
+    # Integrations
     mqtt: Mqtt

@@ -13,12 +13,14 @@ from octoprint_enclosure.inputs import PullResistor
 from octoprint_enclosure.utils import to_int
 
 if TYPE_CHECKING:
+    import logging
     from collections.abc import Callable
 
     from octoprint.util.comm import MachineCom
 
+    from octoprint_enclosure.core import PluginContext, Settings
+    from octoprint_enclosure.inputs import Sensors
     from octoprint_enclosure.inputs.sensors.dummy import DummySensor
-    from octoprint_enclosure.plugin import EnclosurePlugin
 
 NUMBER_REGEX = r"-?\d+(?:\.\d+)?"
 
@@ -46,17 +48,46 @@ class _Command:
 class EncDevHandler:
     """Handles the @ENCDEV G-code commands."""
 
-    _plugin: EnclosurePlugin
+    _settings: Settings
+    _sensors: Sensors
+    _logger: logging.Logger
+
+    _development_mode: bool
+    """Whether the plugin runs in development mode."""
+
+    _read_sensors_now: Callable[[], None]
+    """The function called to make the plugin read the sensors right away."""
+
+    _handle_event: Callable[[str, dict], None]
+    """The function called with a simulated OctoPrint event and its payload."""
+
     _commands: tuple[_Command, ...]
 
-    def __init__(self, plugin: EnclosurePlugin) -> None:
+    def __init__(
+        self,
+        plugin_context: PluginContext,
+        *,
+        development_mode: bool,
+        read_sensors_now: Callable[[], None],
+        handle_event: Callable[[str, dict], None],
+    ) -> None:
         """Set up the handler.
 
         Args:
-            plugin (EnclosurePlugin): The plugin instance.
+            plugin_context (PluginContext): The plugin context.
+            development_mode (bool): Whether the plugin runs in development mode, the only one the commands are
+                available in.
+            read_sensors_now (Callable[[], None]): The function called to make the plugin read the sensors right away.
+            handle_event (Callable[[str, dict], None]): The function called with a simulated OctoPrint event and its
+                payload.
 
         """
-        self._plugin = plugin
+        self._settings = plugin_context.settings
+        self._sensors = plugin_context.sensors
+        self._logger = plugin_context.logger.getChild("EncDevHandler")
+        self._development_mode = development_mode
+        self._read_sensors_now = read_sensors_now
+        self._handle_event = handle_event
 
         self._commands = (
             _Command(
@@ -103,7 +134,7 @@ class EncDevHandler:
 
         send_reply = comm_instance._log
 
-        if not self._plugin.development_mode:
+        if not self._development_mode:
             send_reply("@ENCDEV commands are available only in development mode")
             return
 
@@ -126,7 +157,7 @@ class EncDevHandler:
         except _CommandError as error:
             send_reply(str(error))
         except Exception:
-            self._plugin._logger.exception("Error running @ENCDEV %s", line)
+            self._logger.exception("Error running @ENCDEV %s", line)
             send_reply("@ENCDEV failed, see plugin logs")
 
     ##########
@@ -156,7 +187,7 @@ class EncDevHandler:
             send_reply(f"I2C bus {bus}, address {address:#04x}, register {register}: {value}")
 
         # Sensors
-        for config in self._plugin.rpi_inputs:
+        for config in self._settings.rpi_inputs:
             if config["input_type"] == "temperature_sensor":
                 send_reply(self._describe_sensor(config))
 
@@ -228,7 +259,7 @@ class EncDevHandler:
             msg = f"No OctoPrint event named {name}"
             raise _CommandError(msg)
 
-        self._plugin.on_event(event, dict(EVENT_PAYLOAD))
+        self._handle_event(event, dict(EVENT_PAYLOAD))
         send_reply(f"Event {event} handled")
 
     ##########
@@ -239,9 +270,6 @@ class EncDevHandler:
         send_reply("Usage:")
         for encdev_command in self._commands:
             send_reply(f"  @ENCDEV {encdev_command.usage}")
-
-    def _read_sensors_now(self) -> None:
-        self._plugin.check_enclosure_temp()
 
     def _describe_sensor(self, config: dict) -> str:
         description = f"Sensor {config['index_id']} ({config['label']}) on pin {to_int(config['gpio_pin'])}"
@@ -263,7 +291,7 @@ class EncDevHandler:
 
     def _get_dummy_sensor(self, config: dict) -> DummySensor:
         try:
-            return self._plugin._sensors.get_dummy(config["index_id"])
+            return self._sensors.get_dummy(config["index_id"])
         except LookupError as error:
             raise _CommandError(str(error)) from error
 
@@ -274,12 +302,12 @@ class EncDevHandler:
             if pin != "":
                 labels.setdefault(to_int(pin), []).append(label)
 
-        for config in self._plugin.rpi_inputs:
+        for config in self._settings.rpi_inputs:
             if config["input_type"] == "gpio":
                 add(config["gpio_pin"], f"Input {config['index_id']} ({config['label']})")
             elif config["input_type"] == "temperature_sensor":
                 add(config["gpio_pin"], f"Sensor {config['index_id']} ({config['label']})")
-        for config in self._plugin.rpi_outputs:
+        for config in self._settings.rpi_outputs:
             output_type = config["output_type"]
             label = f"Output {config['index_id']} ({config['label']})"
             if output_type == "pwm" or (
@@ -296,7 +324,7 @@ class EncDevHandler:
         config = next(
             (
                 config
-                for config in self._plugin.rpi_inputs
+                for config in self._settings.rpi_inputs
                 if config["index_id"] == to_int(index_id) and config["input_type"] == input_type
             ),
             None,

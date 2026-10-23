@@ -120,8 +120,10 @@ class EnclosurePlugin(
         self._actions = Actions(self._printer, self._frontend, self._logger)
         self._automations = Automations(self._logger)
 
-        # Init integrations
+        # Init notifications
         self._notifications = Notifications(self._enclosure_settings, self._logger)
+
+        # Init integrations
         self._mqtt = Mqtt(self._plugin_manager, self._logger)
 
         # Init the plugin context
@@ -142,8 +144,13 @@ class EnclosurePlugin(
         )
 
         # Init G-code command handlers
-        self._enc_handler = EncHandler(self)
-        self._encdev_handler = EncDevHandler(self)
+        self._enc_handler = EncHandler(self._plugin_context, self.handle_temperature_command, self.update_ui)
+        self._encdev_handler = EncDevHandler(
+            self._plugin_context,
+            development_mode=self.development_mode,
+            read_sensors_now=self.check_enclosure_temp,
+            handle_event=self.on_event,
+        )
 
     def start_timer(self):
         """Start the timer that checks the enclosure temperature."""
@@ -1279,6 +1286,14 @@ class EnclosurePlugin(
             self._outputs.get(index_id, TempHumControlOutput).set_target(to_float(target))
         except OutputError as error:
             self._logger.debug("Can't set the target of output %s: %s", index_id, error)
+
+    def handle_temperature_command(self, index_id, temperature, wait):
+        if wait and self._printer.is_printing():
+            self._printer.pause_print()
+            self.waiting_temperature.add(index_id)
+        self.set_temp_hum_control_target(index_id, temperature)
+        self.update_ui_set_temperature()
+        self.handle_temp_hum_control()
 
     def switch_output(self, index_id, state, queue_id=None):
         try:

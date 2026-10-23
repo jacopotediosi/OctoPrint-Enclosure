@@ -6,22 +6,50 @@ from octoprint_enclosure.outputs import OutputError
 from octoprint_enclosure.utils import get_gcode_param, to_float, to_int
 
 if TYPE_CHECKING:
+    import logging
+    from collections.abc import Callable
+
     from octoprint.util.comm import MachineCom
 
-    from octoprint_enclosure.plugin import EnclosurePlugin
+    from octoprint_enclosure.core import PluginContext, Settings
+    from octoprint_enclosure.outputs import Outputs
 
 
 class EncHandler:
     """Handles the ENC G-code commands."""
 
-    def __init__(self, plugin: EnclosurePlugin) -> None:
+    _settings: Settings
+    _outputs: Outputs
+    _logger: logging.Logger
+
+    _set_temperature: Callable[[int, float, bool], None]
+    """The function called to set the target of a temperature/humidity control, with the id of the output,
+    the target and whether the print has to pause until the target is reached."""
+
+    _update_ui: Callable[[], None]
+    """The function called to refresh the UI after an output changed."""
+
+    def __init__(
+        self,
+        plugin_context: PluginContext,
+        set_temperature: Callable[[int, float, bool], None],
+        update_ui: Callable[[], None],
+    ) -> None:
         """Set up the handler.
 
         Args:
-            plugin (EnclosurePlugin): The plugin instance.
+            plugin_context (PluginContext): The plugin context.
+            set_temperature (Callable[[int, float, bool], None]): The function called to set the target of a
+                temperature/humidity control, with the id of the output, the target and whether the print has to pause
+                until the target is reached.
+            update_ui (Callable[[], None]): The function called to refresh the UI after an output changed.
 
         """
-        self._plugin = plugin
+        self._settings = plugin_context.settings
+        self._outputs = plugin_context.outputs
+        self._logger = plugin_context.logger.getChild("EncHandler")
+        self._set_temperature = set_temperature
+        self._update_ui = update_ui
 
     def handle(self, comm_instance: MachineCom, cmd: str) -> None:
         """Run a G-code line, if it is an ENC command.
@@ -31,36 +59,30 @@ class EncHandler:
             cmd (str): The G-code line.
 
         """
-        plugin = self._plugin
-        if not plugin._enclosure_settings.gcode_control or not cmd.strip().startswith("ENC"):
+        if not self._settings.gcode_control or not cmd.strip().startswith("ENC"):
             return
 
-        plugin._logger.debug("Received ENC command: %s", cmd)
+        self._logger.debug("Received ENC command: %s", cmd)
 
         index_id = to_int(get_gcode_param(cmd, "O"))
-        output = next((item for item in plugin.rpi_outputs if item["index_id"] == index_id), None)
+        output = next((item for item in self._settings.rpi_outputs if item["index_id"] == index_id), None)
         if output is None:
             return
 
-        output_type = output["output_type"]
-        if output_type == "temp_hum_control":
+        if output["output_type"] == "temp_hum_control":
             temperature = to_float(get_gcode_param(cmd, "S"))
-            if to_int(get_gcode_param(cmd, "W")) == 1 and plugin._printer.is_printing():
-                plugin._printer.pause_print()
-                plugin.waiting_temperature.add(index_id)
-            plugin.set_temp_hum_control_target(index_id, temperature)
-            plugin.update_ui_set_temperature()
-            plugin.handle_temp_hum_control()
+            wait = to_int(get_gcode_param(cmd, "W")) == 1
+            self._set_temperature(index_id, temperature, wait)
             comm_instance._log(f"Setting TEMP/HUM control output {index_id} to value {temperature}")
         else:
             try:
-                reply = plugin._outputs.run_enc_command(index_id, cmd)
+                reply = self._outputs.run_enc_command(index_id, cmd)
             except OutputError as error:
-                plugin._logger.debug("Can't run ENC command %s: %s", cmd, error)
+                self._logger.debug("Can't run ENC command %s: %s", cmd, error)
                 return
             except Exception:
-                plugin._logger.exception("Error running ENC command: %s", cmd)
+                self._logger.exception("Error running ENC command: %s", cmd)
                 return
             if reply is not None:
-                plugin.update_ui()
+                self._update_ui()
                 comm_instance._log(reply)
