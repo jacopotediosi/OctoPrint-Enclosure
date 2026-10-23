@@ -63,17 +63,10 @@ class Actions:
     _actions: dict[int, Action]
     """The action with each id."""
 
-    def __init__(
-        self,
-        actions_settings: Iterable[dict],
-        printer: PrinterInterface,
-        frontend: Frontend,
-        logger: logging.Logger,
-    ) -> None:
-        """Set up some actions.
+    def __init__(self, printer: PrinterInterface, frontend: Frontend, logger: logging.Logger) -> None:
+        """Set up the actions, with none until some settings are loaded.
 
         Args:
-            actions_settings (Iterable[dict]): The settings of the actions.
             printer (PrinterInterface): The OctoPrint printer interface.
             frontend (Frontend): The frontend handler.
             logger (logging.Logger): The logger to write to.
@@ -84,10 +77,8 @@ class Actions:
         self._logger = logger.getChild("Actions")
         self._actions = {}
 
-        self.reload(actions_settings)
-
-    def reload(self, actions_settings: Iterable[dict]) -> None:
-        """Set up some actions again, after their settings changed.
+    def load(self, actions_settings: Iterable[dict]) -> None:
+        """Load some actions from their settings.
 
         An action whose settings didn't change is kept as it is.
 

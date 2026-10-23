@@ -50,21 +50,18 @@ class Automations:
     _automations: dict[int, Automation]
     """The automation with each id."""
 
-    def __init__(self, automations_settings: Iterable[dict], logger: logging.Logger) -> None:
-        """Set up some automations.
+    def __init__(self, logger: logging.Logger) -> None:
+        """Set up the automations, with none until some settings are loaded.
 
         Args:
-            automations_settings (Iterable[dict]): The settings of the automations.
             logger (logging.Logger): The logger to write to.
 
         """
         self._logger = logger.getChild("Automations")
         self._automations = {}
 
-        self.reload(automations_settings)
-
-    def reload(self, automations_settings: Iterable[dict]) -> tuple[list[Automation], list[Automation]]:
-        """Set up some automations again, after their settings changed.
+    def load(self, automations_settings: Iterable[dict]) -> tuple[list[Automation], list[Automation]]:
+        """Load some automations from their settings.
 
         An automation whose settings didn't change is kept as it is, with its state.
 

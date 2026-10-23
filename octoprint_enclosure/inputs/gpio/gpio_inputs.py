@@ -50,17 +50,10 @@ class GpioInputs:
     _gpio_inputs: dict[int, GpioInput | _InvalidGpioInput]
     """The GPIO input with each id."""
 
-    def __init__(
-        self,
-        gpio_inputs_settings: Iterable[dict],
-        gpio: GpioBackend,
-        on_edge: Callable[[int, int], object],
-        logger: logging.Logger,
-    ) -> None:
-        """Set up some GPIO inputs.
+    def __init__(self, gpio: GpioBackend, on_edge: Callable[[int, int], object], logger: logging.Logger) -> None:
+        """Set up the GPIO inputs, with none until some settings are loaded.
 
         Args:
-            gpio_inputs_settings (Iterable[dict]): The settings of the GPIO inputs.
             gpio (GpioBackend): The GPIO backend, with the API of RPi.GPIO.
             on_edge (Callable[[int, int], object]): The function called when an edge is detected on the pin of an
                 input, with the id of the input and the level of the pin, 1 if high or 0 if low.
@@ -72,10 +65,8 @@ class GpioInputs:
         self._logger = logger.getChild("GpioInputs")
         self._gpio_inputs = {}
 
-        self.reload(gpio_inputs_settings)
-
-    def reload(self, gpio_inputs_settings: Iterable[dict]) -> None:
-        """Set up some GPIO inputs again, after their settings changed.
+    def load(self, gpio_inputs_settings: Iterable[dict]) -> None:
+        """Load some GPIO inputs from their settings.
 
         An input whose settings didn't change is kept as it is.
 

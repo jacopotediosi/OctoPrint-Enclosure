@@ -63,11 +63,10 @@ class Sensors:
     _lock: threading.Lock
     """Held while the sensors are replaced, and while one is picked to be read."""
 
-    def __init__(self, sensor_inputs_settings: Iterable[dict], logger: logging.Logger, *, dummy: bool) -> None:
-        """Set up the sensors of some inputs.
+    def __init__(self, logger: logging.Logger, *, dummy: bool) -> None:
+        """Set up the sensors of the inputs, with none until some settings are loaded.
 
         Args:
-            sensor_inputs_settings (Iterable[dict]): The settings of the inputs with a temperature sensor.
             logger (logging.Logger): The logger to write to.
             dummy (bool): Whether every sensor is replaced by the dummy sensor.
 
@@ -77,10 +76,8 @@ class Sensors:
         self._sensors = {}
         self._lock = threading.Lock()
 
-        self.reload(sensor_inputs_settings)
-
-    def reload(self, sensor_inputs_settings: Iterable[dict]) -> None:
-        """Set up the sensors of some inputs again, after their settings changed.
+    def load(self, sensor_inputs_settings: Iterable[dict]) -> None:
+        """Load the sensors of some inputs from their settings.
 
         An input whose settings didn't change keeps its sensor as it is, with its state.
 

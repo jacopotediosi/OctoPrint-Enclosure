@@ -29,7 +29,7 @@ from .automations import (
     StopTempHumControlReaction,
     TemperatureTrigger,
 )
-from .core import Frontend, Settings
+from .core import Frontend, PluginContext, Settings
 from .core.migrations import migrate_settings
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
@@ -99,13 +99,11 @@ class EnclosurePlugin(
         # Don't propagate logging
         self._logger.propagate = False
 
-        # Initialize other plugin components
+        # Init general plugin components
         self._enclosure_settings = Settings(self._settings)
         self._frontend = Frontend(self._plugin_manager, self._identifier)
-        self._notifications = Notifications(self._enclosure_settings, self._logger)
-        self._mqtt = Mqtt(self._plugin_manager, self._logger)
 
-        # Init GPIO
+        # Init hardware
         self.development_mode = self._enclosure_settings.development_mode
         if self.development_mode:
             self._gpio = dummy_gpio
@@ -114,6 +112,34 @@ class EnclosurePlugin(
         else:
             self._gpio = gpio
             self._i2c = smbus2
+
+        # Init inputs, outputs, actions and automations
+        self._sensors = Sensors(self._logger, dummy=self.development_mode)
+        self._gpio_inputs = GpioInputs(self._gpio, self.handle_gpio_input, self._logger)
+        self._outputs = Outputs(self._gpio, self._i2c, self._logger)
+        self._actions = Actions(self._printer, self._frontend, self._logger)
+        self._automations = Automations(self._logger)
+
+        # Init integrations
+        self._notifications = Notifications(self._enclosure_settings, self._logger)
+        self._mqtt = Mqtt(self._plugin_manager, self._logger)
+
+        # Init the plugin context
+        self._plugin_context = PluginContext(
+            logger=self._logger,
+            settings=self._enclosure_settings,
+            frontend=self._frontend,
+            printer=self._printer,
+            gpio=self._gpio,
+            i2c=self._i2c,
+            sensors=self._sensors,
+            gpio_inputs=self._gpio_inputs,
+            outputs=self._outputs,
+            actions=self._actions,
+            automations=self._automations,
+            notifications=self._notifications,
+            mqtt=self._mqtt,
+        )
 
         # Init G-code command handlers
         self._enc_handler = EncHandler(self)
@@ -165,16 +191,20 @@ class EnclosurePlugin(
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
         self.actions = self._enclosure_settings.actions
         self.automations = self._enclosure_settings.automations
+
         # Reset volatile temp_ctr_set_value to 0 on startup (it should not be persisted)
         for rpi_output in self.rpi_outputs:
             rpi_output["temp_ctr_set_value"] = 0
-        self.configure_sensors()
-        self.configure_gpio_inputs()
-        self.configure_outputs()
+
+        self._sensors.load(self.get_sensor_inputs())
+        self._gpio_inputs.load(self.get_gpio_inputs())
+        self._outputs.load(self.rpi_outputs)
+        self.set_temp_hum_control_targets()
         if self.development_mode:
             self.link_dummy_sensors()
-        self.configure_actions()
-        self.configure_automations()
+        self._actions.load(self.actions)
+        self._automations.load(self.automations)
+
         self.setup_gpio()
         self.configure_gpio()
         self.update_ui()
@@ -640,18 +670,8 @@ class EnclosurePlugin(
     def get_sensor_inputs(self):
         return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "temperature_sensor"]
 
-    def configure_sensors(self):
-        self._sensors = Sensors(self.get_sensor_inputs(), self._logger, dummy=self.development_mode)
-
     def get_gpio_inputs(self):
         return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "gpio"]
-
-    def configure_gpio_inputs(self):
-        self._gpio_inputs = GpioInputs(self.get_gpio_inputs(), self._gpio, self.handle_gpio_input, self._logger)
-
-    def configure_outputs(self):
-        self._outputs = Outputs(self.rpi_outputs, self._gpio, self._i2c, self._logger)
-        self.set_temp_hum_control_targets()
 
     def set_temp_hum_control_targets(self, outputs_not_changed=()):
         for rpi_output in self.rpi_outputs:
@@ -678,12 +698,6 @@ class EnclosurePlugin(
                 dummy.is_cooler_on = control.is_on
             elif control.config.temp_ctr_type is TempHumControlType.DEHUMIDIFIER:
                 dummy.is_dehumidifier_on = control.is_on
-
-    def configure_actions(self):
-        self._actions = Actions(self.actions, self._printer, self._frontend, self._logger)
-
-    def configure_automations(self):
-        self._automations = Automations(self.automations, self._logger)
 
     def get_output_settings(self, index_id):
         return next((item for item in self.rpi_outputs if to_int(item["index_id"]) == index_id), None)
@@ -1528,18 +1542,18 @@ class EnclosurePlugin(
     def on_settings_save(self, data):
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
         self.rpi_inputs = self._enclosure_settings.rpi_inputs
-        self._sensors.reload(self.get_sensor_inputs())
+        self._sensors.load(self.get_sensor_inputs())
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
-        outputs_not_changed, removed_outputs = self._outputs.reload(self.rpi_outputs)
+        outputs_not_changed, removed_outputs = self._outputs.load(self.rpi_outputs)
         self.set_temp_hum_control_targets(outputs_not_changed)
         if self.development_mode:
             self.link_dummy_sensors()
         self.actions = self._enclosure_settings.actions
-        self._actions.reload(self.actions)
+        self._actions.load(self.actions)
         self.automations = self._enclosure_settings.automations
-        automations_not_changed, _ = self._automations.reload(self.automations)
+        automations_not_changed, _ = self._automations.load(self.automations)
         self.clear_gpio(removed_outputs)
-        self._gpio_inputs.reload(self.get_gpio_inputs())
+        self._gpio_inputs.load(self.get_gpio_inputs())
 
         self._logger.debug("rpi_inputs: %s", self.rpi_inputs)
         self._logger.debug("rpi_outputs: %s", self.rpi_outputs)

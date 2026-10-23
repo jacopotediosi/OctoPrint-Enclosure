@@ -61,17 +61,10 @@ class Outputs:
     _outputs: dict[int, Output]
     """The output with each id."""
 
-    def __init__(
-        self,
-        outputs_settings: Iterable[dict],
-        gpio: GpioBackend,
-        i2c: I2cBackend,
-        logger: logging.Logger,
-    ) -> None:
-        """Set up some outputs.
+    def __init__(self, gpio: GpioBackend, i2c: I2cBackend, logger: logging.Logger) -> None:
+        """Set up the outputs, with none until some settings are loaded.
 
         Args:
-            outputs_settings (Iterable[dict]): The settings of the outputs.
             gpio (GpioBackend): The GPIO backend, with the API of RPi.GPIO.
             i2c (I2cBackend): The I2C backend, with the API of smbus2.
             logger (logging.Logger): The logger to write to.
@@ -82,10 +75,8 @@ class Outputs:
         self._logger = logger.getChild("Outputs")
         self._outputs = {}
 
-        self.reload(outputs_settings)
-
-    def reload(self, outputs_settings: Iterable[dict]) -> tuple[list[Output], list[Output]]:
-        """Set up some outputs again, after their settings changed.
+    def load(self, outputs_settings: Iterable[dict]) -> tuple[list[Output], list[Output]]:
+        """Load some outputs from their settings.
 
         An output whose settings didn't change is kept as it is, with its state and the hardware it drives.
 
