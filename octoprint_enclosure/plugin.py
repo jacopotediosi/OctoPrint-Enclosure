@@ -49,7 +49,7 @@ from .outputs import (
     TempHumControlStatus,
     TempHumControlType,
 )
-from .runtime import Scheduler
+from .runtime import Scheduler, SensorPoller
 from .utils import (
     parse_hhmm,
     parse_rgb,
@@ -73,7 +73,6 @@ class EnclosurePlugin(
     actions = []
     automations = []
     waiting_temperature = set()
-    temperature_sensor_data = []
     failing_sensors = set()
     print_complete = False
     development_mode = False
@@ -122,6 +121,7 @@ class EnclosurePlugin(
 
         # Init threads
         self._scheduler = Scheduler(self._logger)
+        self._sensor_poller = SensorPoller(self._sensors, self.handle_sensor_reading, self._logger)
 
         # Init notifications
         self._notifications = Notifications(self._enclosure_settings, self._logger)
@@ -143,6 +143,7 @@ class EnclosurePlugin(
             actions=self._actions,
             automations=self._automations,
             scheduler=self._scheduler,
+            sensor_poller=self._sensor_poller,
             notifications=self._notifications,
             mqtt=self._mqtt,
         )
@@ -155,11 +156,6 @@ class EnclosurePlugin(
             read_sensors_now=self.check_enclosure_temp,
             handle_event=self.on_event,
         )
-
-    def start_timer(self):
-        """Start the timer that checks the enclosure temperature."""
-        self._check_temp_timer = RepeatedTimer(10, self.check_enclosure_temp, None, None, True)
-        self._check_temp_timer.start()
 
     def pin_state_boolean(self, pin, active_low):
         try:
@@ -206,7 +202,7 @@ class EnclosurePlugin(
         for rpi_output in self.rpi_outputs:
             rpi_output["temp_ctr_set_value"] = 0
 
-        self._sensors.load(self.get_sensor_inputs())
+        self._sensor_poller.load(self.get_sensor_inputs())
         self._gpio_inputs.load(self.get_gpio_inputs())
         self._outputs.load(self.rpi_outputs)
         self.set_temp_hum_control_targets()
@@ -220,7 +216,11 @@ class EnclosurePlugin(
         self.update_ui()
         self.start_outpus_with_server()
         self.handle_initial_gpio_control()
-        self.start_timer()
+
+        self._sensor_poller.start()
+        # Start the timer that runs the controls on the last readings of the sensors
+        RepeatedTimer(10, self.handle_readings, None, None, False).start()
+
         self.print_complete = False
 
     def get_settings_version(self):
@@ -345,6 +345,11 @@ class EnclosurePlugin(
                             out["controlled_io"] = automation_settings["action"]
                     else:
                         out["action_type"] = automation_settings["reaction_type"]
+                reading = next((item for item in self.get_sensor_data() if item["index_id"] == identifier), None)
+                temperature = None if reading is None else reading["temperature"]
+                humidity = None if reading is None else reading["humidity"]
+                out["temp_sensor_temp"] = "" if temperature is None else temperature
+                out["temp_sensor_humidity"] = "" if humidity is None else humidity
                 return jsonify(out)
         return make_response("", 404)
 
@@ -720,36 +725,52 @@ class EnclosurePlugin(
         return bool(self.get_pwm_temperature_linked_settings(to_int(index_id)))
 
     def check_enclosure_temp(self):
+        """Read every sensor now, then run the controls on the readings."""
+        self._sensor_poller.read_all()
+        self.handle_readings()
+
+    def handle_sensor_reading(self, index_id, sensor_reading):
+        # The input may have been removed by a settings save while its sensor was being read
+        sensor = next((item for item in self.get_sensor_inputs() if item["index_id"] == index_id), None)
+        if sensor is None:
+            return
+
+        if sensor_reading.error is not None:
+            self.handle_sensor_failure(sensor, sensor_reading.error)
+        else:
+            temp, hum, _ = self.convert_reading(sensor, sensor_reading.reading)
+            self.handle_sensor_recovery(sensor)
+            self._mqtt.publish_sensor_reading(sensor["label"], temp, hum)
+
+        self.update_ui_current_temperature()
+
+    def get_sensor_data(self):
+        readings = self._sensor_poller.get_readings()
+
+        sensor_data = []
+        for sensor in self.get_sensor_inputs():
+            sensor_reading = readings.get(sensor["index_id"])
+            if sensor_reading is None or sensor_reading.error is not None:
+                temp = hum = airquality = None
+            else:
+                temp, hum, airquality = self.convert_reading(sensor, sensor_reading.reading)
+
+            sensor_data.append(
+                {
+                    "index_id": sensor["index_id"],
+                    "temperature": temp,
+                    "humidity": hum,
+                    "airquality": airquality,
+                },
+            )
+
+        return sensor_data
+
+    def handle_readings(self):
         try:
-            sensor_inputs = self.get_sensor_inputs()
-
-            sensor_data = []
-            for sensor in sensor_inputs:
-                try:
-                    reading = self._sensors.read(sensor["index_id"])
-                except Exception as error:
-                    self.handle_sensor_failure(sensor, error)
-                    sensor["temp_sensor_temp"] = ""
-                    sensor["temp_sensor_humidity"] = ""
-                    temp = hum = airquality = None
-                else:
-                    temp, hum, airquality = self.convert_reading(sensor, reading)
-                    self.handle_sensor_recovery(sensor)
-                    sensor["temp_sensor_temp"] = "" if temp is None else temp
-                    sensor["temp_sensor_humidity"] = "" if hum is None else hum
-                    self._mqtt.publish_sensor_reading(sensor["label"], temp, hum)
-
-                sensor_data.append(
-                    {
-                        "index_id": sensor["index_id"],
-                        "temperature": temp,
-                        "humidity": hum,
-                        "airquality": airquality,
-                    },
-                )
+            sensor_data = self.get_sensor_data()
 
             if sensor_data:
-                self.temperature_sensor_data = sensor_data
                 self.handle_temp_hum_control()
                 self.handle_temperature_rules()
                 self.handle_pwm_linked_temperature()
@@ -836,7 +857,7 @@ class EnclosurePlugin(
         self.update_ui_set_temperature()
 
     def update_ui_current_temperature(self):
-        self._frontend.update_sensor_data(self.temperature_sensor_data)
+        self._frontend.update_sensor_data(self.get_sensor_data())
 
     def update_ui_inputs(self):
         try:
@@ -958,7 +979,7 @@ class EnclosurePlugin(
             self._logger.exception("Error handling temperature linked PWM outputs")
 
     def get_linked_temp_sensor_data(self, linked_id):
-        linked_data = next((data for data in self.temperature_sensor_data if data["index_id"] == linked_id), None)
+        linked_data = next((data for data in self.get_sensor_data() if data["index_id"] == linked_id), None)
         if linked_data is None:
             self._logger.warning("No linked temperature sensor found for %s", linked_id)
         return linked_data
@@ -1508,8 +1529,8 @@ class EnclosurePlugin(
     def on_settings_save(self, data):
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
         self.rpi_inputs = self._enclosure_settings.rpi_inputs
-        self._sensors.load(self.get_sensor_inputs())
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
+        self._sensor_poller.load(self.get_sensor_inputs())
         outputs_not_changed, removed_outputs = self._outputs.load(self.rpi_outputs)
         self.set_temp_hum_control_targets(outputs_not_changed)
         if self.development_mode:
@@ -1621,10 +1642,14 @@ class EnclosurePlugin(
         self._encdev_handler.handle(comm_instance, command, parameters)
 
     def get_graph_data(self, comm, parsed_temps):
+        sensor_data = {item["index_id"]: item for item in self.get_sensor_data()}
         for sensor in self.get_sensor_inputs():
-            if sensor["show_graph_temp"] and sensor["temp_sensor_temp"] != "":
-                parsed_temps[str(sensor["label"])] = (sensor["temp_sensor_temp"], None)
-            if sensor["show_graph_humidity"] and sensor["temp_sensor_humidity"] != "":
-                parsed_temps[str(sensor["label"]) + " Humidity"] = (sensor["temp_sensor_humidity"], None)
+            reading = sensor_data.get(sensor["index_id"])
+            if reading is None:
+                continue
+            if sensor["show_graph_temp"] and reading["temperature"] is not None:
+                parsed_temps[str(sensor["label"])] = (reading["temperature"], None)
+            if sensor["show_graph_humidity"] and reading["humidity"] is not None:
+                parsed_temps[str(sensor["label"]) + " Humidity"] = (reading["humidity"], None)
 
         return parsed_temps

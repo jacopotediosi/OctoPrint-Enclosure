@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from octoprint_enclosure.integrations import Mqtt
     from octoprint_enclosure.notifications import Notifications
     from octoprint_enclosure.outputs import Outputs
-    from octoprint_enclosure.runtime import Scheduler
+    from octoprint_enclosure.runtime import Scheduler, SensorPoller
 
     from .frontend import Frontend
     from .settings import Settings
@@ -46,6 +46,7 @@ class PluginContext:
 
     # Threads
     scheduler: Scheduler
+    sensor_poller: SensorPoller
 
     # Notifications
     notifications: Notifications

@@ -61,7 +61,7 @@ class Sensors:
     """The sensor of each input, by the id of the input."""
 
     _lock: threading.Lock
-    """Held while the sensors are replaced, and while one is picked to be read."""
+    """Held by every access to the sensors."""
 
     def __init__(self, logger: logging.Logger, *, dummy: bool) -> None:
         """Set up the sensors of the inputs, with none until some settings are loaded.
@@ -108,28 +108,15 @@ class Sensors:
         with self._lock:
             self._sensors = sensors
 
-    def read(self, index_id: int) -> Reading:
-        """Read the sensor of an input.
-
-        Args:
-            index_id (int): The id of the input.
+    def get_all(self) -> dict[int, Sensor]:
+        """Get all sensors.
 
         Returns:
-            Reading: The values read.
-
-        Raises:
-            Exception: If the sensor can't be read.
+            dict[int, Sensor]: All sensors, by the id of their input.
 
         """
         with self._lock:
-            sensor = self._sensors.get(index_id)
-        if sensor is None:
-            msg = "The sensor is not set up"
-            raise SensorError(msg)
-
-        reading = sensor.read()
-        self._get_sensor_logger(type(sensor), index_id).debug("Read: %s", reading)
-        return reading
+            return dict(self._sensors)
 
     def get_dummy(self, index_id: int) -> DummySensor:
         """Get the dummy sensor of an input.
