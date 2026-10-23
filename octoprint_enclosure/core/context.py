@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from octoprint_enclosure.integrations import Mqtt
     from octoprint_enclosure.notifications import Notifications
     from octoprint_enclosure.outputs import Outputs
+    from octoprint_enclosure.runtime import Scheduler
 
     from .frontend import Frontend
     from .settings import Settings
@@ -42,6 +43,9 @@ class PluginContext:
     outputs: Outputs
     actions: Actions
     automations: Automations
+
+    # Threads
+    scheduler: Scheduler
 
     # Notifications
     notifications: Notifications

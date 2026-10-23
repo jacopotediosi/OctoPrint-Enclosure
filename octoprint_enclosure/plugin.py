@@ -1,8 +1,8 @@
 import contextlib
 import copy
+import functools
 import logging
 import sys
-import threading
 from datetime import timedelta
 from pathlib import Path
 
@@ -49,8 +49,9 @@ from .outputs import (
     TempHumControlStatus,
     TempHumControlType,
 )
+from .runtime import Scheduler
 from .utils import (
-    is_hhmm,
+    parse_hhmm,
     parse_rgb,
     seconds_until_next,
     seconds_until_today_at,
@@ -72,7 +73,6 @@ class EnclosurePlugin(
     actions = []
     automations = []
     waiting_temperature = set()
-    event_queue = []
     temperature_sensor_data = []
     failing_sensors = set()
     print_complete = False
@@ -120,6 +120,9 @@ class EnclosurePlugin(
         self._actions = Actions(self._printer, self._frontend, self._logger)
         self._automations = Automations(self._logger)
 
+        # Init threads
+        self._scheduler = Scheduler(self._logger)
+
         # Init notifications
         self._notifications = Notifications(self._enclosure_settings, self._logger)
 
@@ -139,6 +142,7 @@ class EnclosurePlugin(
             outputs=self._outputs,
             actions=self._actions,
             automations=self._automations,
+            scheduler=self._scheduler,
             notifications=self._notifications,
             mqtt=self._mqtt,
         )
@@ -193,7 +197,6 @@ class EnclosurePlugin(
     def on_after_startup(self):
         self._mqtt.load_helpers()
 
-        self.event_queue = []
         self.rpi_inputs = self._enclosure_settings.rpi_inputs
         self.rpi_outputs = self._enclosure_settings.rpi_outputs
         self.actions = self._enclosure_settings.actions
@@ -506,8 +509,8 @@ class EnclosurePlugin(
 
         if not value:
             suffix = "auto_startup"
-            queue_id = f"{identifier}_{suffix}"
-            self.stop_queue_item(queue_id)
+            queue_id = f"output:{identifier}:{suffix}"
+            self._scheduler.cancel(queue_id)
         for output in self.rpi_outputs:
             if identifier == to_int(output["index_id"]):
                 output["auto_startup"] = value
@@ -532,8 +535,8 @@ class EnclosurePlugin(
 
         if not value:
             suffix = "auto_shutdown"
-            queue_id = f"{identifier}_{suffix}"
-            self.stop_queue_item(queue_id)
+            queue_id = f"output:{identifier}:{suffix}"
+            self._scheduler.cancel(queue_id)
 
         for output in self.rpi_outputs:
             if identifier == to_int(output["index_id"]):
@@ -636,7 +639,7 @@ class EnclosurePlugin(
         self.run_action(identifier, PrinterAction)
         return make_response("", 204)
 
-    def send_neopixel_command(self, output, red, green, blue, queue_id=None):
+    def send_neopixel_command(self, output, red, green, blue):
         """Send neopixel command.
 
         Args:
@@ -644,21 +647,14 @@ class EnclosurePlugin(
             red (int): Red value from 0 to 255.
             green (int): Green value from 0 to 255.
             blue (int): Blue value from 0 to 255.
-            queue_id (str, optional): Scheduled queue item to remove after sending the command.
 
         """
         index_id = output["index_id"]
         try:
-            if queue_id is not None:
-                self._logger.debug("running scheduled queue id %s", queue_id)
-
             neopixel_class = (
                 NeopixelDirectOutput if output["output_type"] == "neopixel_direct" else NeopixelIndirectOutput
             )
             self._outputs.get(index_id, neopixel_class).set_color(int(red), int(green), int(blue))
-
-            if queue_id is not None:
-                self.stop_queue_item(queue_id)
         except OutputError as error:
             self._logger.debug("Can't set the color of output %s: %s", index_id, error)
         except Exception:
@@ -795,8 +791,11 @@ class EnclosurePlugin(
                 if not self.print_complete:
                     on = self.switch_output(index_id, RegularSetState.ON if first_run else RegularSetState.TOGGLE)
                     time_delay = to_int(output["toggle_timer_on"]) if on else to_int(output["toggle_timer_off"])
-                    thread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
-                    thread.start()
+                    self._scheduler.schedule(
+                        f"output:{index_id}:toggle_timer",
+                        time_delay,
+                        functools.partial(self.toggle_output, index_id),
+                    )
                 else:
                     self.switch_output(index_id, RegularSetState.OFF)
                 self.update_ui_outputs()
@@ -820,8 +819,11 @@ class EnclosurePlugin(
 
                 if not self.print_complete:
                     self.write_pwm(index_id, write_value)
-                    thread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
-                    thread.start()
+                    self._scheduler.schedule(
+                        f"output:{index_id}:toggle_timer",
+                        time_delay,
+                        functools.partial(self.toggle_output, index_id),
+                    )
                 else:
                     self.write_pwm(index_id, 0)
                 self.update_ui_outputs()
@@ -857,18 +859,6 @@ class EnclosurePlugin(
                 result.append({"index_id": temp_crt_output["index_id"], "set_temperature": set_temperature})
                 result.append(set_temperature)
         self._frontend.update_set_temperature(result)
-
-    def stop_queue_item(self, queue_id):
-        old_list = self.event_queue
-        self._logger.debug("Stopping queue id %s...", queue_id)
-        for task in self.event_queue:
-            self._logger.debug("Queue id found...")
-            if task["queue_id"] == queue_id:
-                task["thread"].cancel()
-                self.event_queue.remove(task)
-                self._logger.debug("Queue id stopped and removed from list...")
-                self._logger.debug("Old queue list: %s", old_list)
-                self._logger.debug("New queue list: %s", self.event_queue)
 
     def update_ui_outputs(self):
         try:
@@ -1157,13 +1147,6 @@ class EnclosurePlugin(
         for filament_automation in self._automations.get_all(FilamentAutomation):
             filament_automation.disarm()
 
-    def cancel_all_events_on_queue(self):
-        for task in self.event_queue:
-            try:
-                task["thread"].cancel()
-            except Exception:
-                self._logger.exception("Failed to stop task %s", task)
-
     def handle_initial_gpio_control(self):
         try:
             for rule in self._automations.get_all(RuleAutomation):
@@ -1295,7 +1278,7 @@ class EnclosurePlugin(
         self.update_ui_set_temperature()
         self.handle_temp_hum_control()
 
-    def switch_output(self, index_id, state, queue_id=None):
+    def switch_output(self, index_id, state):
         try:
             regular_output = self._outputs.get(index_id, RegularOutput)
             if state is RegularSetState.TOGGLE:
@@ -1306,11 +1289,7 @@ class EnclosurePlugin(
             else:
                 regular_output.turn_off()
                 on = False
-            if queue_id is not None:
-                self._logger.debug("Running scheduled queue id %s", queue_id)
             self.update_ui()
-            if queue_id is not None:
-                self.stop_queue_item(queue_id)
         except OutputError as error:
             self._logger.debug("Can't write on output %s: %s", index_id, error)
             return None
@@ -1320,14 +1299,10 @@ class EnclosurePlugin(
         else:
             return on
 
-    def write_pwm(self, index_id, pwm_value, queue_id=None):
+    def write_pwm(self, index_id, pwm_value):
         try:
-            if queue_id is not None:
-                self._logger.debug("running scheduled queue id %s", queue_id)
             self._outputs.get(index_id, PwmOutput).set_duty_cycle(pwm_value)
             self.update_ui()
-            if queue_id is not None:
-                self.stop_queue_item(queue_id)
         except OutputError as error:
             self._logger.debug("Can't write PWM on output %s: %s", index_id, error)
         except Exception:
@@ -1346,22 +1321,24 @@ class EnclosurePlugin(
 
         if event == Events.PRINT_STARTED:
             self.print_complete = False
-            self.cancel_all_events_on_queue()
-            self.event_queue = []
+            self._scheduler.cancel_all()
             self.start_filament_detection()
             for rpi_output in self.rpi_outputs:
                 if rpi_output["auto_startup"]:
                     startup_time = rpi_output["startup_time"]
+                    startup_time_of_day = parse_hhmm(str(startup_time))
                     delay_seconds = (
-                        seconds_until_today_at(startup_time) if is_hhmm(startup_time) else to_float(startup_time)
+                        to_float(startup_time)
+                        if startup_time_of_day is None
+                        else seconds_until_today_at(startup_time_of_day)
                     )
                     self.schedule_auto_startup_outputs(rpi_output, delay_seconds)
                 if rpi_output["toggle_timer"] and rpi_output["output_type"] in ("regular", "pwm"):
                     self.toggle_output(rpi_output["index_id"], True)
-                if is_hhmm(rpi_output["shutdown_time"]):
-                    shutdown_delay_seconds = seconds_until_next(rpi_output["shutdown_time"])
+                shutdown_time_of_day = parse_hhmm(str(rpi_output["shutdown_time"]))
+                if shutdown_time_of_day is not None:
+                    shutdown_delay_seconds = seconds_until_next(shutdown_time_of_day)
                     self.schedule_auto_shutdown_outputs(rpi_output, shutdown_delay_seconds)
-            self.run_tasks()
             self.update_ui()
 
         elif event == Events.PRINT_DONE:
@@ -1371,25 +1348,22 @@ class EnclosurePlugin(
                 shutdown_time = rpi_output["shutdown_time"]
                 if rpi_output["output_type"] == "pwm" and self.is_pwm_linked(rpi_output["index_id"]):
                     self.write_pwm(rpi_output["index_id"], to_int(rpi_output["default_duty_cycle"]))
-                if rpi_output["auto_shutdown"] and not is_hhmm(shutdown_time):
+                if rpi_output["auto_shutdown"] and parse_hhmm(str(shutdown_time)) is None:
                     delay_seconds = to_float(shutdown_time)
                     self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
-            self.run_tasks()
             self.update_ui()
 
         elif event in (Events.PRINT_CANCELLED, Events.PRINT_FAILED):
             self.stop_filament_detection()
-            self.cancel_all_events_on_queue()
-            self.event_queue = []
+            self._scheduler.cancel_all()
             for rpi_output in self.rpi_outputs:
                 if rpi_output["shutdown_on_failed"]:
                     shutdown_time = rpi_output["shutdown_time"]
-                    if rpi_output["auto_shutdown"] and not is_hhmm(shutdown_time):
+                    if rpi_output["auto_shutdown"] and parse_hhmm(str(shutdown_time)) is None:
                         delay_seconds = to_float(shutdown_time)
                         self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
                         if rpi_output["output_type"] == "temp_hum_control":
                             self.set_temp_hum_control_target(to_int(rpi_output["index_id"]), 0)
-            self.run_tasks()
 
         if event == Events.PRINT_DONE:
             file_name = Path(payload["path"]).name
@@ -1407,12 +1381,6 @@ class EnclosurePlugin(
                 if rpi_output["shutdown_on_error"]:
                     self._logger.debug("Schedule shutdown for: %s", rpi_output["index_id"])
                     self.schedule_auto_shutdown_outputs(rpi_output, 0)
-            self.run_tasks()
-
-    def run_tasks(self):
-        for task in self.event_queue:
-            if not task["thread"].is_alive():
-                task["thread"].start()
 
     def schedule_auto_shutdown_outputs(self, rpi_output, shutdown_delay_seconds):
         suffix = "auto_shutdown"
@@ -1430,7 +1398,6 @@ class EnclosurePlugin(
         if rpi_output["output_type"] == "temp_hum_control":
             value = 0
             self.add_temperature_output_temperature_queue(shutdown_delay_seconds, rpi_output, value, suffix)
-        self._logger.debug("Events scheduled to run %s", self.event_queue)
 
     def ledstrip_set_rgb(self, rpi_output, rgb=None):
         try:
@@ -1478,77 +1445,61 @@ class EnclosurePlugin(
         if rpi_output["output_type"] == "temp_hum_control":
             value = rpi_output["temp_ctr_default_value"]
             self.add_temperature_output_temperature_queue(delay_seconds, rpi_output, value, suffix)
-        self._logger.debug("Events scheduled to run %s", self.event_queue)
 
     def add_neopixel_output_to_queue(self, rpi_output, delay_seconds, red, green, blue, suffix):
-        queue_id = f"{to_int(rpi_output['index_id'])}_{suffix}"
-
+        queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
         self._logger.debug("Scheduling neopixel output id %s for on %s delay_seconds", queue_id, delay_seconds)
-
-        thread = threading.Timer(
+        self._scheduler.schedule(
+            queue_id,
             delay_seconds,
-            self.send_neopixel_command,
-            args=[rpi_output, red, green, blue, queue_id],
+            functools.partial(self.send_neopixel_command, rpi_output, red, green, blue),
         )
-
-        self.event_queue.append({"queue_id": queue_id, "thread": thread})
 
     def add_pwm_output_to_queue(self, delay_seconds, rpi_output, value, suffix):
-        queue_id = f"{rpi_output['index_id']}_{suffix}"
-
+        queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
         self._logger.debug("Scheduling pwm output id %s for on %s delay_seconds", queue_id, delay_seconds)
-
-        thread = threading.Timer(
+        self._scheduler.schedule(
+            queue_id,
             delay_seconds,
-            self.write_pwm,
-            args=[rpi_output["index_id"], value, queue_id],
+            functools.partial(self.write_pwm, rpi_output["index_id"], value),
         )
-
-        self.event_queue.append({"queue_id": queue_id, "thread": thread})
 
     def schedule_pwm_duty_on_queue(self, delay_seconds, rpi_output, value, suffix):
-        queue_id = f"{rpi_output['index_id']}_pwm_linked_temp_{suffix}"
-        thread = threading.Timer(delay_seconds, self.write_pwm, args=[rpi_output["index_id"], value, queue_id])
-
+        queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
         self._logger.debug("Scheduling pwm linked temp output id %s on %s delay_seconds", queue_id, delay_seconds)
-
-        self.event_queue.append({"queue_id": queue_id, "thread": thread})
-
-    def add_regular_output_to_queue(self, delay_seconds, rpi_output, state, suffix):
-        queue_id = f"{rpi_output['index_id']}_{suffix}"
-
-        self._logger.debug("Scheduling regular output id %s on %s delay_seconds", queue_id, delay_seconds)
-
-        thread = threading.Timer(delay_seconds, self.switch_output, args=[rpi_output["index_id"], state, queue_id])
-
-        self.event_queue.append({"queue_id": queue_id, "thread": thread})
-
-    def add_temperature_output_temperature_queue(self, delay_seconds, rpi_output, value, suffix):
-        queue_id = f"{rpi_output['index_id']}_{suffix}"
-        self._logger.debug("Scheduling temperature control id %s on %s delay_seconds", queue_id, delay_seconds)
-
-        thread = threading.Timer(
+        self._scheduler.schedule(
+            queue_id,
             delay_seconds,
-            self.write_temperature_to_output,
-            args=[to_int(rpi_output["index_id"]), value, queue_id],
+            functools.partial(self.write_pwm, rpi_output["index_id"], value),
         )
 
-        self.event_queue.append({"queue_id": queue_id, "thread": thread})
+    def add_regular_output_to_queue(self, delay_seconds, rpi_output, state, suffix):
+        queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
+        self._logger.debug("Scheduling regular output id %s on %s delay_seconds", queue_id, delay_seconds)
+        self._scheduler.schedule(
+            queue_id,
+            delay_seconds,
+            functools.partial(self.switch_output, rpi_output["index_id"], state),
+        )
 
-    def write_temperature_to_output(self, rpi_output_index, value, queue_id=None):
+    def add_temperature_output_temperature_queue(self, delay_seconds, rpi_output, value, suffix):
+        queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
+        self._logger.debug("Scheduling temperature control id %s on %s delay_seconds", queue_id, delay_seconds)
+        self._scheduler.schedule(
+            queue_id,
+            delay_seconds,
+            functools.partial(self.write_temperature_to_output, to_int(rpi_output["index_id"]), value),
+        )
+
+    def write_temperature_to_output(self, rpi_output_index, value):
         try:
             rpi_output = [r_out for r_out in self.rpi_outputs if to_int(r_out["index_id"]) == rpi_output_index].pop()
 
             if rpi_output["output_type"] == "temp_hum_control":
                 self.set_temp_hum_control_target(rpi_output_index, value)
-
-                if queue_id is not None:
-                    self._logger.debug("running scheduled queue id %s", queue_id)
                 self._logger.debug("Setting temperature to output index: %s value %s", rpi_output["index_id"], value)
 
             self.update_ui()
-            if queue_id is not None:
-                self.stop_queue_item(queue_id)
 
         except Exception:
             self._logger.exception("Error setting temperature on output %s", rpi_output_index)
