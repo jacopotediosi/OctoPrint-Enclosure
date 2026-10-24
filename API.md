@@ -88,7 +88,6 @@ Response (200):
     "startup_time": number,
     "temp_ctr_deadband": number,
     "neopixel_brightness": number,
-    "new_duty_cycle": string,
     "gpio_pin": number,
     "default_duty_cycle": number,
     "neopixel_color": string,
@@ -122,19 +121,15 @@ Response (200):
     "show_on_navbar": boolean,
     "duty_b": number,
     "toggle_timer": boolean,
-    "pwm_status": number,
     "gpio_status": boolean,
     "pwm_frequency": number,
-    "new_ledstrip_color": string,
     "startup_with_server": boolean,
     "active_low": boolean,
     "temp_ctr_max_temp": number,
     "pwm_temperature_linked": boolean,
-    "temp_ctr_new_set_value": string,
     "output_type": string,
     "microcontroller_address": number,
-    "index_id": number,
-    "new_neopixel_color": string
+    "index_id": number
 }
 ```
 

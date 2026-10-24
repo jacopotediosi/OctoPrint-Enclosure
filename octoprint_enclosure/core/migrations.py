@@ -69,6 +69,27 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
     if current < 11:
         logger.warning("Migrating settings to v11")
 
+        # Up to version 10, the plugin saved into settings some runtime-only values by mistake.
+        input_runtime_keys = ("temp_sensor_temp", "temp_sensor_humidity")
+        for rpi_input in rpi_inputs:
+            for key in input_runtime_keys:
+                rpi_input.pop(key, None)
+        output_runtime_keys = (
+            "gpio_status",
+            "duty_cycle",
+            "new_duty_cycle",
+            "pwm_status",
+            "neopixel_color",
+            "new_neopixel_color",
+            "ledstrip_color",
+            "new_ledstrip_color",
+            "temp_ctr_set_value",
+            "temp_ctr_new_set_value",
+        )
+        for rpi_output in rpi_outputs:
+            for key in output_runtime_keys:
+                rpi_output.pop(key, None)
+
         # Up to version 10, rpi_outputs and rpi_inputs also held what is neither an output nor an input. From version
         # 11, the actions list holds what runs when asked, and the automations list what decides by itself when to act.
         # The steps below move each of them to its list.

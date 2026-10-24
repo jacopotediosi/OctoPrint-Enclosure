@@ -199,14 +199,9 @@ class EnclosurePlugin(
         self.actions = self._enclosure_settings.actions
         self.automations = self._enclosure_settings.automations
 
-        # Reset volatile temp_ctr_set_value to 0 on startup (it should not be persisted)
-        for rpi_output in self.rpi_outputs:
-            rpi_output["temp_ctr_set_value"] = 0
-
         self._sensor_poller.load(self.get_sensor_inputs())
         self._gpio_inputs.load(self.get_gpio_inputs())
         self._outputs.load(self.rpi_outputs)
-        self.set_temp_hum_control_targets()
         if self.development_mode:
             self.link_dummy_sensors()
         self._actions.load(self.actions)
@@ -419,6 +414,13 @@ class EnclosurePlugin(
         out = self.get_legacy_output_settings(identifier)
         if out is None:
             return make_response("", 404)
+
+        out["gpio_status"] = False
+        out["duty_cycle"] = 0
+        out["neopixel_color"] = "rgb(0,0,0)"
+        out["ledstrip_color"] = "rgb(0,0,0)"
+        out["temp_ctr_set_value"] = 0
+
         if out["output_type"] == "pwm":
             with contextlib.suppress(OutputError):
                 out["duty_cycle"] = self._outputs.get(identifier, PwmOutput).duty_cycle
@@ -427,12 +429,13 @@ class EnclosurePlugin(
                 out["temp_ctr_set_value"] = self._outputs.get(identifier, TempHumControlOutput).target
         if out["output_type"] in ("neopixel_indirect", "neopixel_direct"):
             neopixel_class = NeopixelDirectOutput if out["output_type"] == "neopixel_direct" else NeopixelIndirectOutput
-            out["neopixel_color"] = self.output_color(identifier, neopixel_class, out["neopixel_color"])
+            out["neopixel_color"] = self.output_color(identifier, neopixel_class)
         if out["output_type"] == "ledstrip":
-            out["ledstrip_color"] = self.output_color(identifier, LedstripOutput, out["ledstrip_color"])
+            out["ledstrip_color"] = self.output_color(identifier, LedstripOutput)
         if out["output_type"] in ("regular", "temp_hum_control"):
             output_class = RegularOutput if out["output_type"] == "regular" else TempHumControlOutput
             out["current_value"] = self.output_state_boolean(identifier, output_class)
+            out["gpio_status"] = out["current_value"] is True
         else:
             out["current_value"] = self.pin_state_boolean(to_int(out.get("gpio_pin")), False)
         return jsonify(out)
@@ -565,9 +568,7 @@ class EnclosurePlugin(
             return make_response("missing duty_cycle attribute", 406)
 
         set_value = to_int(data["duty_cycle"])
-        for rpi_output in [item for item in self.rpi_outputs if item["index_id"] == identifier]:
-            rpi_output["new_duty_cycle"] = ""
-            self.write_pwm(identifier, set_value)
+        self.write_pwm(identifier, set_value)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/rgb-led/<int:identifier>", methods=["PATCH"])
@@ -666,14 +667,15 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error sending neopixel command for output %s", index_id)
 
-    def output_color(self, index_id, output_class, saved_color):
+    def output_color(self, index_id, output_class):
         try:
             color = self._outputs.get(index_id, output_class).color
         except OutputError:
-            return saved_color
-        if color is None:
-            return saved_color
-        red, green, blue = color
+            color = None
+
+        # Until a color is set, the output is shown as black
+        red, green, blue = (0, 0, 0) if color is None else color
+
         return f"rgb({red},{green},{blue})"
 
     def get_sensor_inputs(self):
@@ -681,19 +683,6 @@ class EnclosurePlugin(
 
     def get_gpio_inputs(self):
         return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "gpio"]
-
-    def set_temp_hum_control_targets(self, outputs_not_changed=()):
-        for rpi_output in self.rpi_outputs:
-            if rpi_output["output_type"] == "temp_hum_control":
-                index_id = to_int(rpi_output["index_id"])
-                # A control kept as it was by a settings save keeps its target
-                try:
-                    control = self._outputs.get(index_id, TempHumControlOutput)
-                except OutputError:
-                    control = None
-                if control in outputs_not_changed:
-                    continue
-                self.set_temp_hum_control_target(index_id, rpi_output.get("temp_ctr_set_value"))
 
     def link_dummy_sensors(self):
         for control in self._outputs.get_all(TempHumControlOutput):
@@ -879,7 +868,6 @@ class EnclosurePlugin(
             with contextlib.suppress(OutputError):
                 set_temperature = self._outputs.get(to_int(temp_crt_output["index_id"]), TempHumControlOutput).target
                 result.append({"index_id": temp_crt_output["index_id"], "set_temperature": set_temperature})
-                result.append(set_temperature)
         self._frontend.update_set_temperature(result)
 
     def update_ui_outputs(self):
@@ -908,12 +896,12 @@ class EnclosurePlugin(
                     neopixel_class = (
                         NeopixelDirectOutput if output["output_type"] == "neopixel_direct" else NeopixelIndirectOutput
                     )
-                    val = self.output_color(index, neopixel_class, output["neopixel_color"])
+                    val = self.output_color(index, neopixel_class)
                     neopixel_status.append(
                         {"index_id": index, "color": val, "auto_startup": startup, "auto_shutdown": shutdown},
                     )
                 if output["output_type"] == "ledstrip":
-                    val = self.output_color(index, LedstripOutput, output["ledstrip_color"])
+                    val = self.output_color(index, LedstripOutput)
                     ledstrip_status.append(
                         {"index_id": index, "color": val, "auto_startup": startup, "auto_shutdown": shutdown},
                     )
@@ -1515,7 +1503,6 @@ class EnclosurePlugin(
         outputs_before = self._outputs.get_all(Output)
         self._outputs.load(self.rpi_outputs)
         outputs_not_changed = [output for output in self._outputs.get_all(Output) if output in outputs_before]
-        self.set_temp_hum_control_targets(outputs_not_changed)
 
         # Link outputs to dummy sensors
         if self.development_mode:
@@ -1545,6 +1532,9 @@ class EnclosurePlugin(
         # Start a filament automation added or changed during a print
         if self._printer.is_printing():
             self.start_filament_detection(automations_not_changed)
+
+        # Update UI
+        self.update_ui()
 
     def get_settings_defaults(self):
         return {

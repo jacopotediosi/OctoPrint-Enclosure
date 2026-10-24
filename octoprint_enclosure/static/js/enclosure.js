@@ -332,11 +332,50 @@ $(function () {
       return duty_cycle;
     }
 
+    self.inputStates = {};
+    self.outputStates = {};
+
+    self.newInputState = function () {
+      return {
+        temp_sensor_temp: ko.observable(""),
+        temp_sensor_humidity: ko.observable("")
+      };
+    };
+
+    self.newOutputState = function () {
+      return {
+        gpio_status: ko.observable(false),
+        duty_cycle: ko.observable(0),
+        new_duty_cycle: ko.observable(""),
+        neopixel_color: ko.observable("rgb(0,0,0)"),
+        new_neopixel_color: ko.observable(""),
+        ledstrip_color: ko.observable("rgb(0,0,0)"),
+        new_ledstrip_color: ko.observable(""),
+        temp_ctr_set_value: ko.observable(0),
+        temp_ctr_new_set_value: ko.observable("")
+      };
+    };
+
+    self.withState = function (items, states, newState) {
+      var kept = {};
+      var wrapped = items.map(function (item) {
+        var index_id = item.index_id();
+        kept[index_id] = states[index_id] || newState();
+        return $.extend({}, item, kept[index_id]);
+      });
+      return {states: kept, items: wrapped};
+    };
+
     self.bindFromSettings = function(){
-      self.rpi_inputs(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs());
-      self.rpi_outputs(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs());
-      self.actions(self.settingsViewModel.settings.plugins.enclosure.actions());
-      self.automations(self.settingsViewModel.settings.plugins.enclosure.automations());
+      var settings = self.settingsViewModel.settings.plugins.enclosure;
+      var inputs = self.withState(settings.rpi_inputs(), self.inputStates, self.newInputState);
+      var outputs = self.withState(settings.rpi_outputs(), self.outputStates, self.newOutputState);
+      self.inputStates = inputs.states;
+      self.outputStates = outputs.states;
+      self.rpi_inputs(inputs.items);
+      self.rpi_outputs(outputs.items);
+      self.actions(settings.actions());
+      self.automations(settings.automations());
     };
 
     self.onBeforeBinding = function () {
@@ -350,6 +389,7 @@ $(function () {
     self.onStartupComplete = function () {
       self.settingsOpen = false;
       self.notifyGpioAlert();
+      self.getUpdateUI();
     };
 
     self.notifyGpioAlert = function () {
@@ -372,6 +412,7 @@ $(function () {
 
     self.onSettingsHidden = function () {
       self.settingsOpen = false;
+      self.getUpdateUI();
     };
 
     self.setTemperature = function (item, form) {
@@ -420,8 +461,6 @@ $(function () {
         input_pull_resistor: ko.observable("input_pull_up"),
         temp_sensor_type: ko.observable(""),
         temp_sensor_address: ko.observable(""),
-        temp_sensor_temp: ko.observable(""),
-        temp_sensor_humidity: ko.observable(""),
         ds18b20_serial: ko.observable(""),
         use_fahrenheit: ko.observable(false),
         temp_sensor_navbar: ko.observable(true),
@@ -455,7 +494,6 @@ $(function () {
         label: ko.observable("Output " + nextIndex),
         output_type: ko.observable(""),
         gpio_pin: ko.observable(0),
-        gpio_status: ko.observable(false),
         hide_btn_ui: ko.observable(false),
         active_low: ko.observable(true),
         toggle_timer: ko.observable(false),
@@ -470,24 +508,15 @@ $(function () {
         linked_temp_sensor: ko.observable(""),
         temp_ctr_type: ko.observable(""),
         temp_ctr_deadband: ko.observable(0),
-        temp_ctr_set_value: ko.observable(0),
-        temp_ctr_new_set_value: ko.observable(""),
         temp_ctr_default_value: ko.observable(0),
         temp_ctr_max_temp: ko.observable(0),
         pwm_frequency: ko.observable(50),
-        pwm_status: ko.observable(50),
-        duty_cycle: ko.observable(0),
         default_duty_cycle: ko.observable(0),
-        new_duty_cycle: ko.observable(""),
-        neopixel_color: ko.observable("rgb(0,0,0)"),
         default_neopixel_color: ko.observable(""),
-        new_neopixel_color: ko.observable(""),
         neopixel_count: ko.observable(0),
         neopixel_brightness: ko.observable(255),
         neopixel_dma: ko.observable(10),
-        ledstrip_color: ko.observable("rgb(0,0,0)"),
         default_ledstrip_color: ko.observable(""),
-        new_ledstrip_color: ko.observable(""),
         ledstrip_gpio_clk: ko.observable(""),
         ledstrip_gpio_dat: ko.observable(""),
         microcontroller_address: ko.observable(0),
