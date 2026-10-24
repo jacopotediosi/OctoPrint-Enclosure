@@ -13,6 +13,11 @@ if TYPE_CHECKING:
     from octoprint_enclosure.inputs.sensors.base import Reading, Sensor
 
 READ_INTERVAL_SECONDS = 10
+READING_MAX_AGE_SECONDS = 30
+
+
+class StaleReadingError(Exception):
+    """The error of a sensor that stopped answering."""
 
 
 @dataclass(frozen=True)
@@ -20,10 +25,10 @@ class SensorReading:
     """The outcome of reading a sensor."""
 
     reading: Reading | None
-    """The values read, or None if the sensor couldn't be read."""
+    """The values read, or None if there is no current value."""
 
     error: Exception | None
-    """Why the sensor couldn't be read, or None if it could."""
+    """Why there is no current value, because the sensor couldn't be read or its last reading is too old, or None."""
 
     time: float
     """When the sensor was read, as a monotonic time."""
@@ -48,6 +53,9 @@ class SensorPoller:
 
     _polled: dict[int, Sensor]
     """The sensor to read for each input, by the id of the input."""
+
+    _stale: set[int]
+    """The ids of the inputs whose sensor stopped answering."""
 
     _lock: threading.Lock
     """Held by every access to the sensors and the readings."""
@@ -74,6 +82,7 @@ class SensorPoller:
         self._started = False
         self._readings = {}
         self._polled = {}
+        self._stale = set()
         self._lock = threading.Lock()
 
     def load(self, sensor_inputs_settings: Iterable[dict]) -> None:
@@ -93,6 +102,7 @@ class SensorPoller:
                     continue
                 del self._polled[index_id]
                 self._readings.pop(index_id, None)
+                self._stale.discard(index_id)
 
             # Handle new sensors
             for index_id, sensor in sensors.items():
@@ -124,7 +134,30 @@ class SensorPoller:
 
         """
         with self._lock:
-            return dict(self._readings)
+            now = time.monotonic()
+            readings: dict[int, SensorReading] = {}
+
+            for index_id, last_reading in self._readings.items():
+                age = now - last_reading.time
+
+                if age <= READING_MAX_AGE_SECONDS:
+                    # Reading is not stale
+                    readings[index_id] = last_reading
+                    continue
+
+                if index_id not in self._stale:
+                    # Reading is stale for the first time
+                    self._stale.add(index_id)
+                    self._logger.warning(
+                        "The sensor of input %s stopped answering: its last reading is %.0f s old",
+                        index_id,
+                        age,
+                    )
+
+                error = StaleReadingError(f"The last reading is {age:.0f} s old")
+                readings[index_id] = SensorReading(None, error, last_reading.time)
+
+            return readings
 
     def _start_reading(self, index_id: int, sensor: Sensor) -> None:
         thread = threading.Thread(target=self._poll, args=(index_id, sensor), name=f"EnclosureSensor{index_id}")
@@ -162,7 +195,15 @@ class SensorPoller:
             # A sensor gone or replaced meanwhile leaves no reading behind
             if self._polled.get(index_id) is not sensor:
                 return
+
             self._readings[index_id] = sensor_reading
+
+            answers_again = index_id in self._stale
+            self._stale.discard(index_id)
+
+        # Notify if a stale reading answers again
+        if answers_again:
+            self._logger.info("The sensor of input %s answers again", index_id)
 
         # Call the reading callback
         try:
