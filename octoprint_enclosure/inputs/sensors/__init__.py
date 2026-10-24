@@ -1,4 +1,5 @@
 from .base import SensorError
+from .poller import SensorPoller
 from .sensors import Sensors
 
-__all__ = ["SensorError", "Sensors"]
+__all__ = ["SensorError", "SensorPoller", "Sensors"]

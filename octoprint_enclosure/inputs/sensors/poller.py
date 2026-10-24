@@ -9,8 +9,8 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Iterable
 
-    from octoprint_enclosure.inputs import Sensors
-    from octoprint_enclosure.inputs.sensors.base import Reading, Sensor
+    from .base import Reading, Sensor
+    from .sensors import Sensors
 
 READ_INTERVAL_SECONDS = 10
 READING_MAX_AGE_SECONDS = 30

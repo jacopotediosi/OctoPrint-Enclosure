@@ -29,11 +29,11 @@ from .automations import (
     StopTempHumControlReaction,
     TemperatureTrigger,
 )
-from .core import Frontend, PluginContext, Settings
+from .core import Frontend, PluginContext, Scheduler, Settings
 from .core.migrations import migrate_settings
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
-from .inputs import GpioInputError, GpioInputs, PullResistor, SensorError, Sensors
+from .inputs import GpioInputError, GpioInputs, PullResistor, SensorError, SensorPoller, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
 from .outputs import (
@@ -50,7 +50,6 @@ from .outputs import (
     TempHumControlStatus,
     TempHumControlType,
 )
-from .runtime import Scheduler, SensorPoller
 from .utils import (
     parse_hhmm,
     parse_rgb,

@@ -11,13 +11,13 @@ if TYPE_CHECKING:
     from octoprint_enclosure.actions import Actions
     from octoprint_enclosure.automations import Automations
     from octoprint_enclosure.hardware import GpioBackend, I2cBackend
-    from octoprint_enclosure.inputs import GpioInputs, Sensors
+    from octoprint_enclosure.inputs import GpioInputs, SensorPoller, Sensors
     from octoprint_enclosure.integrations import Mqtt
     from octoprint_enclosure.notifications import Notifications
     from octoprint_enclosure.outputs import Outputs
-    from octoprint_enclosure.runtime import Scheduler, SensorPoller
 
     from .frontend import Frontend
+    from .scheduler import Scheduler
     from .settings import Settings
 
 
