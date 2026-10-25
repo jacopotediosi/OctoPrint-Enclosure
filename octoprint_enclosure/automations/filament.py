@@ -92,6 +92,11 @@ class FilamentAutomation(Automation[FilamentConfig]):
         """
         return self.trigger.matches_level(level)
 
+    @property
+    def is_armed(self) -> bool:
+        """Whether the automation is actually watching for the end of the filament."""
+        return self._armed
+
     def arm(self) -> None:
         """Start detecting the end of the filament."""
         self._armed = True

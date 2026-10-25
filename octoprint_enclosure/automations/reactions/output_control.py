@@ -13,7 +13,7 @@ class OutputControlConfig(BaseConfig):
     """The configuration of an automation reaction that controls an output."""
 
     controlled_io: int
-    """The id of the output."""
+    """The id of the output to control."""
 
     controlled_io_set_state: RegularSetState
     """What to do with the output."""

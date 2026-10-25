@@ -180,15 +180,14 @@ class SensorPoller:
 
     def _read(self, index_id: int, sensor: Sensor) -> None:
         # Get the reading
-        now = time.monotonic()
         try:
             reading = sensor.read()
         except Exception as error:
             self._logger.debug("Couldn't read the sensor of input %s: %s", index_id, error)
-            sensor_reading = SensorReading(None, error, now)
+            sensor_reading = SensorReading(None, error, time.monotonic())
         else:
             self._logger.debug("Read the sensor of input %s: %s", index_id, reading)
-            sensor_reading = SensorReading(reading, None, now)
+            sensor_reading = SensorReading(reading, None, time.monotonic())
 
         # Save the reading
         with self._lock:
@@ -198,7 +197,7 @@ class SensorPoller:
 
             self._readings[index_id] = sensor_reading
 
-            answers_again = index_id in self._stale
+            answers_again = index_id in self._stale and sensor_reading.error is None
             self._stale.discard(index_id)
 
         # Notify if a stale reading answers again

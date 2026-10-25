@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
     from octoprint_enclosure.actions import Actions
     from octoprint_enclosure.automations import Automations
+    from octoprint_enclosure.control_loop import ControlLoop
     from octoprint_enclosure.hardware import GpioBackend, I2cBackend
     from octoprint_enclosure.inputs import GpioInputs, SensorPoller, Sensors
     from octoprint_enclosure.integrations import Mqtt
@@ -47,6 +48,7 @@ class PluginContext:
     # Threads
     scheduler: Scheduler
     sensor_poller: SensorPoller
+    control_loop: ControlLoop
 
     # Notifications
     notifications: Notifications

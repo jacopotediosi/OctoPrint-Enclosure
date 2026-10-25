@@ -13,27 +13,22 @@ from flask import jsonify, make_response, request
 from octoprint.events import Events
 from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
 from octoprint.server.util.flask import restricted_access
-from octoprint.util import RepeatedTimer
 from werkzeug.exceptions import BadRequest
 
-from .actions import ActionError, Actions, GcodeAction, GcodeConfig, PrinterAction, ShellAction
+from .actions import ActionError, Actions, GcodeAction, PrinterAction, ShellAction
 from .automations import (
     AutomationError,
     Automations,
     FilamentAutomation,
-    GpioInputTrigger,
-    OutputControlReaction,
-    PwmTemperatureLinkedAutomation,
     RuleAutomation,
-    RunActionReaction,
-    StopTempHumControlReaction,
     TemperatureTrigger,
 )
+from .control_loop import ControlLoop
 from .core import Frontend, PluginContext, Scheduler, Settings
 from .core.migrations import migrate_settings
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
-from .inputs import GpioInputError, GpioInputs, PullResistor, SensorError, SensorPoller, Sensors
+from .inputs import GpioInputs, PullResistor, SensorError, SensorPoller, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
 from .outputs import (
@@ -47,7 +42,6 @@ from .outputs import (
     RegularOutput,
     RegularSetState,
     TempHumControlOutput,
-    TempHumControlStatus,
     TempHumControlType,
 )
 from .utils import (
@@ -72,9 +66,7 @@ class EnclosurePlugin(
     rpi_outputs = []
     actions = []
     automations = []
-    waiting_temperature = set()
     failing_sensors = set()
-    print_complete = False
     development_mode = False
 
     def initialize(self):
@@ -119,15 +111,30 @@ class EnclosurePlugin(
         self._actions = Actions(self._printer, self._frontend, self._logger)
         self._automations = Automations(self._logger)
 
-        # Init threads
-        self._scheduler = Scheduler(self._logger)
-        self._sensor_poller = SensorPoller(self._sensors, self.handle_sensor_reading, self._logger)
-
         # Init notifications
         self._notifications = Notifications(self._enclosure_settings, self._logger)
 
         # Init integrations
         self._mqtt = Mqtt(self._plugin_manager, self._logger)
+
+        # Init threads
+        self._scheduler = Scheduler(self._logger)
+        self._sensor_poller = SensorPoller(self._sensors, self.handle_sensor_reading, self._logger)
+        self._control_loop = ControlLoop(
+            self._gpio_inputs,
+            self._outputs,
+            self._automations,
+            self._actions,
+            self._notifications,
+            self._printer,
+            self._frontend,
+            self._enclosure_settings,
+            self._logger,
+            get_sensor_data=self.get_sensor_data,
+            switch_output=self.switch_output,
+            write_pwm=self.write_pwm,
+            update_ui=self.update_ui,
+        )
 
         # Init the plugin context
         self._plugin_context = PluginContext(
@@ -144,6 +151,7 @@ class EnclosurePlugin(
             automations=self._automations,
             scheduler=self._scheduler,
             sensor_poller=self._sensor_poller,
+            control_loop=self._control_loop,
             notifications=self._notifications,
             mqtt=self._mqtt,
         )
@@ -205,18 +213,15 @@ class EnclosurePlugin(
             self.link_dummy_sensors()
         self._actions.load(self.actions)
         self._automations.load(self.automations)
+        self.warn_missing_linked_sensors()
 
         self.setup_gpio()
         self.configure_gpio()
         self.update_ui()
         self.start_outpus_with_server()
-        self.handle_initial_gpio_control()
 
         self._sensor_poller.start()
-        # Start the timer that runs the controls on the last readings of the sensors
-        RepeatedTimer(10, self.handle_readings, None, None, False).start()
-
-        self.print_complete = False
+        self._control_loop.start()
 
     def get_settings_version(self):
         return 11
@@ -365,7 +370,7 @@ class EnclosurePlugin(
 
         self.set_temp_hum_control_target(identifier, set_value)
 
-        self.handle_temp_hum_control()
+        self._control_loop.evaluate()
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/filament/<int:identifier>", methods=["PATCH"])
@@ -683,6 +688,30 @@ class EnclosurePlugin(
     def get_gpio_inputs(self):
         return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "gpio"]
 
+    def warn_missing_linked_sensors(self):
+        sensor_ids = {to_int(rpi_input["index_id"]) for rpi_input in self.get_sensor_inputs()}
+        for rpi_output in self.rpi_outputs:
+            if rpi_output["output_type"] != "temp_hum_control":
+                continue
+            if to_int(rpi_output["linked_temp_sensor"]) not in sensor_ids:
+                self._logger.warning(
+                    "Output %s is linked to sensor %s, which doesn't exist",
+                    rpi_output["index_id"],
+                    rpi_output["linked_temp_sensor"],
+                )
+        for automation in self.automations:
+            is_temperature_rule = (
+                automation["automation_type"] == "rule" and automation["trigger_type"] == "temperature"
+            )
+            if not is_temperature_rule and automation["automation_type"] != "pwm_temperature_linked":
+                continue
+            if to_int(automation["linked_temp_sensor"]) not in sensor_ids:
+                self._logger.warning(
+                    "Automation %s is linked to sensor %s, which doesn't exist",
+                    automation["index_id"],
+                    automation["linked_temp_sensor"],
+                )
+
     def link_dummy_sensors(self):
         for control in self._outputs.get_all(TempHumControlOutput):
             try:
@@ -714,9 +743,9 @@ class EnclosurePlugin(
         return bool(self.get_pwm_temperature_linked_settings(to_int(index_id)))
 
     def check_enclosure_temp(self):
-        """Read every sensor now, then run the controls on the readings."""
+        """Read every sensor now, then take the decisions on the readings."""
         self._sensor_poller.read_all()
-        self.handle_readings()
+        self._control_loop.evaluate()
 
     def handle_sensor_reading(self, index_id, sensor_reading):
         # The input may have been removed by a settings save while its sensor was being read
@@ -732,6 +761,7 @@ class EnclosurePlugin(
             self._mqtt.publish_sensor_reading(sensor["label"], temp, hum)
 
         self.update_ui_current_temperature()
+        self._control_loop.evaluate_reading(index_id)
 
     def get_sensor_data(self):
         readings = self._sensor_poller.get_readings()
@@ -754,18 +784,6 @@ class EnclosurePlugin(
             )
 
         return sensor_data
-
-    def handle_readings(self):
-        try:
-            sensor_data = self.get_sensor_data()
-
-            if sensor_data:
-                self.handle_temp_hum_control()
-                self.handle_temperature_rules()
-                self.handle_pwm_linked_temperature()
-                self.update_ui()
-        except Exception:
-            self._logger.exception("Error checking enclosure temperature")
 
     def handle_sensor_failure(self, sensor, error):
         if sensor["index_id"] in self.failing_sensors:
@@ -798,7 +816,7 @@ class EnclosurePlugin(
             index_id = to_int(output["index_id"])
 
             if output["output_type"] == "regular":
-                if not self.print_complete:
+                if self._printer.is_printing() or self._printer.is_paused():
                     on = self.switch_output(index_id, RegularSetState.ON if first_run else RegularSetState.TOGGLE)
                     time_delay = to_int(output["toggle_timer_on"]) if on else to_int(output["toggle_timer_off"])
                     self._scheduler.schedule(
@@ -827,7 +845,7 @@ class EnclosurePlugin(
                     time_delay = to_int(output["toggle_timer_on"])
                     write_value = to_int(output["default_duty_cycle"])
 
-                if not self.print_complete:
+                if self._printer.is_printing() or self._printer.is_paused():
                     self.write_pwm(index_id, write_value)
                     self._scheduler.schedule(
                         f"output:{index_id}:toggle_timer",
@@ -936,80 +954,6 @@ class EnclosurePlugin(
 
         return temperature, humidity, airquality
 
-    def handle_temperature_rules(self):
-        for rule in self._automations.get_all(RuleAutomation):
-            trigger = rule.trigger
-            if not isinstance(trigger, TemperatureTrigger):
-                continue
-            linked_data = self.get_linked_temp_sensor_data(trigger.config.linked_temp_sensor)
-            temperature = None if linked_data is None else linked_data["temperature"]
-            if trigger.matches_temperature(temperature):
-                self.handle_temperature_reaction(rule.reaction, trigger.config.alarm_set_temp)
-
-    def handle_pwm_linked_temperature(self):
-        try:
-            for pwm_linked in self._automations.get_all(PwmTemperatureLinkedAutomation):
-                output_id = pwm_linked.config.output
-                if self._printer.is_printing():
-                    linked_data = self.get_linked_temp_sensor_data(pwm_linked.config.linked_temp_sensor)
-                    temperature = None if linked_data is None else linked_data["temperature"]
-                    calculated_duty = pwm_linked.get_duty_cycle(temperature)
-                    self._logger.debug("Calculated duty for PWM %s is %s", output_id, calculated_duty)
-                elif self.print_complete:
-                    # After a print the PWM keeps its duty cycle: the default one, or the one set through API or ENC
-                    continue
-                else:
-                    calculated_duty = 0
-
-                self.write_pwm(output_id, calculated_duty)
-
-        except Exception:
-            self._logger.exception("Error handling temperature linked PWM outputs")
-
-    def get_linked_temp_sensor_data(self, linked_id):
-        linked_data = next((data for data in self.get_sensor_data() if data["index_id"] == linked_id), None)
-        if linked_data is None:
-            self._logger.warning("No linked temperature sensor found for %s", linked_id)
-        return linked_data
-
-    def handle_temp_hum_control(self):
-        try:
-            for temp_hum_control in list(
-                filter(lambda item: item["output_type"] == "temp_hum_control", self.rpi_outputs),
-            ):
-                index_id = to_int(temp_hum_control["index_id"])
-                try:
-                    control = self._outputs.get(index_id, TempHumControlOutput)
-                except OutputError:
-                    continue
-
-                # With a target of 0 the control is off, and doesn't need the sensor
-                if control.target == 0:
-                    linked_sensor_data = None
-                else:
-                    linked_sensor_data = self.get_linked_temp_sensor_data(control.config.linked_temp_sensor)
-                temperature = None if linked_sensor_data is None else linked_sensor_data["temperature"]
-                humidity = None if linked_sensor_data is None else linked_sensor_data["humidity"]
-
-                previous_status = control.status
-                try:
-                    status = control.regulate(temperature, humidity)
-                except Exception:
-                    self._logger.exception("Error reading or writing output %s", index_id)
-                    continue
-                if status is previous_status:
-                    continue
-
-                # A print paused by ENC W1 goes on when no control it waits for still has to reach its target
-                if status is TempHumControlStatus.IDLE and index_id in self.waiting_temperature:
-                    self.waiting_temperature.discard(index_id)
-                    if not self.waiting_temperature and self._printer.is_paused():
-                        self._printer.resume_print()
-
-                self.update_ui()
-        except Exception:
-            self._logger.exception("Error handling temperature/humidity control")
-
     def setup_gpio(self):
         try:
             current_mode = self._gpio.getmode()
@@ -1085,61 +1029,6 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error configuring GPIO")
 
-    def handle_filament_detection(self, automation, input_id, input_label):
-        try:
-            if automation.detect_end():
-                gcode_logger = self._logger.getChild("Actions.GcodeAction")
-                gcode_config = GcodeConfig(self._enclosure_settings.filament_sensor_gcode)
-                GcodeAction(gcode_config, self._printer, self._frontend, gcode_logger).run()
-                self._notifications.send(
-                    NotificationType.FILAMENT_CHANGE,
-                    f"Filament change action caused by sensor: {input_label}",
-                )
-        except Exception:
-            self._logger.exception("Error handling filament detection of input %s", input_id)
-
-    def start_filament_detection(self, automations_not_changed=()):
-        try:
-            for filament_automation in self._automations.get_all(FilamentAutomation):
-                # An automation kept as it was by a settings save goes on detecting as it is
-                if filament_automation in automations_not_changed:
-                    continue
-                filament_automation.disarm()
-                input_id = filament_automation.trigger.config.input
-                try:
-                    level = self._gpio_inputs.get(input_id).read_pin_level()
-                except GpioInputError as error:
-                    self._logger.debug("Can't read GPIO input %s: %s", input_id, error)
-                    continue
-                if filament_automation.is_filament_missing(level):
-                    self._printer.pause_print()
-                    self._logger.info("Started printing with no filament.")
-                else:
-                    filament_automation.arm()
-        except Exception:
-            self._logger.exception("Error starting filament detection")
-
-    def stop_filament_detection(self):
-        for filament_automation in self._automations.get_all(FilamentAutomation):
-            filament_automation.disarm()
-
-    def handle_initial_gpio_control(self):
-        try:
-            for rule in self._automations.get_all(RuleAutomation):
-                trigger, reaction = rule.trigger, rule.reaction
-                if not isinstance(trigger, GpioInputTrigger) or not isinstance(reaction, OutputControlReaction):
-                    continue
-                input_id = trigger.config.input
-                try:
-                    level = self._gpio_inputs.get(input_id).read_pin_level()
-                except GpioInputError as error:
-                    self._logger.debug("Can't read GPIO input %s: %s", input_id, error)
-                    continue
-                if trigger.matches_level(level):
-                    self.control_output(reaction.config)
-        except Exception:
-            self._logger.exception("Error handling initial GPIO control")
-
     def run_action(self, index_id, action_class):
         try:
             action = self._actions.get(index_id, action_class)
@@ -1149,96 +1038,7 @@ class EnclosurePlugin(
         action.run()
 
     def handle_gpio_input(self, input_id, level):
-        input_label = next(
-            (rpi_input["label"] for rpi_input in self.rpi_inputs if to_int(rpi_input["index_id"]) == input_id),
-            "",
-        )
-        for automation in self._automations.get_triggered_by_gpio_input(input_id, level):
-            if isinstance(automation, RuleAutomation):
-                self.handle_gpio_reaction(automation.reaction, input_id, input_label)
-            elif isinstance(automation, FilamentAutomation):
-                self.handle_filament_detection(automation, input_id, input_label)
-
-    def handle_gpio_reaction(self, reaction, input_id, input_label):
-        try:
-            if isinstance(reaction, OutputControlReaction):
-                config = reaction.config
-                if self.control_output(config):
-                    self._notifications.send(
-                        NotificationType.GPIO_ACTION,
-                        f"GPIO control action caused by input {input_label}. "
-                        f"Setting GPIO{config.controlled_io} to: {config.controlled_io_set_state.value}",
-                    )
-            elif isinstance(reaction, RunActionReaction):
-                action_settings = self.run_automation_action(reaction.config.action)
-                action_type = action_settings.get("action_type")
-                if action_type == "gcode_output":
-                    self._notifications.send(
-                        NotificationType.GPIO_ACTION,
-                        f"GPIO control action caused by input {input_label}. Sending GCODE command",
-                    )
-                elif action_type == "printer":
-                    self._notifications.send(
-                        NotificationType.PRINTER_ACTION,
-                        f"Printer action: {action_settings['printer_action']} caused by input: {input_label}",
-                    )
-            elif isinstance(reaction, StopTempHumControlReaction):
-                self.stop_temp_hum_control()
-                self._notifications.send(
-                    NotificationType.PRINTER_ACTION,
-                    f"Printer action: stop_temp_hum_control caused by input: {input_label}",
-                )
-        except Exception:
-            self._logger.exception("Error handling an automation of input %s", input_id)
-
-    def handle_temperature_reaction(self, reaction, threshold):
-        cause = f"enclosure temperature exceed {threshold:g}"
-        try:
-            if isinstance(reaction, OutputControlReaction):
-                if self.control_output(reaction.config):
-                    self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
-            elif isinstance(reaction, RunActionReaction):
-                action_settings = self.run_automation_action(reaction.config.action)
-                action_type = action_settings.get("action_type")
-                if action_type == "gcode_output":
-                    self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
-                elif action_type == "printer":
-                    self._notifications.send(
-                        NotificationType.PRINTER_ACTION,
-                        f"Printer action: {action_settings['printer_action']} caused by {cause}",
-                    )
-            elif isinstance(reaction, StopTempHumControlReaction):
-                self.stop_temp_hum_control()
-                self._notifications.send(
-                    NotificationType.PRINTER_ACTION,
-                    f"Printer action: stop_temp_hum_control caused by {cause}",
-                )
-        except Exception:
-            self._logger.exception("Error handling an automation on the temperature above %s", threshold)
-
-    def control_output(self, config):
-        output_settings = self.get_output_settings(config.controlled_io)
-        if output_settings is None or output_settings["output_type"] != "regular":
-            return False
-        self.switch_output(config.controlled_io, config.controlled_io_set_state)
-        return True
-
-    def run_automation_action(self, index_id):
-        action_settings = self.get_action_settings(index_id)
-        if action_settings is None:
-            return {}
-        try:
-            self._actions.run(index_id)
-        except ActionError as error:
-            self._logger.debug("Can't run action %s: %s", index_id, error)
-        return action_settings
-
-    def stop_temp_hum_control(self):
-        self._logger.info("Printer action stopping temperature control.")
-        for rpi_output in self.rpi_outputs:
-            if rpi_output["auto_shutdown"] and rpi_output["output_type"] == "temp_hum_control":
-                self.set_temp_hum_control_target(to_int(rpi_output["index_id"]), 0)
-        self.handle_temp_hum_control()
+        self._control_loop.evaluate_gpio_input_edge(input_id, level)
 
     def set_temp_hum_control_target(self, index_id, target):
         try:
@@ -1247,12 +1047,13 @@ class EnclosurePlugin(
             self._logger.debug("Can't set the target of output %s: %s", index_id, error)
 
     def handle_temperature_command(self, index_id, temperature, wait):
-        if wait and self._printer.is_printing():
-            self._printer.pause_print()
-            self.waiting_temperature.add(index_id)
         self.set_temp_hum_control_target(index_id, temperature)
         self.update_ui_set_temperature()
-        self.handle_temp_hum_control()
+        if wait and self._printer.is_printing():
+            self._printer.pause_print()
+            self._control_loop.wait_for_temperature(index_id)
+        else:
+            self._control_loop.evaluate()
 
     def switch_output(self, index_id, state):
         try:
@@ -1286,19 +1087,16 @@ class EnclosurePlugin(
 
     # ~~ EventPlugin mixin
     def on_event(self, event, payload):
+        self._control_loop.evaluate_octoprint_event(event)
+
         if event == Events.CONNECTED:
             self.update_ui()
 
         if event == Events.CLIENT_OPENED:
             self.update_ui()
 
-        if event == Events.PRINT_RESUMED:
-            self.start_filament_detection()
-
         if event == Events.PRINT_STARTED:
-            self.print_complete = False
             self._scheduler.cancel_all()
-            self.start_filament_detection()
             for rpi_output in self.rpi_outputs:
                 if rpi_output["auto_startup"]:
                     startup_time = rpi_output["startup_time"]
@@ -1318,19 +1116,14 @@ class EnclosurePlugin(
             self.update_ui()
 
         elif event == Events.PRINT_DONE:
-            self.stop_filament_detection()
-            self.print_complete = True
             for rpi_output in self.rpi_outputs:
                 shutdown_time = rpi_output["shutdown_time"]
-                if rpi_output["output_type"] == "pwm" and self.is_pwm_linked(rpi_output["index_id"]):
-                    self.write_pwm(rpi_output["index_id"], to_int(rpi_output["default_duty_cycle"]))
                 if rpi_output["auto_shutdown"] and parse_hhmm(str(shutdown_time)) is None:
                     delay_seconds = to_float(shutdown_time)
                     self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
             self.update_ui()
 
         elif event in (Events.PRINT_CANCELLED, Events.PRINT_FAILED):
-            self.stop_filament_detection()
             self._scheduler.cancel_all()
             for rpi_output in self.rpi_outputs:
                 if rpi_output["shutdown_on_failed"]:
@@ -1340,6 +1133,7 @@ class EnclosurePlugin(
                         self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
                         if rpi_output["output_type"] == "temp_hum_control":
                             self.set_temp_hum_control_target(to_int(rpi_output["index_id"]), 0)
+            self._control_loop.evaluate()
 
         if event == Events.PRINT_DONE:
             file_name = Path(payload["path"]).name
@@ -1474,6 +1268,7 @@ class EnclosurePlugin(
             if rpi_output["output_type"] == "temp_hum_control":
                 self.set_temp_hum_control_target(rpi_output_index, value)
                 self._logger.debug("Setting temperature to output index: %s value %s", rpi_output["index_id"], value)
+                self._control_loop.evaluate()
 
             self.update_ui()
 
@@ -1511,13 +1306,8 @@ class EnclosurePlugin(
         self._actions.load(self.actions)
 
         # Update automations
-        filament_automations_before = self._automations.get_all(FilamentAutomation)
         self._automations.load(self.automations)
-        automations_not_changed = [
-            automation
-            for automation in self._automations.get_all(FilamentAutomation)
-            if automation in filament_automations_before
-        ]
+        self.warn_missing_linked_sensors()
 
         # Restart GPIO
         try:
@@ -1528,12 +1318,8 @@ class EnclosurePlugin(
         self.setup_gpio()
         self.configure_gpio(outputs_not_changed)
 
-        # Start a filament automation added or changed during a print
-        if self._printer.is_printing():
-            self.start_filament_detection(automations_not_changed)
-
-        # Update UI
-        self.update_ui()
+        # Take the decisions again on the new settings
+        self._control_loop.evaluate_settings()
 
     def get_settings_defaults(self):
         return {
