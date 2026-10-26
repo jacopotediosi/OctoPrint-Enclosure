@@ -43,6 +43,10 @@ class _InvalidOutput(Output[BaseConfig]):
         self.reason = reason
 
     @override
+    def turn_off(self) -> None:
+        raise OutputError(self.reason)
+
+    @override
     def run_enc_command(self, command: str) -> str | None:
         raise OutputError(self.reason)
 
@@ -116,7 +120,7 @@ class Outputs:
             if output in outputs.values():
                 continue
             try:
-                output.stop()
+                output.release()
                 for pin in output.gpio_pins - pins_in_use:
                     self._gpio.cleanup(pin)
             except Exception:

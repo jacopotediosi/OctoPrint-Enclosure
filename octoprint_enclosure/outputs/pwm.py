@@ -75,11 +75,22 @@ class PwmOutput(Output[PwmConfig]):
         self._pwm = pwm
 
     @override
-    def stop(self) -> None:
+    def release(self) -> None:
         """Stop the PWM."""
         if self._pwm is not None:
             self._pwm.stop()
             self._pwm = None
+
+    @override
+    def turn_off(self) -> None:
+        """Set the duty cycle of the PWM to 0.
+
+        Raises:
+            OutputError: If the PWM isn't started.
+            Exception: If the duty cycle can't be written.
+
+        """
+        self.set_duty_cycle(0.0)
 
     def set_duty_cycle(self, duty_cycle: float) -> None:
         """Set the duty cycle of the PWM.

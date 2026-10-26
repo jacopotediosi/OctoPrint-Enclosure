@@ -56,6 +56,7 @@ from .utils import (
 
 class EnclosurePlugin(
     octoprint.plugin.StartupPlugin,
+    octoprint.plugin.ShutdownPlugin,
     octoprint.plugin.TemplatePlugin,
     octoprint.plugin.SettingsPlugin,
     octoprint.plugin.AssetPlugin,
@@ -223,6 +224,11 @@ class EnclosurePlugin(
         self._sensor_poller.start()
         self._control_loop.start()
 
+    # ~~ ShutdownPlugin mixin
+    def on_shutdown(self):
+        self._control_loop.stop()
+
+    # ~~ SettingsPlugin mixin
     def get_settings_version(self):
         return 11
 

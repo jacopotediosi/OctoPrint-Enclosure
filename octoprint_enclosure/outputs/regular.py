@@ -37,6 +37,7 @@ class RegularOutput(SwitchOutput[RegularConfig]):
         """
         self._switch(on=True)
 
+    @override
     def turn_off(self) -> None:
         """Turn the output off.
 

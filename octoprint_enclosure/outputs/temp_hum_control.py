@@ -103,6 +103,17 @@ class TempHumControlOutput(SwitchOutput[TempHumControlConfig]):
         """
         self._target = target
 
+    @override
+    def turn_off(self) -> None:
+        """Turn the control off: drop the target and switch the device off.
+
+        Raises:
+            Exception: If the output can't be regulated.
+
+        """
+        self.set_target(0.0)
+        self.regulate(None, None)
+
     def regulate(self, temperature: float | None, humidity: float | None) -> TempHumControlStatus:
         """Turn the device on or off after a new reading of the sensor, to keep the target.
 

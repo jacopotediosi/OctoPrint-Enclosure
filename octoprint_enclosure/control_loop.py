@@ -21,7 +21,7 @@ from .automations import (
 )
 from .inputs import GpioInputError
 from .notifications import NotificationType
-from .outputs import OutputError, PwmOutput, RegularOutput, TempHumControlOutput, TempHumControlStatus
+from .outputs import Output, OutputError, PwmOutput, RegularOutput, TempHumControlOutput, TempHumControlStatus
 from .utils import to_int
 
 if TYPE_CHECKING:
@@ -63,8 +63,13 @@ class _Event:
 
 
 @dataclass(frozen=True)
-class _Started(_Event):
-    """The Control Loop started."""
+class _Start(_Event):
+    """The Control Loop starts."""
+
+
+@dataclass(frozen=True)
+class _Stop(_Event):
+    """The Control Loop stops."""
 
 
 @dataclass(frozen=True)
@@ -218,8 +223,13 @@ class ControlLoop:
 
     def start(self) -> None:
         """Start taking decisions, on the Control Loop thread."""
-        self._put(_Started())
+        self._put(_Start())
         self._thread.start()
+
+    def stop(self) -> None:
+        """Stop taking decisions and turn every output off."""
+        self._put(_Stop())
+        self._thread.join()
 
     def evaluate(self) -> None:
         """Take the decisions again now."""
@@ -294,10 +304,16 @@ class ControlLoop:
             except Exception:
                 self._logger.exception("Error handling %s", event)
 
+            # Stop the loop if the event was a stop
+            if isinstance(event, _Stop):
+                return
+
     def _handle(self, event: _Event) -> None:
-        if isinstance(event, _Started):
+        if isinstance(event, _Start):
             self._print_job_running = bool(self._printer.is_printing() or self._printer.is_paused())
             self._decide_gpio_input_levels()
+        elif isinstance(event, _Stop):
+            self._turn_off_all_outputs()
         elif isinstance(event, _Tick):
             self._decide_all()
         elif isinstance(event, _NewReading):
@@ -608,6 +624,15 @@ class ControlLoop:
                 except OutputError as error:
                     self._logger.debug("Can't set the target of output %s: %s", index_id, error)
         self._decide_temp_hum_controls(self._get_sensor_data(), None)
+
+    def _turn_off_all_outputs(self) -> None:
+        for output in self._outputs.get_all(Output):
+            try:
+                output.turn_off()
+            except OutputError as error:
+                self._logger.debug("Can't turn off an output: %s", error)
+            except Exception:
+                self._logger.exception("Error turning off an output")
 
     def _control_output(self, reaction: OutputControlReaction) -> bool:
         config = reaction.config

@@ -3,6 +3,8 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import TYPE_CHECKING, TypeVar
 
+from typing_extensions import override
+
 from octoprint_enclosure.core import BaseConfig
 
 from .base import Output
@@ -53,6 +55,16 @@ class ColorOutput(Output[_ConfigT]):
         """
         self._write_color(red, green, blue)
         self._color = (red, green, blue)
+
+    @override
+    def turn_off(self) -> None:
+        """Turn the LEDs off.
+
+        Raises:
+            Exception: If the output can't be written.
+
+        """
+        self.set_color(0, 0, 0)
 
     @abstractmethod
     def _write_color(self, red: int, green: int, blue: int) -> None:
