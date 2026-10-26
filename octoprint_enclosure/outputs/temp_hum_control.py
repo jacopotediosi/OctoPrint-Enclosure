@@ -129,7 +129,11 @@ class TempHumControlOutput(SwitchOutput[TempHumControlConfig]):
 
         """
         config = self.config
-        is_switch_on = self.is_on()
+        try:
+            is_switch_on = self.is_on()
+        except Exception as error:
+            self._logger.warning("Can't read the switch: %s", error)
+            is_switch_on = None
 
         # Handle heater above its maximum temperature
         if (
@@ -168,7 +172,7 @@ class TempHumControlOutput(SwitchOutput[TempHumControlConfig]):
             should_be_on = True
 
         # Switch on or off
-        if should_be_on != is_switch_on:
+        if is_switch_on is None or should_be_on != is_switch_on:
             self._logger.debug("Turning gpio to control temperature %s.", "on" if should_be_on else "off")
             self._switch(on=should_be_on)
 
