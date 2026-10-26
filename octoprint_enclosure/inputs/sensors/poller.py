@@ -160,11 +160,20 @@ class SensorPoller:
             return readings
 
     def _start_reading(self, index_id: int, sensor: Sensor) -> None:
-        thread = threading.Thread(target=self._poll, args=(index_id, sensor), name=f"EnclosureSensor{index_id}")
+        polled_position = list(self._polled).index(index_id)
+        shift_seconds = polled_position * READ_INTERVAL_SECONDS / len(self._polled)
+
+        thread = threading.Thread(
+            target=self._poll,
+            args=(index_id, sensor, shift_seconds),
+            name=f"EnclosureSensor{index_id}",
+        )
         thread.daemon = True
         thread.start()
 
-    def _poll(self, index_id: int, sensor: Sensor) -> None:
+    def _poll(self, index_id: int, sensor: Sensor, shift_seconds: float) -> None:
+        read_interval_seconds = READ_INTERVAL_SECONDS + shift_seconds
+
         while True:
             # End the thread if its sensor is gone or replaced
             with self._lock:
@@ -176,7 +185,8 @@ class SensorPoller:
             self._read(index_id, sensor)
 
             # Sleep until the next reading
-            time.sleep(max(0, READ_INTERVAL_SECONDS - (time.monotonic() - started)))
+            time.sleep(max(0, read_interval_seconds - (time.monotonic() - started)))
+            read_interval_seconds = READ_INTERVAL_SECONDS
 
     def _read(self, index_id: int, sensor: Sensor) -> None:
         # Get the reading
