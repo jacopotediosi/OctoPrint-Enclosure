@@ -51,7 +51,7 @@ class RegularOutput(SwitchOutput[RegularConfig]):
         """Turn the output off if it is on, and on if it is off.
 
         Returns:
-            bool: Whether the output is now on.
+            bool: Whether the output is on after the toggle.
 
         Raises:
             Exception: If the output can't be read or written.

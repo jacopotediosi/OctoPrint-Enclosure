@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.outputs import OutputError
 from octoprint_enclosure.utils import get_gcode_param, to_float, to_int
 
 if TYPE_CHECKING:
@@ -12,14 +11,14 @@ if TYPE_CHECKING:
     from octoprint.util.comm import MachineCom
 
     from octoprint_enclosure.core import PluginContext, Settings
-    from octoprint_enclosure.outputs import Outputs
+    from octoprint_enclosure.executor import Executor
 
 
 class EncHandler:
     """Handles the ENC G-code commands."""
 
     _settings: Settings
-    _outputs: Outputs
+    _executor: Executor
     _logger: logging.Logger
 
     _set_temperature: Callable[[int, float, bool], None]
@@ -46,7 +45,7 @@ class EncHandler:
 
         """
         self._settings = plugin_context.settings
-        self._outputs = plugin_context.outputs
+        self._executor = plugin_context.executor
         self._logger = plugin_context.logger.getChild("EncHandler")
         self._set_temperature = set_temperature
         self._update_ui = update_ui
@@ -75,14 +74,7 @@ class EncHandler:
             self._set_temperature(index_id, temperature, wait)
             comm_instance._log(f"Setting TEMP/HUM control output {index_id} to value {temperature}")
         else:
-            try:
-                reply = self._outputs.run_enc_command(index_id, cmd)
-            except OutputError as error:
-                self._logger.debug("Can't run ENC command %s: %s", cmd, error)
-                return
-            except Exception:
-                self._logger.exception("Error running ENC command: %s", cmd)
-                return
+            reply = self._executor.run_enc_command(index_id, cmd, wait=True)
             if reply is not None:
                 self._update_ui()
                 comm_instance._log(reply)

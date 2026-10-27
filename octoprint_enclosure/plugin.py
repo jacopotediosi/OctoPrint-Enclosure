@@ -15,7 +15,7 @@ from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
 from octoprint.server.util.flask import restricted_access
 from werkzeug.exceptions import BadRequest
 
-from .actions import ActionError, Actions, GcodeAction, PrinterAction, ShellAction
+from .actions import Actions, GcodeAction, PrinterAction, ShellAction
 from .automations import (
     AutomationError,
     Automations,
@@ -26,6 +26,7 @@ from .automations import (
 from .control_loop import ControlLoop
 from .core import Frontend, PluginContext, Scheduler, Settings
 from .core.migrations import migrate_settings
+from .executor import Executor
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
 from .inputs import GpioInputs, PullResistor, SensorError, SensorPoller, Sensors
@@ -119,21 +120,20 @@ class EnclosurePlugin(
         self._mqtt = Mqtt(self._plugin_manager, self._logger)
 
         # Init threads
-        self._scheduler = Scheduler(self._logger)
         self._sensor_poller = SensorPoller(self._sensors, self.handle_sensor_reading, self._logger)
+        self._scheduler = Scheduler(self._logger)
+        self._executor = Executor(self._outputs, self._actions, self._logger, update_ui=self.update_ui)
         self._control_loop = ControlLoop(
             self._gpio_inputs,
             self._outputs,
             self._automations,
-            self._actions,
+            self._executor,
             self._notifications,
             self._printer,
             self._frontend,
             self._enclosure_settings,
             self._logger,
             get_sensor_data=self.get_sensor_data,
-            switch_output=self.switch_output,
-            write_pwm=self.write_pwm,
             update_ui=self.update_ui,
         )
 
@@ -150,6 +150,7 @@ class EnclosurePlugin(
             outputs=self._outputs,
             actions=self._actions,
             automations=self._automations,
+            executor=self._executor,
             scheduler=self._scheduler,
             sensor_poller=self._sensor_poller,
             control_loop=self._control_loop,
@@ -509,7 +510,11 @@ class EnclosurePlugin(
 
         for rpi_output in self.rpi_outputs:
             if identifier == to_int(rpi_output["index_id"]):
-                self.switch_output(identifier, RegularSetState.ON if value else RegularSetState.OFF)
+                self._executor.switch_output(
+                    identifier,
+                    RegularSetState.ON if value else RegularSetState.OFF,
+                    wait=True,
+                )
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:identifier>/auto-startup", methods=["PATCH"])
@@ -579,7 +584,7 @@ class EnclosurePlugin(
             return make_response("missing duty_cycle attribute", 406)
 
         set_value = to_int(data["duty_cycle"])
-        self.write_pwm(identifier, set_value)
+        self._executor.write_pwm(identifier, set_value, wait=True)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/rgb-led/<int:identifier>", methods=["PATCH"])
@@ -595,11 +600,11 @@ class EnclosurePlugin(
 
         if "rgb" not in data:
             return make_response("missing rgb attribute", 406)
-        rgb = data["rgb"]
+        red, green, blue = parse_rgb(data["rgb"])
 
         for rpi_output in self.rpi_outputs:
             if identifier == to_int(rpi_output["index_id"]):
-                self.ledstrip_set_rgb(rpi_output, rgb)
+                self._executor.set_color(identifier, to_int(red), to_int(green), to_int(blue), wait=True)
 
         return make_response("", 204)
 
@@ -623,7 +628,13 @@ class EnclosurePlugin(
 
         for rpi_output in self.rpi_outputs:
             if identifier == to_int(rpi_output["index_id"]):
-                self.send_neopixel_command(rpi_output, data["red"], data["green"], data["blue"])
+                self._executor.set_color(
+                    identifier,
+                    to_int(data["red"]),
+                    to_int(data["green"]),
+                    to_int(data["blue"]),
+                    wait=True,
+                )
 
         return make_response("", 204)
 
@@ -642,41 +653,20 @@ class EnclosurePlugin(
     @octoprint.plugin.BlueprintPlugin.route("/shell/<int:identifier>", methods=["POST"])
     @restricted_access
     def send_shell_command(self, identifier):
-        self.run_action(identifier, ShellAction)
+        self._executor.run_action(identifier, ShellAction)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/gcode/<int:identifier>", methods=["POST"])
     @restricted_access
     def requested_gcode_command(self, identifier):
-        self.run_action(identifier, GcodeAction)
+        self._executor.run_action(identifier, GcodeAction)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/printer/<int:identifier>", methods=["POST"])
     @restricted_access
     def send_printer_command(self, identifier):
-        self.run_action(identifier, PrinterAction)
+        self._executor.run_action(identifier, PrinterAction)
         return make_response("", 204)
-
-    def send_neopixel_command(self, output, red, green, blue):
-        """Send neopixel command.
-
-        Args:
-            output (dict): NeoPixel output whose color is being set.
-            red (int): Red value from 0 to 255.
-            green (int): Green value from 0 to 255.
-            blue (int): Blue value from 0 to 255.
-
-        """
-        index_id = output["index_id"]
-        try:
-            neopixel_class = (
-                NeopixelDirectOutput if output["output_type"] == "neopixel_direct" else NeopixelIndirectOutput
-            )
-            self._outputs.get(index_id, neopixel_class).set_color(int(red), int(green), int(blue))
-        except OutputError as error:
-            self._logger.debug("Can't set the color of output %s: %s", index_id, error)
-        except Exception:
-            self._logger.exception("Error sending neopixel command for output %s", index_id)
 
     def output_color(self, index_id, output_class):
         try:
@@ -824,7 +814,11 @@ class EnclosurePlugin(
 
             if output["output_type"] == "regular":
                 if self._printer.is_printing() or self._printer.is_paused():
-                    on = self.switch_output(index_id, RegularSetState.ON if first_run else RegularSetState.TOGGLE)
+                    on = self._executor.switch_output(
+                        index_id,
+                        RegularSetState.ON if first_run else RegularSetState.TOGGLE,
+                        wait=True,
+                    )
                     time_delay = to_int(output["toggle_timer_on"]) if on else to_int(output["toggle_timer_off"])
                     self._scheduler.schedule(
                         f"output:{index_id}:toggle_timer",
@@ -832,7 +826,7 @@ class EnclosurePlugin(
                         functools.partial(self.toggle_output, index_id),
                     )
                 else:
-                    self.switch_output(index_id, RegularSetState.OFF)
+                    self._executor.switch_output(index_id, RegularSetState.OFF)
                 self.update_ui_outputs()
                 return
 
@@ -853,14 +847,14 @@ class EnclosurePlugin(
                     write_value = to_int(output["default_duty_cycle"])
 
                 if self._printer.is_printing() or self._printer.is_paused():
-                    self.write_pwm(index_id, write_value)
+                    self._executor.write_pwm(index_id, write_value)
                     self._scheduler.schedule(
                         f"output:{index_id}:toggle_timer",
                         time_delay,
                         functools.partial(self.toggle_output, index_id),
                     )
                 else:
-                    self.write_pwm(index_id, 0)
+                    self._executor.write_pwm(index_id, 0)
                 self.update_ui_outputs()
                 return
 
@@ -1036,22 +1030,11 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error configuring GPIO")
 
-    def run_action(self, index_id, action_class):
-        try:
-            action = self._actions.get(index_id, action_class)
-        except ActionError as error:
-            self._logger.debug("Can't run action %s: %s", index_id, error)
-            return
-        action.run()
-
     def handle_gpio_input(self, input_id, level):
         self._control_loop.evaluate_gpio_input_edge(input_id, level)
 
     def set_temp_hum_control_target(self, index_id, target):
-        try:
-            self._outputs.get(index_id, TempHumControlOutput).set_target(to_float(target))
-        except OutputError as error:
-            self._logger.debug("Can't set the target of output %s: %s", index_id, error)
+        self._executor.set_target(index_id, to_float(target), wait=True)
 
     def handle_temperature_command(self, index_id, temperature, wait):
         self.set_temp_hum_control_target(index_id, temperature)
@@ -1061,36 +1044,6 @@ class EnclosurePlugin(
             self._control_loop.wait_for_temperature(index_id)
         else:
             self._control_loop.evaluate()
-
-    def switch_output(self, index_id, state):
-        try:
-            regular_output = self._outputs.get(index_id, RegularOutput)
-            if state is RegularSetState.TOGGLE:
-                on = regular_output.toggle()
-            elif state is RegularSetState.ON:
-                regular_output.turn_on()
-                on = True
-            else:
-                regular_output.turn_off()
-                on = False
-            self.update_ui()
-        except OutputError as error:
-            self._logger.debug("Can't write on output %s: %s", index_id, error)
-            return None
-        except Exception:
-            self._logger.exception("Error writing on output %s", index_id)
-            return None
-        else:
-            return on
-
-    def write_pwm(self, index_id, pwm_value):
-        try:
-            self._outputs.get(index_id, PwmOutput).set_duty_cycle(pwm_value)
-            self.update_ui()
-        except OutputError as error:
-            self._logger.debug("Can't write PWM on output %s: %s", index_id, error)
-        except Exception:
-            self._logger.exception("Error writing PWM on output %s", index_id)
 
     # ~~ EventPlugin mixin
     def on_event(self, event, payload):
@@ -1164,7 +1117,8 @@ class EnclosurePlugin(
         if rpi_output["output_type"] == "regular":
             self.add_regular_output_to_queue(shutdown_delay_seconds, rpi_output, RegularSetState.OFF, suffix)
         if rpi_output["output_type"] == "ledstrip":
-            self.ledstrip_set_rgb(rpi_output)
+            red, green, blue = parse_rgb(rpi_output["default_ledstrip_color"])
+            self._executor.set_color(to_int(rpi_output["index_id"]), to_int(red), to_int(green), to_int(blue))
         if rpi_output["output_type"] == "pwm" and not self.is_pwm_linked(rpi_output["index_id"]):
             value = 0
             self.add_pwm_output_to_queue(shutdown_delay_seconds, rpi_output, value, suffix)
@@ -1176,33 +1130,20 @@ class EnclosurePlugin(
             value = 0
             self.add_temperature_output_temperature_queue(shutdown_delay_seconds, rpi_output, value, suffix)
 
-    def ledstrip_set_rgb(self, rpi_output, rgb=None):
-        try:
-            ledstrip = self._outputs.get(rpi_output["index_id"], LedstripOutput)
-        except OutputError as error:
-            self._logger.debug("Can't set the color of output %s: %s", rpi_output["index_id"], error)
-        else:
-            if rgb is None:
-                red, green, blue = parse_rgb(rpi_output["default_ledstrip_color"])
-            else:
-                red, green, blue = parse_rgb(rgb)
-
-            self._logger.info("LEDSTRIP set rgb color: %s, %s, %s", red, green, blue)
-            ledstrip.set_color(to_int(red), to_int(green), to_int(blue))
-
     def start_outpus_with_server(self):
         for rpi_output in self.rpi_outputs:
             if rpi_output["startup_with_server"]:
                 if rpi_output["output_type"] == "regular":
-                    self.switch_output(rpi_output["index_id"], RegularSetState.ON)
+                    self._executor.switch_output(rpi_output["index_id"], RegularSetState.ON)
                 if rpi_output["output_type"] == "ledstrip":
-                    self.ledstrip_set_rgb(rpi_output)
+                    red, green, blue = parse_rgb(rpi_output["default_ledstrip_color"])
+                    self._executor.set_color(to_int(rpi_output["index_id"]), to_int(red), to_int(green), to_int(blue))
                 if rpi_output["output_type"] == "pwm" and not self.is_pwm_linked(rpi_output["index_id"]):
                     value = to_int(rpi_output["default_duty_cycle"])
-                    self.write_pwm(rpi_output["index_id"], value)
+                    self._executor.write_pwm(rpi_output["index_id"], value)
                 if rpi_output["output_type"] == "neopixel_indirect" or rpi_output["output_type"] == "neopixel_direct":
                     red, green, blue = parse_rgb(rpi_output["default_neopixel_color"])
-                    self.send_neopixel_command(rpi_output, red, green, blue)
+                    self._executor.set_color(to_int(rpi_output["index_id"]), to_int(red), to_int(green), to_int(blue))
                 if rpi_output["output_type"] == "temp_hum_control":
                     index_id = to_int(rpi_output["index_id"])
                     self.set_temp_hum_control_target(index_id, rpi_output["temp_ctr_default_value"])
@@ -1212,7 +1153,8 @@ class EnclosurePlugin(
         if rpi_output["output_type"] == "regular":
             self.add_regular_output_to_queue(delay_seconds, rpi_output, RegularSetState.ON, suffix)
         if rpi_output["output_type"] == "ledstrip":
-            self.ledstrip_set_rgb(rpi_output)
+            red, green, blue = parse_rgb(rpi_output["default_ledstrip_color"])
+            self._executor.set_color(to_int(rpi_output["index_id"]), to_int(red), to_int(green), to_int(blue))
         if rpi_output["output_type"] == "pwm" and not self.is_pwm_linked(rpi_output["index_id"]):
             value = to_int(rpi_output["default_duty_cycle"])
             self.add_pwm_output_to_queue(delay_seconds, rpi_output, value, suffix)
@@ -1229,7 +1171,13 @@ class EnclosurePlugin(
         self._scheduler.schedule(
             queue_id,
             delay_seconds,
-            functools.partial(self.send_neopixel_command, rpi_output, red, green, blue),
+            functools.partial(
+                self._executor.set_color,
+                to_int(rpi_output["index_id"]),
+                to_int(red),
+                to_int(green),
+                to_int(blue),
+            ),
         )
 
     def add_pwm_output_to_queue(self, delay_seconds, rpi_output, value, suffix):
@@ -1238,7 +1186,7 @@ class EnclosurePlugin(
         self._scheduler.schedule(
             queue_id,
             delay_seconds,
-            functools.partial(self.write_pwm, rpi_output["index_id"], value),
+            functools.partial(self._executor.write_pwm, rpi_output["index_id"], value),
         )
 
     def schedule_pwm_duty_on_queue(self, delay_seconds, rpi_output, value, suffix):
@@ -1247,7 +1195,7 @@ class EnclosurePlugin(
         self._scheduler.schedule(
             queue_id,
             delay_seconds,
-            functools.partial(self.write_pwm, rpi_output["index_id"], value),
+            functools.partial(self._executor.write_pwm, rpi_output["index_id"], value),
         )
 
     def add_regular_output_to_queue(self, delay_seconds, rpi_output, state, suffix):
@@ -1256,7 +1204,7 @@ class EnclosurePlugin(
         self._scheduler.schedule(
             queue_id,
             delay_seconds,
-            functools.partial(self.switch_output, rpi_output["index_id"], state),
+            functools.partial(self._executor.switch_output, rpi_output["index_id"], state),
         )
 
     def add_temperature_output_temperature_queue(self, delay_seconds, rpi_output, value, suffix):

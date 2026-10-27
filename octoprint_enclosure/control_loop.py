@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from octoprint.events import Events
 
-from .actions import Action, ActionError, GcodeAction, GcodeConfig, PrinterAction
+from .actions import GcodeAction, GcodeConfig, PrinterAction
 from .automations import (
     FilamentAutomation,
     GpioInputTrigger,
@@ -21,7 +21,7 @@ from .automations import (
 )
 from .inputs import GpioInputError
 from .notifications import NotificationType
-from .outputs import Output, OutputError, PwmOutput, RegularOutput, TempHumControlOutput, TempHumControlStatus
+from .outputs import OutputError, PwmOutput, RegularOutput, TempHumControlOutput, TempHumControlStatus
 from .utils import to_int
 
 if TYPE_CHECKING:
@@ -30,12 +30,12 @@ if TYPE_CHECKING:
 
     from octoprint.printer import PrinterInterface
 
-    from .actions import Actions
     from .automations import Automations
     from .core import Frontend, Settings
+    from .executor import Executor
     from .inputs import GpioInputs
     from .notifications import Notifications
-    from .outputs import Outputs, RegularSetState
+    from .outputs import Outputs
 
 TICK_INTERVAL_SECONDS = 10
 """The seconds between two ticks, at which the loop takes the decisions again on everything."""
@@ -133,7 +133,7 @@ class ControlLoop:
     _gpio_inputs: GpioInputs
     _outputs: Outputs
     _automations: Automations
-    _actions: Actions
+    _executor: Executor
     _notifications: Notifications
     _printer: PrinterInterface
     _frontend: Frontend
@@ -142,12 +142,6 @@ class ControlLoop:
 
     _get_sensor_data: Callable[[], list[dict]]
     """The function giving the last reading of each sensor."""
-
-    _switch_output: Callable[[int, RegularSetState], object]
-    """The function switching a regular output, with the id of the output and the state to set."""
-
-    _write_pwm: Callable[[int, float], object]
-    """The function setting the duty cycle of a PWM output, with the id of the output and the duty cycle."""
 
     _update_ui: Callable[[], object]
     """The function refreshing the UI."""
@@ -168,7 +162,7 @@ class ControlLoop:
         gpio_inputs: GpioInputs,
         outputs: Outputs,
         automations: Automations,
-        actions: Actions,
+        executor: Executor,
         notifications: Notifications,
         printer: PrinterInterface,
         frontend: Frontend,
@@ -176,8 +170,6 @@ class ControlLoop:
         logger: logging.Logger,
         *,
         get_sensor_data: Callable[[], list[dict]],
-        switch_output: Callable[[int, RegularSetState], object],
-        write_pwm: Callable[[int, float], object],
         update_ui: Callable[[], object],
     ) -> None:
         """Set up the loop, with its thread ready to start.
@@ -186,7 +178,7 @@ class ControlLoop:
             gpio_inputs (GpioInputs): The GPIO inputs.
             outputs (Outputs): The outputs.
             automations (Automations): The automations.
-            actions (Actions): The actions.
+            executor (Executor): The executor of the commands to the outputs and the actions.
             notifications (Notifications): The notifications.
             printer (PrinterInterface): The OctoPrint printer interface.
             frontend (Frontend): The frontend handler.
@@ -194,17 +186,13 @@ class ControlLoop:
             logger (logging.Logger): The logger to write to.
             get_sensor_data (Callable[[], list[dict]]): The function giving the last reading of each sensor, as a list
                 of dicts with the keys index_id, temperature, humidity and airquality.
-            switch_output (Callable[[int, RegularSetState], object]): The function switching a regular output, called
-                with the id of the output and the state to set.
-            write_pwm (Callable[[int, float], object]): The function setting the duty cycle of a PWM output, called
-                with the id of the output and the duty cycle.
             update_ui (Callable[[], object]): The function refreshing the UI.
 
         """
         self._gpio_inputs = gpio_inputs
         self._outputs = outputs
         self._automations = automations
-        self._actions = actions
+        self._executor = executor
         self._notifications = notifications
         self._printer = printer
         self._frontend = frontend
@@ -212,8 +200,6 @@ class ControlLoop:
         self._logger = logger.getChild("ControlLoop")
 
         self._get_sensor_data = get_sensor_data
-        self._switch_output = switch_output
-        self._write_pwm = write_pwm
         self._update_ui = update_ui
 
         self._print_job_running = False
@@ -313,7 +299,7 @@ class ControlLoop:
             self._print_job_running = bool(self._printer.is_printing() or self._printer.is_paused())
             self._decide_gpio_input_levels()
         elif isinstance(event, _Stop):
-            self._turn_off_all_outputs()
+            self._executor.turn_off_all_outputs(wait=True)
         elif isinstance(event, _Tick):
             self._decide_all()
         elif isinstance(event, _NewReading):
@@ -400,10 +386,8 @@ class ControlLoop:
 
                 # Forward the sensor data to the temperature and humidity control
                 previous_status = control.status
-                try:
-                    status = control.regulate(temperature, humidity)
-                except Exception:
-                    self._logger.exception("Error reading or writing output %s", index_id)
+                status = self._executor.regulate(index_id, temperature, humidity, wait=True)
+                if status is None:
                     continue
 
                 # If the control status has remained unchanged, we are done
@@ -465,7 +449,7 @@ class ControlLoop:
                 if self._control_output(reaction):
                     self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
             elif isinstance(reaction, RunActionReaction):
-                action = self._run_action(reaction.config.action)
+                action = self._executor.run_action(reaction.config.action, wait=True)
                 if isinstance(action, GcodeAction):
                     self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
                 elif isinstance(action, PrinterAction):
@@ -504,7 +488,7 @@ class ControlLoop:
                 calculated_duty = automation.get_duty_cycle(temperature)
 
                 # Write the new duty cycle to the output
-                self._write_pwm(output_id, calculated_duty)
+                self._executor.write_pwm(output_id, calculated_duty)
         except Exception:
             self._logger.exception("Error handling temperature linked PWM outputs")
 
@@ -516,7 +500,7 @@ class ControlLoop:
             except OutputError as error:
                 self._logger.debug("Can't reset the duty cycle of output %s: %s", output_id, error)
             else:
-                self._write_pwm(output_id, default_duty_cycle)
+                self._executor.write_pwm(output_id, default_duty_cycle)
 
     def _decide_gpio_input_edge(self, input_id: int, level: int) -> None:
         input_label = next(
@@ -545,7 +529,7 @@ class ControlLoop:
                         f"Setting GPIO{config.controlled_io} to: {config.controlled_io_set_state.value}",
                     )
             elif isinstance(reaction, RunActionReaction):
-                action = self._run_action(reaction.config.action)
+                action = self._executor.run_action(reaction.config.action, wait=True)
                 if isinstance(action, GcodeAction):
                     self._notifications.send(
                         NotificationType.GPIO_ACTION,
@@ -618,21 +602,8 @@ class ControlLoop:
     def _stop_temp_hum_controls(self) -> None:
         for rpi_output in self._settings.rpi_outputs:
             if rpi_output["auto_shutdown"] and rpi_output["output_type"] == "temp_hum_control":
-                index_id = to_int(rpi_output["index_id"])
-                try:
-                    self._outputs.get(index_id, TempHumControlOutput).set_target(0.0)
-                except OutputError as error:
-                    self._logger.debug("Can't set the target of output %s: %s", index_id, error)
+                self._executor.set_target(to_int(rpi_output["index_id"]), 0.0)
         self._decide_temp_hum_controls(self._get_sensor_data(), None)
-
-    def _turn_off_all_outputs(self) -> None:
-        for output in self._outputs.get_all(Output):
-            try:
-                output.turn_off()
-            except OutputError as error:
-                self._logger.debug("Can't turn off an output: %s", error)
-            except Exception:
-                self._logger.exception("Error turning off an output")
 
     def _control_output(self, reaction: OutputControlReaction) -> bool:
         config = reaction.config
@@ -640,17 +611,8 @@ class ControlLoop:
             self._outputs.get(config.controlled_io, RegularOutput)
         except OutputError:
             return False
-        self._switch_output(config.controlled_io, config.controlled_io_set_state)
+        self._executor.switch_output(config.controlled_io, config.controlled_io_set_state)
         return True
-
-    def _run_action(self, index_id: int) -> Action | None:
-        try:
-            action = self._actions.get(index_id, Action)
-            action.run()
-        except ActionError as error:
-            self._logger.debug("Can't run action %s: %s", index_id, error)
-            return None
-        return action
 
     def _get_linked_sensor_data(self, sensor_data: list[dict], linked_id: int) -> dict | None:
         return next((data for data in sensor_data if data["index_id"] == linked_id), None)
