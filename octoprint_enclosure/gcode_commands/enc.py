@@ -25,14 +25,10 @@ class EncHandler:
     """The function called to set the target of a thermostat, with the id of the output,
     the target and whether the print has to pause until the target is reached."""
 
-    _update_ui: Callable[[], None]
-    """The function called to refresh the UI after an output changed."""
-
     def __init__(
         self,
         plugin_context: PluginContext,
         set_temperature: Callable[[int, float, bool], None],
-        update_ui: Callable[[], None],
     ) -> None:
         """Set up the handler.
 
@@ -41,14 +37,12 @@ class EncHandler:
             set_temperature (Callable[[int, float, bool], None]): The function called to set the target of a
                 thermostat, with the id of the output, the target and whether the print has to pause
                 until the target is reached.
-            update_ui (Callable[[], None]): The function called to refresh the UI after an output changed.
 
         """
         self._settings = plugin_context.settings
         self._executor = plugin_context.executor
         self._logger = plugin_context.logger.getChild("EncHandler")
         self._set_temperature = set_temperature
-        self._update_ui = update_ui
 
     def handle(self, comm_instance: MachineCom, cmd: str) -> None:
         """Run a G-code line, if it is an ENC command.
@@ -76,5 +70,4 @@ class EncHandler:
         else:
             reply = self._executor.run_enc_command(index_id, cmd, wait=True)
             if reply is not None:
-                self._update_ui()
                 comm_instance._log(reply)

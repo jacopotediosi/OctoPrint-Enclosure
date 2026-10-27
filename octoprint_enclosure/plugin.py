@@ -122,7 +122,7 @@ class EnclosurePlugin(
         # Init threads
         self._sensor_poller = SensorPoller(self._sensors, self.handle_sensor_reading, self._logger)
         self._scheduler = Scheduler(self._logger)
-        self._executor = Executor(self._outputs, self._actions, self._logger, update_ui=self.update_ui)
+        self._executor = Executor(self._outputs, self._actions, self._logger, update_ui_outputs=self.send_ui_outputs)
         self._control_loop = ControlLoop(
             self._gpio_inputs,
             self._outputs,
@@ -134,7 +134,6 @@ class EnclosurePlugin(
             self._enclosure_settings,
             self._logger,
             get_sensor_data=self.get_sensor_data,
-            update_ui=self.update_ui,
         )
 
         # Init the plugin context
@@ -159,7 +158,7 @@ class EnclosurePlugin(
         )
 
         # Init G-code command handlers
-        self._enc_handler = EncHandler(self._plugin_context, self.handle_temperature_command, self.update_ui)
+        self._enc_handler = EncHandler(self._plugin_context, self.handle_temperature_command)
         self._encdev_handler = EncDevHandler(
             self._plugin_context,
             development_mode=self.development_mode,
@@ -219,7 +218,6 @@ class EnclosurePlugin(
 
         self.setup_gpio()
         self.configure_gpio()
-        self.update_ui()
         self.start_outpus_with_server()
 
         self._sensor_poller.start()
@@ -405,6 +403,7 @@ class EnclosurePlugin(
                     self._automations.get(index_id, FilamentAutomation).enabled = bool(value)
                 self._logger.info("Setting filament sensor for input %s to : %s", str(identifier), value)
         self._enclosure_settings.automations = self.automations
+        self.update_ui_filament_sensors()
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/outputs", methods=["GET"])
@@ -435,7 +434,7 @@ class EnclosurePlugin(
             with contextlib.suppress(OutputError):
                 out["duty_cycle"] = self._outputs.get(identifier, PwmOutput).duty_cycle
         if out["output_type"] == "temp_hum_control":
-            target = self._control_loop.get_thermostat_target(identifier)
+            target = self._control_loop.get_thermostat_targets().get(identifier)
             if target is not None:
                 out["temp_ctr_set_value"] = target
         if out["output_type"] in ("neopixel_indirect", "neopixel_direct"):
@@ -540,6 +539,7 @@ class EnclosurePlugin(
                 output["auto_startup"] = value
                 self._logger.info("Setting auto startup for output %s to : %s", str(identifier), value)
         self._enclosure_settings.rpi_outputs = self.rpi_outputs
+        self.update_ui_outputs()
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:identifier>/auto-shutdown", methods=["PATCH"])
@@ -567,6 +567,7 @@ class EnclosurePlugin(
                 output["auto_shutdown"] = value
                 self._logger.info("Setting auto shutdown for output %s to : %s", str(identifier), value)
         self._enclosure_settings.rpi_outputs = self.rpi_outputs
+        self.update_ui_outputs()
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/pwm/<int:identifier>", methods=["PATCH"])
@@ -641,6 +642,7 @@ class EnclosurePlugin(
     @restricted_access
     def clear_gpio_mode(self):
         self._gpio.cleanup()
+        self.update_ui_outputs()
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/update", methods=["POST"])
@@ -756,7 +758,7 @@ class EnclosurePlugin(
             self.handle_sensor_recovery(sensor)
             self._mqtt.publish_sensor_reading(sensor["label"], temp, hum)
 
-        self.update_ui_current_temperature()
+        self.update_ui_readings()
         self._control_loop.evaluate_reading(index_id)
 
     def get_sensor_data(self):
@@ -826,7 +828,6 @@ class EnclosurePlugin(
                     )
                 else:
                     self._executor.switch_output(index_id, RegularSetState.OFF)
-                self.update_ui_outputs()
                 return
 
             if output["output_type"] == "pwm":
@@ -854,19 +855,18 @@ class EnclosurePlugin(
                     )
                 else:
                     self._executor.write_pwm(index_id, 0)
-                self.update_ui_outputs()
                 return
 
     def update_ui(self):
-        self.update_ui_current_temperature()
-        self.update_ui_inputs()
+        self.update_ui_readings()
+        self.update_ui_filament_sensors()
         self.update_ui_outputs()
-        self.update_ui_set_temperature()
+        self.update_ui_targets()
 
-    def update_ui_current_temperature(self):
-        self._frontend.update_sensor_data(self.get_sensor_data())
+    def update_ui_readings(self):
+        self._frontend.update_readings(self.get_sensor_data())
 
-    def update_ui_inputs(self):
+    def update_ui_filament_sensors(self):
         try:
             sensor_status = []
             for automation_settings in self.automations:
@@ -875,19 +875,17 @@ class EnclosurePlugin(
                     with contextlib.suppress(AutomationError):
                         value = self._automations.get(index, FilamentAutomation).enabled
                         sensor_status.append({"index_id": index, "filament_sensor_enabled": value})
-            self._frontend.update_filament_sensor_status(sensor_status)
+            self._frontend.update_filament_sensors(sensor_status)
         except Exception:
             self._logger.exception("Error sending input status to the UI")
 
-    def update_ui_set_temperature(self):
-        result = []
-        for thermostat_output in list(filter(lambda item: item["output_type"] == "temp_hum_control", self.rpi_outputs)):
-            set_temperature = self._control_loop.get_thermostat_target(to_int(thermostat_output["index_id"]))
-            if set_temperature is not None:
-                result.append({"index_id": thermostat_output["index_id"], "set_temperature": set_temperature})
-        self._frontend.update_set_temperature(result)
+    def update_ui_targets(self):
+        self._control_loop.update_ui_targets()
 
     def update_ui_outputs(self):
+        self._executor.update_ui_outputs()
+
+    def send_ui_outputs(self):
         try:
             regular_status = []
             pwm_status = []
@@ -1045,12 +1043,6 @@ class EnclosurePlugin(
     def on_event(self, event, payload):
         self._control_loop.evaluate_octoprint_event(event)
 
-        if event == Events.CONNECTED:
-            self.update_ui()
-
-        if event == Events.CLIENT_OPENED:
-            self.update_ui()
-
         if event == Events.PRINT_STARTED:
             self._scheduler.cancel_all()
             for rpi_output in self.rpi_outputs:
@@ -1069,7 +1061,6 @@ class EnclosurePlugin(
                 if shutdown_time_of_day is not None:
                     shutdown_delay_seconds = seconds_until_next(shutdown_time_of_day)
                     self.schedule_auto_shutdown_outputs(rpi_output, shutdown_delay_seconds)
-            self.update_ui()
 
         elif event == Events.PRINT_DONE:
             for rpi_output in self.rpi_outputs:
@@ -1077,7 +1068,6 @@ class EnclosurePlugin(
                 if rpi_output["auto_shutdown"] and parse_hhmm(str(shutdown_time)) is None:
                     delay_seconds = to_float(shutdown_time)
                     self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
-            self.update_ui()
 
         elif event in (Events.PRINT_CANCELLED, Events.PRINT_FAILED):
             self._scheduler.cancel_all()
@@ -1219,8 +1209,6 @@ class EnclosurePlugin(
                 self.set_thermostat_target(rpi_output_index, value)
                 self._logger.debug("Setting temperature to output index: %s value %s", rpi_output["index_id"], value)
 
-            self.update_ui()
-
         except Exception:
             self._logger.exception("Error setting temperature on output %s", rpi_output_index)
 
@@ -1269,6 +1257,9 @@ class EnclosurePlugin(
 
         # Take the decisions again on the new settings
         self._control_loop.evaluate_settings()
+
+        # Update UI in every client
+        self.update_ui()
 
     def get_settings_defaults(self):
         return {

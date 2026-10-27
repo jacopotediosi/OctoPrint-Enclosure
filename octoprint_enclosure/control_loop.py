@@ -135,6 +135,11 @@ class _StopThermostats(_Event):
     """The thermostats with Auto Shutdown on turn off."""
 
 
+@dataclass(frozen=True)
+class _UpdateUiTargets(_Event):
+    """The UI asks for the targets of the thermostats."""
+
+
 class ControlLoop:
     """Takes the decisions of the plugin on a thread of its own: what the outputs do, and when the automations act.
 
@@ -155,9 +160,6 @@ class ControlLoop:
 
     _get_sensor_data: Callable[[], list[dict]]
     """The function giving the last reading of each sensor."""
-
-    _update_ui: Callable[[], object]
-    """The function refreshing the UI."""
 
     _thermostats: dict[int, Thermostat]
     """The thermostats, by the id of their output."""
@@ -186,7 +188,6 @@ class ControlLoop:
         logger: logging.Logger,
         *,
         get_sensor_data: Callable[[], list[dict]],
-        update_ui: Callable[[], object],
     ) -> None:
         """Set up the loop, with its thread ready to start.
 
@@ -202,7 +203,6 @@ class ControlLoop:
             logger (logging.Logger): The logger to write to.
             get_sensor_data (Callable[[], list[dict]]): The function giving the last reading of each sensor, as a list
                 of dicts with the keys index_id, temperature, humidity and airquality.
-            update_ui (Callable[[], object]): The function refreshing the UI.
 
         """
         self._gpio_inputs = gpio_inputs
@@ -216,7 +216,6 @@ class ControlLoop:
         self._logger = logger.getChild("ControlLoop")
 
         self._get_sensor_data = get_sensor_data
-        self._update_ui = update_ui
 
         self._thermostats = {}
         self._print_job_running = False
@@ -280,19 +279,15 @@ class ControlLoop:
         """
         self._put(_ThermostatTargetChanged(index_id, target))
 
-    def get_thermostat_target(self, index_id: int) -> float | None:
-        """Get the target of a thermostat.
-
-        Args:
-            index_id (int): The id of the thermostat.
+    def get_thermostat_targets(self) -> dict[int, float]:
+        """Get the targets of the thermostats.
 
         Returns:
-            float | None: The target temperature or humidity, 0 if the thermostat is off, or None if there is no
-                thermostat with that id.
+            dict[int, float]: The target temperature or humidity of each thermostat, 0 if it is off, by the id of
+                its output.
 
         """
-        thermostat = self._thermostats.get(index_id)
-        return None if thermostat is None else thermostat.target
+        return {index_id: thermostat.target for index_id, thermostat in self._thermostats.items()}
 
     def wait_for_temperature(self, index_id: int) -> None:
         """Resume the paused print once a thermostat reaches its target.
@@ -306,6 +301,10 @@ class ControlLoop:
     def stop_thermostats(self) -> None:
         """Turn off the thermostats with Auto Shutdown on."""
         self._put(_StopThermostats())
+
+    def update_ui_targets(self) -> None:
+        """Update the targets of the thermostats in the UI."""
+        self._put(_UpdateUiTargets())
 
     def _put(self, event: _Event) -> None:
         self._queue.put(event)
@@ -355,6 +354,7 @@ class ControlLoop:
             self._decide_print_job_event(event.event)
         elif isinstance(event, _SettingsLoaded):
             self._load_thermostats()
+            self._frontend.update_targets(self.get_thermostat_targets())
 
             # While printing every filament automation has to watch: start the ones that don't yet
             if self._printer.is_printing():
@@ -368,13 +368,15 @@ class ControlLoop:
                 self._logger.debug("Can't set the target of output %s: it isn't a thermostat", event.index_id)
             else:
                 thermostat.set_target(event.target)
+                self._frontend.update_targets(self.get_thermostat_targets())
                 self._decide_thermostats(self._get_sensor_data(), None)
-                self._update_ui()
         elif isinstance(event, _WaitForTemperature):
             self._waiting_temperature.add(event.index_id)
             self._decide_thermostats(self._get_sensor_data(), None)
         elif isinstance(event, _StopThermostats):
             self._stop_thermostats()
+        elif isinstance(event, _UpdateUiTargets):
+            self._frontend.update_targets(self.get_thermostat_targets())
 
     def _start_deciding(self) -> None:
         self._load_thermostats()
@@ -438,8 +440,6 @@ class ControlLoop:
         self._decide_thermostats(sensor_data, None)
         self._decide_pwm_linked_temperature(sensor_data, None)
 
-        self._update_ui()
-
     def _decide_thermostats(self, sensor_data: list[dict], sensor_id: int | None) -> None:
         try:
             for index_id, thermostat in self._thermostats.items():
@@ -456,18 +456,11 @@ class ControlLoop:
                 if thermostat.is_above_max_temp(temperature):
                     self._logger.warning("Thermostat %s reached its maximum temperature: turning it off", index_id)
                     thermostat.set_target(0.0)
+                    self._frontend.update_targets(self.get_thermostat_targets())
 
                 # Decide whether the device has to be on, and switch it
-                previous_status = thermostat.status
                 should_be_on = thermostat.decide(temperature, humidity)
                 self._executor.switch_thermostat(index_id, on=should_be_on)
-
-                # If the thermostat status has remained unchanged, we are done
-                if thermostat.status is previous_status:
-                    continue
-
-                # Update UI
-                self._update_ui()
 
             # Resume the print paused by ENC W1 once every thermostat it waits for is at its target
             self._decide_waiting_print()
@@ -676,6 +669,7 @@ class ControlLoop:
                 thermostat = self._thermostats.get(to_int(rpi_output["index_id"]))
                 if thermostat is not None:
                     thermostat.set_target(0.0)
+        self._frontend.update_targets(self.get_thermostat_targets())
         self._decide_thermostats(self._get_sensor_data(), None)
 
     def _control_output(self, reaction: OutputControlReaction) -> bool:

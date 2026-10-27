@@ -53,8 +53,11 @@ class Executor:
     _actions: Actions
     _logger: logging.Logger
 
-    _update_ui: Callable[[], object]
-    """The function refreshing the UI."""
+    _update_ui_outputs: Callable[[], object]
+    """The function pushing the state of the outputs to the UI."""
+
+    _update_ui_outputs_already_requested: bool
+    """Whether an outputs UI update has already been requested."""
 
     _thread: ThreadPoolExecutor
     """Runs the commands on the Executor thread."""
@@ -65,7 +68,7 @@ class Executor:
         actions: Actions,
         logger: logging.Logger,
         *,
-        update_ui: Callable[[], object],
+        update_ui_outputs: Callable[[], object],
     ) -> None:
         """Set up the executor and start executing.
 
@@ -73,13 +76,14 @@ class Executor:
             outputs (Outputs): The outputs.
             actions (Actions): The actions.
             logger (logging.Logger): The logger to write to.
-            update_ui (Callable[[], object]): The function refreshing the UI.
+            update_ui_outputs (Callable[[], object]): The function pushing the state of the outputs to the UI.
 
         """
         self._outputs = outputs
         self._actions = actions
         self._logger = logger.getChild("Executor")
-        self._update_ui = update_ui
+        self._update_ui_outputs = update_ui_outputs
+        self._update_ui_outputs_already_requested = False
         self._thread = ThreadPoolExecutor(max_workers=1, thread_name_prefix="EnclosureExecutor")
 
     def switch_output(self, index_id: int, state: RegularSetState, *, wait: bool = False) -> bool | None:
@@ -108,8 +112,6 @@ class Executor:
                 else:
                     regular_output.turn_off()
                     on = False
-
-                self._update_ui()
             except OutputError as error:
                 self._logger.debug("Can't write on output %s: %s", index_id, error)
                 return None
@@ -117,6 +119,7 @@ class Executor:
                 self._logger.exception("Error writing on output %s", index_id)
                 return None
             else:
+                self._queue_update_ui_outputs()
                 return on
 
         return self._submit(switch_output, wait=wait)
@@ -134,12 +137,12 @@ class Executor:
         def write_pwm() -> None:
             try:
                 self._outputs.get(index_id, PwmOutput).set_duty_cycle(duty_cycle)
-
-                self._update_ui()
             except OutputError as error:
                 self._logger.debug("Can't write PWM on output %s: %s", index_id, error)
             except Exception:
                 self._logger.exception("Error writing PWM on output %s", index_id)
+            else:
+                self._queue_update_ui_outputs()
 
         self._submit(write_pwm, wait=wait)
 
@@ -162,6 +165,8 @@ class Executor:
                 self._logger.debug("Can't set the color of output %s: %s", index_id, error)
             except Exception:
                 self._logger.exception("Error setting the color of output %s", index_id)
+            else:
+                self._queue_update_ui_outputs()
 
         self._submit(set_color, wait=wait)
 
@@ -186,6 +191,8 @@ class Executor:
                 self._logger.debug("Can't write on output %s: %s", index_id, error)
             except Exception:
                 self._logger.exception("Error writing on output %s", index_id)
+            else:
+                self._queue_update_ui_outputs()
 
         self._submit(switch_thermostat, wait=wait)
 
@@ -245,6 +252,10 @@ class Executor:
             except Exception:
                 self._logger.exception("Error running ENC command: %s", gcode)
                 return None
+
+            if reply is not None:
+                self._queue_update_ui_outputs()
+
             return reply
 
         return self._submit(run_enc_command, wait=wait)
@@ -266,7 +277,27 @@ class Executor:
                 except Exception:
                     self._logger.exception("Error turning off an output")
 
+            self._queue_update_ui_outputs()
+
         self._submit(turn_off_all_outputs, wait=wait)
+
+    def update_ui_outputs(self) -> None:
+        """Update the outputs in the UI once the commands queued so far are executed."""
+        self._thread.submit(self._queue_update_ui_outputs)
+
+    def _queue_update_ui_outputs(self) -> None:
+        def update_ui_outputs() -> None:
+            self._update_ui_outputs_already_requested = False
+            try:
+                self._update_ui_outputs()
+            except Exception:
+                self._logger.exception("Error updating the outputs in the UI")
+
+        if self._update_ui_outputs_already_requested:
+            return
+
+        self._thread.submit(update_ui_outputs)
+        self._update_ui_outputs_already_requested = True
 
     def _submit(self, command: _Command[_T], *, wait: bool) -> _T | None:
         future = self._thread.submit(command)

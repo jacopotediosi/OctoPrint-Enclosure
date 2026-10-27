@@ -21,12 +21,13 @@ class Frontend:
         self._plugin_manager = plugin_manager
         self._plugin_identifier = plugin_identifier
 
-    def update_sensor_data(self, sensor_data: list[dict]) -> None:
+    def update_readings(self, sensor_data: list[dict]) -> None:
         """Update the latest readings of the temperature sensors."""
         self._send({"sensor_data": sensor_data})
 
-    def update_set_temperature(self, set_temperature: list) -> None:
-        """Update the target values of the thermostats."""
+    def update_targets(self, targets: dict[int, float]) -> None:
+        """Update the targets of the thermostats, by the id of their output."""
+        set_temperature = [{"index_id": index_id, "set_temperature": target} for index_id, target in targets.items()]
         self._send({"set_temperature": set_temperature})
 
     def update_outputs(
@@ -48,9 +49,9 @@ class Frontend:
             },
         )
 
-    def update_filament_sensor_status(self, filament_sensor_status: list[dict]) -> None:
+    def update_filament_sensors(self, filament_sensors: list[dict]) -> None:
         """Update whether each filament sensor is enabled."""
-        self._send({"filament_sensor_status": filament_sensor_status})
+        self._send({"filament_sensor_status": filament_sensors})
 
     def show_message(self, message: str, message_type: Literal["success", "error"]) -> None:
         """Show a popup message."""

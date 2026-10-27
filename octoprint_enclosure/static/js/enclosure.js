@@ -415,6 +415,10 @@ $(function () {
       self.getUpdateUI();
     };
 
+    self.onServerReconnect = function () {
+      self.getUpdateUI();
+    };
+
     self.setTemperature = function (item, form) {
 
       var newSetTemperature = item.temp_ctr_new_set_value();
@@ -426,8 +430,6 @@ $(function () {
         OctoPrint.patchJson(self.buildPluginUrl("temperature/" + item.index_id()), {temperature: parseFloat(newSetTemperature)})
           .done(function () {
             item.temp_ctr_new_set_value("");
-            item.temp_ctr_set_value(newSetTemperature);
-            self.getUpdateUI();
           })
           .fail(function () {
             new PNotify({
@@ -588,10 +590,7 @@ $(function () {
     };
 
     self.turnOffHeater = function (item) {
-      OctoPrint.patchJson(self.buildPluginUrl("temperature/" + item.index_id()), {temperature: 0})
-        .done(function () {
-          self.getUpdateUI();
-        });
+      OctoPrint.patchJson(self.buildPluginUrl("temperature/" + item.index_id()), {temperature: 0});
     };
 
     self.clearGPIOMode = function () {
@@ -612,10 +611,7 @@ $(function () {
     };
 
     self.handleIO = function (item, form) {
-      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), {status: !item.gpio_status()})
-        .done(function () {
-          self.getUpdateUI();
-        });
+      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), {status: !item.gpio_status()});
     };
 
     self.handleGcode = function (item, form) {
@@ -631,24 +627,15 @@ $(function () {
     };
 
     self.switchAutoStartUp = function (item) {
-      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id() + "/auto-startup"), {status: !item.auto_startup()})
-        .done(function () {
-          self.getUpdateUI();
-        });
+      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id() + "/auto-startup"), {status: !item.auto_startup()});
     };
 
     self.switchAutoShutdown = function (item) {
-      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id() + "/auto-shutdown"), {status: !item.auto_shutdown()})
-        .done(function () {
-          self.getUpdateUI();
-        });
+      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id() + "/auto-shutdown"), {status: !item.auto_shutdown()});
     };
 
     self.switchFilamentSensor = function (item) {
-      OctoPrint.patchJson(self.buildPluginUrl("filament/" + item.input()), {status: !item.filament_sensor_enabled()})
-        .done(function () {
-          self.getUpdateUI();
-        });
+      OctoPrint.patchJson(self.buildPluginUrl("filament/" + item.input()), {status: !item.filament_sensor_enabled()});
     };
 
     self.handlePWM = function (item) {
@@ -669,8 +656,6 @@ $(function () {
         OctoPrint.patchJson(self.buildPluginUrl("pwm/" + item.index_id()), {duty_cycle: pwm_value})
           .done(function () {
             item.new_duty_cycle("");
-            item.duty_cycle(pwm_value);
-            self.getUpdateUI();
           });
       }
     };
@@ -699,7 +684,6 @@ $(function () {
         OctoPrint.patchJson(self.buildPluginUrl("neopixel/" + index), {red: r, green: g, blue: b})
           .done(function () {
             item.new_neopixel_color("");
-            self.getUpdateUI();
           });
       }
     };
@@ -726,7 +710,6 @@ $(function () {
         OctoPrint.patchJson(self.buildPluginUrl("rgb-led/" + index), {rgb: or_tempStr})
           .done(function () {
             item.new_ledstrip_color("");
-            self.getUpdateUI();
           });
       }
     };
