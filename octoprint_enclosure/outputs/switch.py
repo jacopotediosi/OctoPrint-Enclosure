@@ -95,6 +95,25 @@ class SwitchOutput(Output[_ConfigT]):
 
         return high != config.active_low
 
+    def turn_on(self) -> None:
+        """Turn the output on.
+
+        Raises:
+            Exception: If the output can't be written.
+
+        """
+        self._switch(on=True)
+
+    @override
+    def turn_off(self) -> None:
+        """Turn the output off.
+
+        Raises:
+            Exception: If the output can't be written.
+
+        """
+        self._switch(on=False)
+
     def _switch(self, *, on: bool) -> None:
         config = self.config
         high = on != config.active_low

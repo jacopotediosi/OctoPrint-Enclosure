@@ -14,11 +14,10 @@
                 <th class="humidity_actual"
                     title="{{ _('Current humidity') }}"
                     data-bind="visible: $root.hasAnySensorWithHumidity()">{{ _("Humidity") }}</th>
-                <th class="temp_hum_control"
-                    data-bind="visible: $root.hasAnyTemperatureControl()">{{ _("Control") }}</th>
+                <th class="thermostat" data-bind="visible: $root.hasAnyThermostat()">{{ _("Thermostat") }}</th>
                 <th class="temperature_target"
                     title="{{ _('Current target temperature') }}"
-                    data-bind="visible: $root.hasAnyTemperatureControl()">{{ _("Target") }}</th>
+                    data-bind="visible: $root.hasAnyThermostat()">{{ _("Target") }}</th>
             </tr>
         </thead>
         <tbody data-bind="foreach: $root.tab_temperature_table_rows()">
@@ -37,11 +36,11 @@
                 </td>
                 <td class="humidity_actual"
                     data-bind="visible: first && $root.hasAnySensorWithHumidity() && !$root.humidityCapableSensor(sensor.temp_sensor_type()), attr: {rowspan: rowspan}">N/A</td>
-                <th class="temp_hum_control"
-                    data-bind="visible: $root.hasAnyTemperatureControl(), text: control && control.label(), attr: {title: control && control.label()}">
+                <th class="thermostat"
+                    data-bind="visible: $root.hasAnyThermostat(), text: thermostat && thermostat.label(), attr: {title: thermostat && thermostat.label()}">
                 </th>
                 <td class="temperature_target"
-                    data-bind="visible: $root.hasAnyTemperatureControl(), with: control">
+                    data-bind="visible: $root.hasAnyThermostat(), with: thermostat">
                     <form class="form-inline"
                           style="margin:0"
                           data-bind="submit: function(element) { $root.setTemperature($data, element) }">
@@ -147,7 +146,7 @@
         <div data-bind="if: output_type() == 'temp_hum_control'">
             <h4>
                 <span data-bind="text: label"></span>
-                <span class="badge">temperature control</span>
+                <span class="badge">thermostat</span>
                 <span class="badge badge-warning"
                       data-bind="visible: temp_ctr_type() == 'heater'">Heater</span>
                 <span class="badge badge-warning"

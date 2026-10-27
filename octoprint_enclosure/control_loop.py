@@ -16,12 +16,19 @@ from .automations import (
     PwmTemperatureLinkedAutomation,
     RuleAutomation,
     RunActionReaction,
-    StopTempHumControlReaction,
+    StopThermostatsReaction,
     TemperatureTrigger,
 )
 from .inputs import GpioInputError
 from .notifications import NotificationType
-from .outputs import OutputError, PwmOutput, RegularOutput, TempHumControlOutput, TempHumControlStatus
+from .outputs import (
+    OutputError,
+    PwmOutput,
+    RegularOutput,
+    Thermostat,
+    ThermostatOutput,
+    ThermostatStatus,
+)
 from .utils import to_int
 
 if TYPE_CHECKING:
@@ -60,11 +67,6 @@ _PRINT_JOB_EVENTS = frozenset(
 
 class _Event:
     """A Control Loop event."""
-
-
-@dataclass(frozen=True)
-class _Start(_Event):
-    """The Control Loop starts."""
 
 
 @dataclass(frozen=True)
@@ -110,16 +112,27 @@ class _SettingsLoaded(_Event):
 
 
 @dataclass(frozen=True)
-class _WaitForTemperature(_Event):
-    """A print waits for a temperature or humidity control to reach its target."""
+class _ThermostatTargetChanged(_Event):
+    """The target of a thermostat changed."""
 
     index_id: int
-    """The id of the control."""
+    """The id of the thermostat."""
+
+    target: float
+    """The new target temperature or humidity, or 0 if the thermostat turned off."""
 
 
 @dataclass(frozen=True)
-class _StopTempHumControls(_Event):
-    """The temperature and humidity controls with Auto Shutdown on turn off."""
+class _WaitForTemperature(_Event):
+    """A print waits for a thermostat to reach its target."""
+
+    index_id: int
+    """The id of the thermostat."""
+
+
+@dataclass(frozen=True)
+class _StopThermostats(_Event):
+    """The thermostats with Auto Shutdown on turn off."""
 
 
 class ControlLoop:
@@ -127,7 +140,7 @@ class ControlLoop:
 
     This is the only place that decides whether an output is on or off, and the automations can also act on the
     printer. Every decision runs on this one thread, one at a time and always in the same order, so when several
-    controls want the same output, who wins never depends on timing.
+    automations want the same output, who wins never depends on timing.
     """
 
     _gpio_inputs: GpioInputs
@@ -146,11 +159,14 @@ class ControlLoop:
     _update_ui: Callable[[], object]
     """The function refreshing the UI."""
 
+    _thermostats: dict[int, Thermostat]
+    """The thermostats, by the id of their output."""
+
     _print_job_running: bool
     """Whether a print job is running."""
 
     _waiting_temperature: set[int]
-    """The ids of the temperature and humidity controls a paused print waits for, until they reach their target."""
+    """The ids of the thermostats a paused print waits for, until they reach their target."""
 
     _queue: queue.Queue[_Event]
     """The events to handle, in order."""
@@ -202,6 +218,7 @@ class ControlLoop:
         self._get_sensor_data = get_sensor_data
         self._update_ui = update_ui
 
+        self._thermostats = {}
         self._print_job_running = False
         self._waiting_temperature = set()
         self._queue = queue.Queue()
@@ -209,7 +226,6 @@ class ControlLoop:
 
     def start(self) -> None:
         """Start taking decisions, on the Control Loop thread."""
-        self._put(_Start())
         self._thread.start()
 
     def stop(self) -> None:
@@ -254,23 +270,52 @@ class ControlLoop:
         """Take the decisions again after new settings were loaded."""
         self._put(_SettingsLoaded())
 
-    def wait_for_temperature(self, index_id: int) -> None:
-        """Resume the paused print once a temperature or humidity control reaches its target.
+    def set_thermostat_target(self, index_id: int, target: float) -> None:
+        """Set the target of a thermostat, and take the decisions regarding it.
 
         Args:
-            index_id (int): The id of the control the print waits for.
+            index_id (int): The id of the thermostat.
+            target (float): The target temperature or humidity, or 0 to turn the thermostat off.
+
+        """
+        self._put(_ThermostatTargetChanged(index_id, target))
+
+    def get_thermostat_target(self, index_id: int) -> float | None:
+        """Get the target of a thermostat.
+
+        Args:
+            index_id (int): The id of the thermostat.
+
+        Returns:
+            float | None: The target temperature or humidity, 0 if the thermostat is off, or None if there is no
+                thermostat with that id.
+
+        """
+        thermostat = self._thermostats.get(index_id)
+        return None if thermostat is None else thermostat.target
+
+    def wait_for_temperature(self, index_id: int) -> None:
+        """Resume the paused print once a thermostat reaches its target.
+
+        Args:
+            index_id (int): The id of the thermostat the print waits for.
 
         """
         self._put(_WaitForTemperature(index_id))
 
-    def stop_temp_hum_controls(self) -> None:
-        """Turn off the temperature and humidity controls with Auto Shutdown on."""
-        self._put(_StopTempHumControls())
+    def stop_thermostats(self) -> None:
+        """Turn off the thermostats with Auto Shutdown on."""
+        self._put(_StopThermostats())
 
     def _put(self, event: _Event) -> None:
         self._queue.put(event)
 
     def _run(self) -> None:
+        try:
+            self._start_deciding()
+        except Exception:
+            self._logger.exception("Error starting to decide")
+
         next_tick = time.monotonic() + TICK_INTERVAL_SECONDS
         while True:
             # Wait for an event, or for the tick if it comes first
@@ -295,16 +340,13 @@ class ControlLoop:
                 return
 
     def _handle(self, event: _Event) -> None:
-        if isinstance(event, _Start):
-            self._print_job_running = bool(self._printer.is_printing() or self._printer.is_paused())
-            self._decide_gpio_input_levels()
-        elif isinstance(event, _Stop):
+        if isinstance(event, _Stop):
             self._executor.turn_off_all_outputs(wait=True)
         elif isinstance(event, _Tick):
             self._decide_all()
         elif isinstance(event, _NewReading):
             sensor_data = self._get_sensor_data()
-            self._decide_temp_hum_controls(sensor_data, event.index_id)
+            self._decide_thermostats(sensor_data, event.index_id)
             self._decide_temperature_rules(sensor_data, event.index_id)
             self._decide_pwm_linked_temperature(sensor_data, event.index_id)
         elif isinstance(event, _GpioInputEdge):
@@ -312,16 +354,57 @@ class ControlLoop:
         elif isinstance(event, _PrintJobEvent):
             self._decide_print_job_event(event.event)
         elif isinstance(event, _SettingsLoaded):
+            self._load_thermostats()
+
             # While printing every filament automation has to watch: start the ones that don't yet
             if self._printer.is_printing():
                 not_armed = [a for a in self._automations.get_all(FilamentAutomation) if not a.is_armed]
                 self._start_filament_detection(not_armed)
+
             self._decide_all()
+        elif isinstance(event, _ThermostatTargetChanged):
+            thermostat = self._thermostats.get(event.index_id)
+            if thermostat is None:
+                self._logger.debug("Can't set the target of output %s: it isn't a thermostat", event.index_id)
+            else:
+                thermostat.set_target(event.target)
+                self._decide_thermostats(self._get_sensor_data(), None)
+                self._update_ui()
         elif isinstance(event, _WaitForTemperature):
             self._waiting_temperature.add(event.index_id)
-            self._decide_temp_hum_controls(self._get_sensor_data(), None)
-        elif isinstance(event, _StopTempHumControls):
-            self._stop_temp_hum_controls()
+            self._decide_thermostats(self._get_sensor_data(), None)
+        elif isinstance(event, _StopThermostats):
+            self._stop_thermostats()
+
+    def _start_deciding(self) -> None:
+        self._load_thermostats()
+        self._print_job_running = bool(self._printer.is_printing() or self._printer.is_paused())
+        self._decide_gpio_input_levels()
+
+    def _load_thermostats(self) -> None:
+        thermostats: dict[int, Thermostat] = {}
+
+        for rpi_output in self._settings.rpi_outputs:
+            # Only the thermostats
+            if rpi_output["output_type"] != "temp_hum_control":
+                continue
+
+            # Get the output
+            index_id = to_int(rpi_output["index_id"])
+            try:
+                output = self._outputs.get(index_id, ThermostatOutput)
+            except OutputError:
+                # If the settings are invalid, we can only skip this thermostat.
+                # There is no risk, as with invalid settings it can't be on in the first place.
+                continue
+
+            # Keep the thermostat of an output the settings didn't change, with its target
+            thermostat = self._thermostats.get(index_id)
+            if thermostat is None or thermostat.config is not output.config:
+                thermostat = Thermostat(output.config)
+            thermostats[index_id] = thermostat
+
+        self._thermostats = thermostats
 
     def _decide_gpio_input_levels(self) -> None:
         try:
@@ -352,55 +435,44 @@ class ControlLoop:
     def _decide_all(self) -> None:
         sensor_data = self._get_sensor_data()
 
-        self._decide_temp_hum_controls(sensor_data, None)
+        self._decide_thermostats(sensor_data, None)
         self._decide_pwm_linked_temperature(sensor_data, None)
 
         self._update_ui()
 
-    def _decide_temp_hum_controls(self, sensor_data: list[dict], sensor_id: int | None) -> None:
+    def _decide_thermostats(self, sensor_data: list[dict], sensor_id: int | None) -> None:
         try:
-            for rpi_output in self._settings.rpi_outputs:
-                # Only the temperature and humidity controls
-                if rpi_output["output_type"] != "temp_hum_control":
-                    continue
-
-                # Get output id
-                index_id = to_int(rpi_output["index_id"])
-
-                # Get the output parsed settings
-                try:
-                    control = self._outputs.get(index_id, TempHumControlOutput)
-                except OutputError:
-                    # If the settings are invalid, we can only skip this output.
-                    # There is no risk, as with invalid settings it can't be on in the first place.
-                    continue
-
-                # If we received a temperature event, check if it is from the sensor linked to this output
-                if sensor_id is not None and control.config.linked_temp_sensor != sensor_id:
+            for index_id, thermostat in self._thermostats.items():
+                # If we received a temperature event, check if it is from the sensor linked to this thermostat
+                if sensor_id is not None and thermostat.config.linked_temp_sensor != sensor_id:
                     continue
 
                 # Get linked sensor data
-                linked_sensor_data = self._get_linked_sensor_data(sensor_data, control.config.linked_temp_sensor)
+                linked_sensor_data = self._get_linked_sensor_data(sensor_data, thermostat.config.linked_temp_sensor)
                 temperature = None if linked_sensor_data is None else linked_sensor_data["temperature"]
                 humidity = None if linked_sensor_data is None else linked_sensor_data["humidity"]
 
-                # Forward the sensor data to the temperature and humidity control
-                previous_status = control.status
-                status = self._executor.regulate(index_id, temperature, humidity, wait=True)
-                if status is None:
-                    continue
+                # Turn a heater off above its maximum temperature
+                if thermostat.is_above_max_temp(temperature):
+                    self._logger.warning("Thermostat %s reached its maximum temperature: turning it off", index_id)
+                    thermostat.set_target(0.0)
 
-                # If the control status has remained unchanged, we are done
-                if status is previous_status:
+                # Decide whether the device has to be on, and switch it
+                previous_status = thermostat.status
+                should_be_on = thermostat.decide(temperature, humidity)
+                self._executor.switch_thermostat(index_id, on=should_be_on)
+
+                # If the thermostat status has remained unchanged, we are done
+                if thermostat.status is previous_status:
                     continue
 
                 # Update UI
                 self._update_ui()
 
-            # Resume the print paused by ENC W1 once every control it waits for is at its target
+            # Resume the print paused by ENC W1 once every thermostat it waits for is at its target
             self._decide_waiting_print()
         except Exception:
-            self._logger.exception("Error handling temperature/humidity control")
+            self._logger.exception("Error handling the thermostats")
 
     def _decide_waiting_print(self) -> None:
         # Avoid resuming prints if they were not paused to wait for temperatures
@@ -408,15 +480,14 @@ class ControlLoop:
             return
 
         for index_id in list(self._waiting_temperature):
-            # Get the temperature/humidity control we are waiting for
-            try:
-                control = self._outputs.get(index_id, TempHumControlOutput)
-            except OutputError:
+            # Get the thermostat we are waiting for
+            thermostat = self._thermostats.get(index_id)
+            if thermostat is None:
                 self._waiting_temperature.discard(index_id)
                 continue
 
-            # Check if the temperature/humidity control has not reached the temperature yet
-            if control.status is not TempHumControlStatus.IDLE:
+            # Check if the thermostat has not reached the temperature yet
+            if thermostat.status is not ThermostatStatus.IDLE:
                 return
 
         # Resume the print
@@ -457,8 +528,8 @@ class ControlLoop:
                         NotificationType.PRINTER_ACTION,
                         f"Printer action: {action.config.printer_action.value} caused by {cause}",
                     )
-            elif isinstance(reaction, StopTempHumControlReaction):
-                self._stop_temp_hum_controls()
+            elif isinstance(reaction, StopThermostatsReaction):
+                self._stop_thermostats()
                 self._notifications.send(
                     NotificationType.PRINTER_ACTION,
                     f"Printer action: stop_temp_hum_control caused by {cause}",
@@ -540,8 +611,8 @@ class ControlLoop:
                         NotificationType.PRINTER_ACTION,
                         f"Printer action: {action.config.printer_action.value} caused by input: {input_label}",
                     )
-            elif isinstance(reaction, StopTempHumControlReaction):
-                self._stop_temp_hum_controls()
+            elif isinstance(reaction, StopThermostatsReaction):
+                self._stop_thermostats()
                 self._notifications.send(
                     NotificationType.PRINTER_ACTION,
                     f"Printer action: stop_temp_hum_control caused by input: {input_label}",
@@ -599,11 +670,13 @@ class ControlLoop:
         except Exception:
             self._logger.exception("Error starting filament detection")
 
-    def _stop_temp_hum_controls(self) -> None:
+    def _stop_thermostats(self) -> None:
         for rpi_output in self._settings.rpi_outputs:
             if rpi_output["auto_shutdown"] and rpi_output["output_type"] == "temp_hum_control":
-                self._executor.set_target(to_int(rpi_output["index_id"]), 0.0)
-        self._decide_temp_hum_controls(self._get_sensor_data(), None)
+                thermostat = self._thermostats.get(to_int(rpi_output["index_id"]))
+                if thermostat is not None:
+                    thermostat.set_target(0.0)
+        self._decide_thermostats(self._get_sensor_data(), None)
 
     def _control_output(self, reaction: OutputControlReaction) -> bool:
         config = reaction.config

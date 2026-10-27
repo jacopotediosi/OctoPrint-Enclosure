@@ -28,25 +28,6 @@ class RegularOutput(SwitchOutput[RegularConfig]):
 
     config_class = RegularConfig
 
-    def turn_on(self) -> None:
-        """Turn the output on.
-
-        Raises:
-            Exception: If the output can't be written.
-
-        """
-        self._switch(on=True)
-
-    @override
-    def turn_off(self) -> None:
-        """Turn the output off.
-
-        Raises:
-            Exception: If the output can't be written.
-
-        """
-        self._switch(on=False)
-
     def toggle(self) -> bool:
         """Turn the output off if it is on, and on if it is off.
 

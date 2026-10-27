@@ -121,13 +121,13 @@ $(function () {
     self.tab_temperature_table_rows = ko.pureComputed(function () {
       var rows = [];
       self.rpi_inputs_temperature_sensors().forEach(function (sensor) {
-        var controls = self.linkedTemperatureControl(sensor.index_id())();
-        var rowspan = Math.max(controls.length, 1);
-        if (controls.length === 0) {
-          rows.push({sensor: sensor, control: null, first: true, rowspan: rowspan});
+        var thermostats = self.linkedThermostats(sensor.index_id())();
+        var rowspan = Math.max(thermostats.length, 1);
+        if (thermostats.length === 0) {
+          rows.push({sensor: sensor, thermostat: null, first: true, rowspan: rowspan});
         }
-        controls.forEach(function (control, index) {
-          rows.push({sensor: sensor, control: control, first: index === 0, rowspan: rowspan});
+        thermostats.forEach(function (thermostat, index) {
+          rows.push({sensor: sensor, thermostat: thermostat, first: index === 0, rowspan: rowspan});
         });
       });
       return rows;
@@ -163,7 +163,7 @@ $(function () {
       });
     };
 
-    self.linkedTemperatureControl = function(sensor_index){
+    self.linkedThermostats = function(sensor_index){
       return ko.pureComputed(function () {
         return ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
           if (item.linked_temp_sensor){
@@ -181,7 +181,7 @@ $(function () {
       });
     };
 
-    self.hasAnyTemperatureControl = function () {
+    self.hasAnyThermostat = function () {
       return self.rpi_outputs().some(function (output) {
         return output.output_type() == "temp_hum_control";
       });
@@ -215,11 +215,11 @@ $(function () {
 
       if (data.hasOwnProperty("set_temperature")) {
         data.set_temperature.forEach(function (set_temperature) {
-          var linked_temp_control = ko.utils.arrayFilter(self.rpi_outputs(), function (temp_control) {
-            return (set_temperature['index_id'] == temp_control.index_id());
+          var linked_thermostat = ko.utils.arrayFilter(self.rpi_outputs(), function (thermostat) {
+            return (set_temperature['index_id'] == thermostat.index_id());
           }).pop();
-          if (linked_temp_control) {
-            linked_temp_control.temp_ctr_set_value(set_temperature['set_temperature'])
+          if (linked_thermostat) {
+            linked_thermostat.temp_ctr_set_value(set_temperature['set_temperature'])
           }
         })
       }
@@ -237,8 +237,8 @@ $(function () {
         })
       }
 
-      if (data.hasOwnProperty("rpi_output_temp_hum_ctrl")) {
-        data.rpi_output_temp_hum_ctrl.forEach(function (output) {
+      if (data.hasOwnProperty("rpi_output_thermostat")) {
+        data.rpi_output_thermostat.forEach(function (output) {
           var linked_output = ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
             return (output['index_id'] == item.index_id());
           }).pop();

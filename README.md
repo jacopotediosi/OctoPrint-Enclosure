@@ -210,7 +210,7 @@ Outputs can be set to the following types:
 * PWM GPIO
 * Neopixel Control via Microcontroller
 * Neopixel Control directly from raspberry pi
-* Temperature and Humidity Control
+* Thermostats, for temperature and humidity
 * Temperature Alarm
 * Gcode Output
 
@@ -225,7 +225,7 @@ Inputs can be of two different types:
 * Temperature Sensors
 * GPIO
 
-Temperature Sensors will be used to input temperature and humidity data, they can be linked to a especial output like temperature control and temperature alarm.
+Temperature Sensors will be used to input temperature and humidity data, they can be linked to a especial output like a thermostat and a temperature alarm.
 
 GPIO inputs will trigger events for the plugin, this feature can be used to add buttons to the enclosure and cause pressing those buttons to act on the printer or other pre-configured outputs.
 

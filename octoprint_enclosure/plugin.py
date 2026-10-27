@@ -42,8 +42,8 @@ from .outputs import (
     PwmOutput,
     RegularOutput,
     RegularSetState,
-    TempHumControlOutput,
-    TempHumControlType,
+    ThermostatDeviceType,
+    ThermostatOutput,
 )
 from .utils import (
     parse_hhmm,
@@ -269,7 +269,7 @@ class EnclosurePlugin(
                 pin = to_int(rpi_output["gpio_pin"])
                 if rpi_output["output_type"] in ("regular", "temp_hum_control"):
                     active_low = bool(rpi_output["active_low"])
-                    output_class = RegularOutput if rpi_output["output_type"] == "regular" else TempHumControlOutput
+                    output_class = RegularOutput if rpi_output["output_type"] == "regular" else ThermostatOutput
                     val = self.output_state_human(to_int(rpi_output["index_id"]), output_class)
                 else:
                     active_low = False
@@ -314,7 +314,7 @@ class EnclosurePlugin(
                 out = copy.deepcopy(rpi_input)
                 # In previous versions, the automation of a GPIO input was saved in the rpi_input dict. To keep backward
                 # compatibility, the API returns the input with the keys of its first automation, and the type of the
-                # reaction in action_type. A filament sensor, a rule that stops the temperature controls and a rule
+                # reaction in action_type. A filament sensor, a rule that stops the thermostats and a rule
                 # that runs a printer action were a printer_control with "filament", "stop_temp_hum_control" or the
                 # command in printer_action, and a rule that runs another action was an output_control with the id of
                 # the action in controlled_io.
@@ -363,7 +363,7 @@ class EnclosurePlugin(
 
     @octoprint.plugin.BlueprintPlugin.route("/temperature/<int:identifier>", methods=["PATCH"])
     @restricted_access
-    def set_enclosure_temp_humidity(self, identifier):
+    def set_thermostat_temperature(self, identifier):
         if "application/json" not in request.headers["Content-Type"]:
             return make_response("expected json", 400)
         try:
@@ -376,9 +376,7 @@ class EnclosurePlugin(
 
         set_value = data["temperature"]
 
-        self.set_temp_hum_control_target(identifier, set_value)
-
-        self._control_loop.evaluate()
+        self.set_thermostat_target(identifier, set_value)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/filament/<int:identifier>", methods=["PATCH"])
@@ -437,15 +435,16 @@ class EnclosurePlugin(
             with contextlib.suppress(OutputError):
                 out["duty_cycle"] = self._outputs.get(identifier, PwmOutput).duty_cycle
         if out["output_type"] == "temp_hum_control":
-            with contextlib.suppress(OutputError):
-                out["temp_ctr_set_value"] = self._outputs.get(identifier, TempHumControlOutput).target
+            target = self._control_loop.get_thermostat_target(identifier)
+            if target is not None:
+                out["temp_ctr_set_value"] = target
         if out["output_type"] in ("neopixel_indirect", "neopixel_direct"):
             neopixel_class = NeopixelDirectOutput if out["output_type"] == "neopixel_direct" else NeopixelIndirectOutput
             out["neopixel_color"] = self.output_color(identifier, neopixel_class)
         if out["output_type"] == "ledstrip":
             out["ledstrip_color"] = self.output_color(identifier, LedstripOutput)
         if out["output_type"] in ("regular", "temp_hum_control"):
-            output_class = RegularOutput if out["output_type"] == "regular" else TempHumControlOutput
+            output_class = RegularOutput if out["output_type"] == "regular" else ThermostatOutput
             out["current_value"] = self.output_state_boolean(identifier, output_class)
             out["gpio_status"] = out["current_value"] is True
         else:
@@ -710,17 +709,17 @@ class EnclosurePlugin(
                 )
 
     def link_dummy_sensors(self):
-        for control in self._outputs.get_all(TempHumControlOutput):
+        for thermostat in self._outputs.get_all(ThermostatOutput):
             try:
-                dummy = self._sensors.get_dummy(control.config.linked_temp_sensor)
+                dummy = self._sensors.get_dummy(thermostat.config.linked_temp_sensor)
             except LookupError:
                 continue
-            if control.config.temp_ctr_type is TempHumControlType.HEATER:
-                dummy.is_heater_on = control.is_on
-            elif control.config.temp_ctr_type is TempHumControlType.COOLER:
-                dummy.is_cooler_on = control.is_on
-            elif control.config.temp_ctr_type is TempHumControlType.DEHUMIDIFIER:
-                dummy.is_dehumidifier_on = control.is_on
+            if thermostat.config.temp_ctr_type is ThermostatDeviceType.HEATER:
+                dummy.is_heater_on = thermostat.is_on
+            elif thermostat.config.temp_ctr_type is ThermostatDeviceType.COOLER:
+                dummy.is_cooler_on = thermostat.is_on
+            elif thermostat.config.temp_ctr_type is ThermostatDeviceType.DEHUMIDIFIER:
+                dummy.is_dehumidifier_on = thermostat.is_on
 
     def get_output_settings(self, index_id):
         return next((item for item in self.rpi_outputs if to_int(item["index_id"]) == index_id), None)
@@ -882,10 +881,10 @@ class EnclosurePlugin(
 
     def update_ui_set_temperature(self):
         result = []
-        for temp_crt_output in list(filter(lambda item: item["output_type"] == "temp_hum_control", self.rpi_outputs)):
-            with contextlib.suppress(OutputError):
-                set_temperature = self._outputs.get(to_int(temp_crt_output["index_id"]), TempHumControlOutput).target
-                result.append({"index_id": temp_crt_output["index_id"], "set_temperature": set_temperature})
+        for thermostat_output in list(filter(lambda item: item["output_type"] == "temp_hum_control", self.rpi_outputs)):
+            set_temperature = self._control_loop.get_thermostat_target(to_int(thermostat_output["index_id"]))
+            if set_temperature is not None:
+                result.append({"index_id": thermostat_output["index_id"], "set_temperature": set_temperature})
         self._frontend.update_set_temperature(result)
 
     def update_ui_outputs(self):
@@ -894,7 +893,7 @@ class EnclosurePlugin(
             pwm_status = []
             neopixel_status = []
             ledstrip_status = []
-            temp_control_status = []
+            thermostat_status = []
             for output in self.rpi_outputs:
                 index = to_int(output["index_id"])
                 startup = output["auto_startup"]
@@ -906,8 +905,8 @@ class EnclosurePlugin(
                         {"index_id": index, "status": val, "auto_startup": startup, "auto_shutdown": shutdown},
                     )
                 if output["output_type"] == "temp_hum_control":
-                    val = self.output_state_boolean(index, TempHumControlOutput) is True
-                    temp_control_status.append(
+                    val = self.output_state_boolean(index, ThermostatOutput) is True
+                    thermostat_status.append(
                         {"index_id": index, "status": val, "auto_startup": startup, "auto_shutdown": shutdown},
                     )
                 if output["output_type"] == "neopixel_indirect" or output["output_type"] == "neopixel_direct":
@@ -939,7 +938,7 @@ class EnclosurePlugin(
                 pwm=pwm_status,
                 neopixel=neopixel_status,
                 ledstrip=ledstrip_status,
-                temp_hum_ctrl=temp_control_status,
+                thermostats=thermostat_status,
             )
         except Exception:
             self._logger.exception("Error sending outputs status to the UI")
@@ -1007,9 +1006,9 @@ class EnclosurePlugin(
             for regular_output in self._outputs.get_all(RegularOutput):
                 if regular_output not in outputs_not_changed:
                     regular_output.setup_pin()
-            for temp_hum_control in self._outputs.get_all(TempHumControlOutput):
-                if temp_hum_control not in outputs_not_changed:
-                    temp_hum_control.setup_pin()
+            for thermostat in self._outputs.get_all(ThermostatOutput):
+                if thermostat not in outputs_not_changed:
+                    thermostat.setup_pin()
             for pwm_output in self._outputs.get_all(PwmOutput):
                 pwm_output.start()
             for neopixel_output in self._outputs.get_all(NeopixelDirectOutput):
@@ -1033,17 +1032,14 @@ class EnclosurePlugin(
     def handle_gpio_input(self, input_id, level):
         self._control_loop.evaluate_gpio_input_edge(input_id, level)
 
-    def set_temp_hum_control_target(self, index_id, target):
-        self._executor.set_target(index_id, to_float(target), wait=True)
+    def set_thermostat_target(self, index_id, target):
+        self._control_loop.set_thermostat_target(index_id, to_float(target))
 
     def handle_temperature_command(self, index_id, temperature, wait):
-        self.set_temp_hum_control_target(index_id, temperature)
-        self.update_ui_set_temperature()
+        self.set_thermostat_target(index_id, temperature)
         if wait and self._printer.is_printing():
             self._printer.pause_print()
             self._control_loop.wait_for_temperature(index_id)
-        else:
-            self._control_loop.evaluate()
 
     # ~~ EventPlugin mixin
     def on_event(self, event, payload):
@@ -1092,8 +1088,7 @@ class EnclosurePlugin(
                         delay_seconds = to_float(shutdown_time)
                         self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
                         if rpi_output["output_type"] == "temp_hum_control":
-                            self.set_temp_hum_control_target(to_int(rpi_output["index_id"]), 0)
-            self._control_loop.evaluate()
+                            self.set_thermostat_target(to_int(rpi_output["index_id"]), 0)
 
         if event == Events.PRINT_DONE:
             file_name = Path(payload["path"]).name
@@ -1146,7 +1141,7 @@ class EnclosurePlugin(
                     self._executor.set_color(to_int(rpi_output["index_id"]), to_int(red), to_int(green), to_int(blue))
                 if rpi_output["output_type"] == "temp_hum_control":
                     index_id = to_int(rpi_output["index_id"])
-                    self.set_temp_hum_control_target(index_id, rpi_output["temp_ctr_default_value"])
+                    self.set_thermostat_target(index_id, rpi_output["temp_ctr_default_value"])
 
     def schedule_auto_startup_outputs(self, rpi_output, delay_seconds):
         suffix = "auto_startup"
@@ -1209,7 +1204,7 @@ class EnclosurePlugin(
 
     def add_temperature_output_temperature_queue(self, delay_seconds, rpi_output, value, suffix):
         queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
-        self._logger.debug("Scheduling temperature control id %s on %s delay_seconds", queue_id, delay_seconds)
+        self._logger.debug("Scheduling thermostat id %s on %s delay_seconds", queue_id, delay_seconds)
         self._scheduler.schedule(
             queue_id,
             delay_seconds,
@@ -1221,9 +1216,8 @@ class EnclosurePlugin(
             rpi_output = [r_out for r_out in self.rpi_outputs if to_int(r_out["index_id"]) == rpi_output_index].pop()
 
             if rpi_output["output_type"] == "temp_hum_control":
-                self.set_temp_hum_control_target(rpi_output_index, value)
+                self.set_thermostat_target(rpi_output_index, value)
                 self._logger.debug("Setting temperature to output index: %s value %s", rpi_output["index_id"], value)
-                self._control_loop.evaluate()
 
             self.update_ui()
 

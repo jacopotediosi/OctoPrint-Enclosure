@@ -22,7 +22,7 @@ class EncHandler:
     _logger: logging.Logger
 
     _set_temperature: Callable[[int, float, bool], None]
-    """The function called to set the target of a temperature/humidity control, with the id of the output,
+    """The function called to set the target of a thermostat, with the id of the output,
     the target and whether the print has to pause until the target is reached."""
 
     _update_ui: Callable[[], None]
@@ -39,7 +39,7 @@ class EncHandler:
         Args:
             plugin_context (PluginContext): The plugin context.
             set_temperature (Callable[[int, float, bool], None]): The function called to set the target of a
-                temperature/humidity control, with the id of the output, the target and whether the print has to pause
+                thermostat, with the id of the output, the target and whether the print has to pause
                 until the target is reached.
             update_ui (Callable[[], None]): The function called to refresh the UI after an output changed.
 
@@ -72,7 +72,7 @@ class EncHandler:
             temperature = to_float(get_gcode_param(cmd, "S"))
             wait = to_int(get_gcode_param(cmd, "W")) == 1
             self._set_temperature(index_id, temperature, wait)
-            comm_instance._log(f"Setting TEMP/HUM control output {index_id} to value {temperature}")
+            comm_instance._log(f"Setting thermostat output {index_id} to value {temperature}")
         else:
             reply = self._executor.run_enc_command(index_id, cmd, wait=True)
             if reply is not None:

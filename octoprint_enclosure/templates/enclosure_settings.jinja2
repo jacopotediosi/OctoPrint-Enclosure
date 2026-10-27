@@ -135,7 +135,7 @@
     <strong>outputs</strong>. Outputs are the devices driven by the plugin: from a button on the Enclosure tab, from an automation, or
     automatically, for example when a print ends or a temperature alarm goes off.
 </p>
-<p>Example of possible outputs are GPIO pins, neopixel LED's or temperature control.</p>
+<p>Example of possible outputs are GPIO pins, neopixel LED's or thermostats.</p>
 <form class="form-horizontal">
     <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.rpi_outputs">
         <!--
@@ -149,7 +149,7 @@
             ("neopixel_indirect", _("NeoPixel Indirect")),
             ("neopixel_direct", _("NeoPixel Direct")),
             ("ledstrip", _("RGB LED Strip")),
-            ("temp_hum_control", _("Temperature / Humidity Control")),
+            ("temp_hum_control", _("Thermostat")),
         ], placeholder="Select Output Type") }}
         {{ text_control_group("label", _("Label"), "Name displayed on Enclosure Tab") }}
         {{ text_control_group("index_id", _("Id"), "Id used for API control", disabled=true) }}
@@ -221,11 +221,11 @@
             </div>
         </div>
         <div data-bind="if: output_type() == 'temp_hum_control'">
-            {{ select_control_group("temp_ctr_type", _("Temp Control Type"), [("heater", _("Heater")), ("cooler", _("Cooler")), ("dehumidifier", _("Dehumidifier"))], placeholder="Select Control Type") }}
+            {{ select_control_group("temp_ctr_type", _("Device Type"), [("heater", _("Heater")), ("cooler", _("Cooler")), ("dehumidifier", _("Dehumidifier"))], placeholder="Select Device Type") }}
             <div data-bind="if: auto_startup() || startup_with_server()">
-                {{ text_control_group("temp_ctr_default_value", _("Default Value"), "Default temperature / humidity that temperature control will be set when the print starts or the server starts.") }}
+                {{ text_control_group("temp_ctr_default_value", _("Default Value"), "Default temperature / humidity the thermostat will be set to when the print starts or the server starts.") }}
             </div>
-            {{ text_control_group("temp_ctr_deadband", _("Value Deadband"), "Allowable drift on temperature / humidity control. Set it to zero to disable.") }}
+            {{ text_control_group("temp_ctr_deadband", _("Value Deadband"), "Allowable drift of the thermostat below its target. Set it to zero to disable.") }}
             <div data-bind="if: temp_ctr_type() == 'heater'">
                 {{ text_control_group("temp_ctr_max_temp", _("Maximum Temperature"), "Maximum temperature that the enclosure should reach, if this temperature is hit, the heater will be disabled until it's set temperature is set again.") }}
             </div>
@@ -351,7 +351,7 @@
 <p>
     Configure all
     <strong>automations</strong>. A rule reacts to a trigger, such as a GPIO input that changes or a temperature above a threshold: it
-    controls an output, runs an action or stops the temperature controls. A filament sensor detects the end of the filament during a
+    controls an output, runs an action or stops the thermostats. A filament sensor detects the end of the filament during a
     print. A PWM linked to temperature sets the duty cycle of a PWM output from a temperature.
 </p>
 <form class="form-horizontal">
@@ -398,7 +398,7 @@
             {% call select_control_group("reaction_type", _("Reaction"), [
                 ("output_control", _("Output Control")),
                 ("run_action", _("Run Action")),
-                ("stop_temp_hum_control", _("Stop Temperature Control")),
+                ("stop_temp_hum_control", _("Stop Thermostats")),
             ], placeholder="Select Reaction") %}
                 <span class="help-inline"
                       data-bind="visible: reaction_type() == 'output_control'">
@@ -413,7 +413,7 @@
                 </span>
                 <span class="help-inline"
                       data-bind="visible: reaction_type() == 'stop_temp_hum_control'">
-                    <span class="label label-info">Info:</span> Will stop all the Temperature / Humidity Controls with Auto Shutdown when a condition is met, for
+                    <span class="label label-info">Info:</span> Will stop all the thermostats with Auto Shutdown when a condition is met, for
                     example the press of a button.
                 </span>
             {% endcall %}

@@ -26,7 +26,7 @@ class Frontend:
         self._send({"sensor_data": sensor_data})
 
     def update_set_temperature(self, set_temperature: list) -> None:
-        """Update the target values of the temperature and humidity controls."""
+        """Update the target values of the thermostats."""
         self._send({"set_temperature": set_temperature})
 
     def update_outputs(
@@ -35,7 +35,7 @@ class Frontend:
         pwm: list[dict],
         neopixel: list[dict],
         ledstrip: list[dict],
-        temp_hum_ctrl: list[dict],
+        thermostats: list[dict],
     ) -> None:
         """Update the state of the outputs, grouped by output type."""
         self._send(
@@ -44,7 +44,7 @@ class Frontend:
                 "rpi_output_pwm": pwm,
                 "rpi_output_neopixel": neopixel,
                 "rpi_output_ledstrip": ledstrip,
-                "rpi_output_temp_hum_ctrl": temp_hum_ctrl,
+                "rpi_output_thermostat": thermostats,
             },
         )
 

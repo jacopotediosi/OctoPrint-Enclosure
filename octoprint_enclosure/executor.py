@@ -12,8 +12,7 @@ from .outputs import (
     PwmOutput,
     RegularOutput,
     RegularSetState,
-    TempHumControlOutput,
-    TempHumControlStatus,
+    ThermostatOutput,
 )
 
 if TYPE_CHECKING:
@@ -166,58 +165,29 @@ class Executor:
 
         self._submit(set_color, wait=wait)
 
-    def set_target(self, index_id: int, target: float, *, wait: bool = False) -> None:
-        """Set the target of a temperature/humidity control, applied at its next regulation.
+    def switch_thermostat(self, index_id: int, *, on: bool, wait: bool = False) -> None:
+        """Turn the device of a thermostat on or off.
 
         Args:
-            index_id (int): The id of the control.
-            target (float): The target temperature or humidity, or 0 to turn the control off.
-            wait (bool): Whether to wait for the target to be set, up to the command timeout.
+            index_id (int): The id of the thermostat.
+            on (bool): Whether to turn the device on or off.
+            wait (bool): Whether to wait for the switch, up to the command timeout.
 
         """
 
-        def set_target() -> None:
+        def switch_thermostat() -> None:
             try:
-                self._outputs.get(index_id, TempHumControlOutput).set_target(target)
+                output = self._outputs.get(index_id, ThermostatOutput)
+                if on:
+                    output.turn_on()
+                else:
+                    output.turn_off()
             except OutputError as error:
-                self._logger.debug("Can't set the target of output %s: %s", index_id, error)
-
-        self._submit(set_target, wait=wait)
-
-    def regulate(
-        self,
-        index_id: int,
-        temperature: float | None,
-        humidity: float | None,
-        *,
-        wait: bool = False,
-    ) -> TempHumControlStatus | None:
-        """Turn the device of a temperature/humidity control on or off, to keep its target.
-
-        Args:
-            index_id (int): The id of the control.
-            temperature (float | None): The temperature read by its sensor, or None if it has none.
-            humidity (float | None): The humidity read by its sensor, or None if it has none.
-            wait (bool): Whether to wait for the regulation, up to the command timeout.
-
-        Returns:
-            TempHumControlStatus | None: What the control is doing after the regulation, or None without waiting, on
-                a timeout or if it couldn't be regulated.
-
-        """
-
-        def regulate() -> TempHumControlStatus | None:
-            try:
-                status = self._outputs.get(index_id, TempHumControlOutput).regulate(temperature, humidity)
-            except OutputError as error:
-                self._logger.debug("Can't regulate output %s: %s", index_id, error)
-                return None
+                self._logger.debug("Can't write on output %s: %s", index_id, error)
             except Exception:
-                self._logger.exception("Error reading or writing output %s", index_id)
-                return None
-            return status
+                self._logger.exception("Error writing on output %s", index_id)
 
-        return self._submit(regulate, wait=wait)
+        self._submit(switch_thermostat, wait=wait)
 
     def run_action(
         self,
