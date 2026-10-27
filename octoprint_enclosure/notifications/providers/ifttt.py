@@ -12,7 +12,7 @@ class IftttProvider(NotificationProvider):
     provider_id = "ifttt"
 
     @override
-    def send(self, message: str) -> None:
+    def _deliver(self, message: str) -> None:
         event = self._settings.notification_event_name
         api_key = self._settings.notification_api_key
         self._logger.debug("Sending IFTTT notification for event %s: %s", event, message)

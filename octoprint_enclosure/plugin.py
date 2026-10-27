@@ -227,6 +227,7 @@ class EnclosurePlugin(
     # ~~ ShutdownPlugin mixin
     def on_shutdown(self):
         self._control_loop.stop()
+        self._notifications.stop()
 
     # ~~ SettingsPlugin mixin
     def get_settings_version(self):

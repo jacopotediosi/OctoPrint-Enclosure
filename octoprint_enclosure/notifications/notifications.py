@@ -53,3 +53,8 @@ class Notifications:
         for notification in self._settings.notifications:
             if notification[notification_type.value]:
                 provider.send(message)
+
+    def stop(self) -> None:
+        """Deliver the notifications pending, then stop delivering."""
+        for provider in self._providers.values():
+            provider.stop()
