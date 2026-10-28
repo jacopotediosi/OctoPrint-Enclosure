@@ -11,14 +11,14 @@ if TYPE_CHECKING:
     from octoprint.util.comm import MachineCom
 
     from octoprint_enclosure.core import PluginContext, Settings
-    from octoprint_enclosure.executor import Executor
+    from octoprint_enclosure.output_executor import OutputExecutor
 
 
 class EncHandler:
     """Handles the ENC G-code commands."""
 
     _settings: Settings
-    _executor: Executor
+    _output_executor: OutputExecutor
     _logger: logging.Logger
 
     _set_temperature: Callable[[int, float, bool], None]
@@ -40,7 +40,7 @@ class EncHandler:
 
         """
         self._settings = plugin_context.settings
-        self._executor = plugin_context.executor
+        self._output_executor = plugin_context.output_executor
         self._logger = plugin_context.logger.getChild("EncHandler")
         self._set_temperature = set_temperature
 
@@ -68,6 +68,6 @@ class EncHandler:
             self._set_temperature(index_id, temperature, wait)
             comm_instance._log(f"Setting thermostat output {index_id} to value {temperature}")
         else:
-            reply = self._executor.run_enc_command(index_id, cmd, wait=True)
+            reply = self._output_executor.run_enc_command(index_id, cmd, wait=True)
             if reply is not None:
                 comm_instance._log(reply)

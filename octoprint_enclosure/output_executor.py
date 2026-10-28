@@ -28,7 +28,7 @@ _T_co = TypeVar("_T_co", covariant=True)
 if TYPE_CHECKING:
 
     class _Command(Protocol[_T_co]):
-        """A function running a command on the Executor thread."""
+        """A function running a command on the OutputExecutor thread."""
 
         __name__: str
 
@@ -39,7 +39,7 @@ COMMAND_TIMEOUT_SECONDS = 5
 """The seconds a caller waits for the outcome of a command."""
 
 
-class Executor:
+class OutputExecutor:
     """Executes the commands to the outputs, on a thread of its own.
 
     This is the only place that commands the outputs: from anywhere else they are only read. Every command runs on
@@ -57,7 +57,7 @@ class Executor:
     """Whether an outputs UI update has already been requested."""
 
     _thread: ThreadPoolExecutor
-    """Runs the commands on the Executor thread."""
+    """Runs the commands on the OutputExecutor thread."""
 
     def __init__(
         self,
@@ -75,10 +75,10 @@ class Executor:
 
         """
         self._outputs = outputs
-        self._logger = logger.getChild("Executor")
+        self._logger = logger.getChild("OutputExecutor")
         self._update_ui_outputs = update_ui_outputs
         self._update_ui_outputs_already_requested = False
-        self._thread = ThreadPoolExecutor(max_workers=1, thread_name_prefix="EnclosureExecutor")
+        self._thread = ThreadPoolExecutor(max_workers=1, thread_name_prefix="EnclosureOutputExecutor")
 
     def switch_output(self, index_id: int, state: RegularSetState, *, wait: bool = False) -> bool | None:
         """Switch a regular output.

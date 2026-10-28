@@ -40,9 +40,9 @@ if TYPE_CHECKING:
     from .actions import Actions
     from .automations import Automations
     from .core import Frontend, Settings
-    from .executor import Executor
     from .inputs import GpioInputs
     from .notifications import Notifications
+    from .output_executor import OutputExecutor
     from .outputs import Outputs
 
 TICK_INTERVAL_SECONDS = 10
@@ -153,7 +153,7 @@ class ControlLoop:
     _outputs: Outputs
     _actions: Actions
     _automations: Automations
-    _executor: Executor
+    _output_executor: OutputExecutor
     _notifications: Notifications
     _printer: PrinterInterface
     _frontend: Frontend
@@ -183,7 +183,7 @@ class ControlLoop:
         outputs: Outputs,
         actions: Actions,
         automations: Automations,
-        executor: Executor,
+        output_executor: OutputExecutor,
         notifications: Notifications,
         printer: PrinterInterface,
         frontend: Frontend,
@@ -199,7 +199,7 @@ class ControlLoop:
             outputs (Outputs): The outputs.
             actions (Actions): The actions.
             automations (Automations): The automations.
-            executor (Executor): The executor of the commands to the outputs.
+            output_executor (OutputExecutor): The executor of the commands to the outputs.
             notifications (Notifications): The notifications.
             printer (PrinterInterface): The OctoPrint printer interface.
             frontend (Frontend): The frontend handler.
@@ -213,7 +213,7 @@ class ControlLoop:
         self._outputs = outputs
         self._actions = actions
         self._automations = automations
-        self._executor = executor
+        self._output_executor = output_executor
         self._notifications = notifications
         self._printer = printer
         self._frontend = frontend
@@ -345,7 +345,7 @@ class ControlLoop:
 
     def _handle(self, event: _Event) -> None:
         if isinstance(event, _Stop):
-            self._executor.turn_off_all_outputs(wait=True)
+            self._output_executor.turn_off_all_outputs(wait=True)
         elif isinstance(event, _Tick):
             self._decide_all()
         elif isinstance(event, _NewReading):
@@ -465,7 +465,7 @@ class ControlLoop:
 
                 # Decide whether the device has to be on, and switch it
                 should_be_on = thermostat.decide(temperature, humidity)
-                self._executor.switch_thermostat(index_id, on=should_be_on)
+                self._output_executor.switch_thermostat(index_id, on=should_be_on)
 
             # Resume the print paused by ENC W1 once every thermostat it waits for is at its target
             self._decide_waiting_print()
@@ -561,7 +561,7 @@ class ControlLoop:
                 calculated_duty = automation.get_duty_cycle(temperature)
 
                 # Write the new duty cycle to the output
-                self._executor.write_pwm(output_id, calculated_duty)
+                self._output_executor.write_pwm(output_id, calculated_duty)
         except Exception:
             self._logger.exception("Error handling temperature linked PWM outputs")
 
@@ -573,7 +573,7 @@ class ControlLoop:
             except OutputError as error:
                 self._logger.debug("Can't reset the duty cycle of output %s: %s", output_id, error)
             else:
-                self._executor.write_pwm(output_id, default_duty_cycle)
+                self._output_executor.write_pwm(output_id, default_duty_cycle)
 
     def _decide_gpio_input_edge(self, input_id: int, level: int) -> None:
         input_label = next(
@@ -691,7 +691,7 @@ class ControlLoop:
             self._outputs.get(config.controlled_io, RegularOutput)
         except OutputError:
             return False
-        self._executor.switch_output(config.controlled_io, config.controlled_io_set_state)
+        self._output_executor.switch_output(config.controlled_io, config.controlled_io_set_state)
         return True
 
     def _get_linked_sensor_data(self, sensor_data: list[dict], linked_id: int) -> dict | None:
