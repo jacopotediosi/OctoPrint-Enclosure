@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+import queue
+import threading
+from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import TYPE_CHECKING, TypeVar
 
@@ -17,6 +19,7 @@ from .outputs import (
 if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Iterable
+    from typing import Any
 
     from typing_extensions import Protocol
 
@@ -30,13 +33,21 @@ if TYPE_CHECKING:
     class _Command(Protocol[_T_co]):
         """A function running a command on the OutputExecutor thread."""
 
-        __name__: str
+        @property
+        def __name__(self) -> str: ...
 
         def __call__(self) -> _T_co: ...
 
 
 COMMAND_TIMEOUT_SECONDS = 5
-"""The seconds a caller waits for the outcome of a command."""
+"""The maximum seconds a caller waits for the outcome of a command."""
+
+SHUTDOWN_TIMEOUT_SECONDS = 15
+"""The maximum seconds to wait during the shutdown."""
+
+
+class _Shutdown:
+    """The OutputExecutor shuts down."""
 
 
 class OutputExecutor:
@@ -56,8 +67,16 @@ class OutputExecutor:
     _update_ui_outputs_already_requested: bool
     """Whether an outputs UI update has already been requested."""
 
-    _thread: ThreadPoolExecutor
-    """Runs the commands on the OutputExecutor thread."""
+    _shutting_down: bool
+    """Whether the executor is shutting down, and discards every command."""
+
+    _queue: queue.Queue[tuple[Future[Any], _Command[Any]] | _Shutdown]
+    """The commands to run, in order, each with the future of its outcome."""
+
+    _lock: threading.Lock
+    """Held by every put in the queue."""
+
+    _thread: threading.Thread
 
     def __init__(
         self,
@@ -78,7 +97,11 @@ class OutputExecutor:
         self._logger = logger.getChild("OutputExecutor")
         self._update_ui_outputs = update_ui_outputs
         self._update_ui_outputs_already_requested = False
-        self._thread = ThreadPoolExecutor(max_workers=1, thread_name_prefix="EnclosureOutputExecutor")
+        self._shutting_down = False
+        self._queue = queue.Queue()
+        self._lock = threading.Lock()
+        self._thread = threading.Thread(target=self._run, name="EnclosureOutputExecutor", daemon=True)
+        self._thread.start()
 
     def load_outputs(self, outputs_settings: Iterable[dict], *, wait: bool = False) -> None:
         """Load the outputs from their settings.
@@ -238,30 +261,21 @@ class OutputExecutor:
 
         return self._submit(run_enc_command, wait=wait)
 
-    def turn_off_all_outputs(self, *, wait: bool = False) -> None:
-        """Turn every output off.
+    def shutdown(self) -> None:
+        """Turn every output off and stop executing.
 
-        Args:
-            wait (bool): Whether to wait for every output to be off, up to the command timeout.
-
+        The commands still queued are discarded, and so is every command asked from now on.
         """
-
-        def turn_off_all_outputs() -> None:
-            for output in self._outputs.get_all(Output):
-                try:
-                    output.turn_off()
-                except OutputError as error:
-                    self._logger.debug("Can't turn off an output: %s", error)
-                except Exception:
-                    self._logger.exception("Error turning off an output")
-
-            self._queue_update_ui_outputs()
-
-        self._submit(turn_off_all_outputs, wait=wait)
+        with self._lock:
+            self._shutting_down = True
+            self._queue.put(_Shutdown())
+        self._thread.join(timeout=SHUTDOWN_TIMEOUT_SECONDS)
+        if self._thread.is_alive():
+            self._logger.warning("The outputs are not all off after %s s", SHUTDOWN_TIMEOUT_SECONDS)
 
     def update_ui_outputs(self) -> None:
         """Update the outputs in the UI once the commands queued so far are executed."""
-        self._thread.submit(self._queue_update_ui_outputs)
+        self._submit(self._queue_update_ui_outputs, wait=False)
 
     def _queue_update_ui_outputs(self) -> None:
         def update_ui_outputs() -> None:
@@ -274,11 +288,16 @@ class OutputExecutor:
         if self._update_ui_outputs_already_requested:
             return
 
-        self._thread.submit(update_ui_outputs)
+        self._submit(update_ui_outputs, wait=False)
         self._update_ui_outputs_already_requested = True
 
     def _submit(self, command: _Command[_T], *, wait: bool) -> _T | None:
-        future = self._thread.submit(command)
+        with self._lock:
+            if self._shutting_down:
+                return None
+
+            future: Future[_T | None] = Future()
+            self._queue.put((future, command))
 
         if not wait:
             return None
@@ -289,3 +308,32 @@ class OutputExecutor:
             self._logger.warning("Command %s not done after %s s", command.__name__, COMMAND_TIMEOUT_SECONDS)
             return None
         return outcome
+
+    def _run(self) -> None:
+        while True:
+            item = self._queue.get()
+
+            # Turn every output off and end the thread when the executor is shut down
+            if isinstance(item, _Shutdown):
+                for output in self._outputs.get_all(Output):
+                    try:
+                        output.turn_off()
+                    except OutputError as error:
+                        self._logger.debug("Can't turn off an output: %s", error)
+                    except Exception:
+                        self._logger.exception("Error turning off an output")
+                return
+
+            # Discard the command if the executor is shutting down
+            future, command = item
+            if self._shutting_down:
+                future.set_result(None)
+                continue
+
+            # Run the command
+            try:
+                outcome = command()
+            except Exception:
+                self._logger.exception("Error running command %s", command.__name__)
+                outcome = None
+            future.set_result(outcome)

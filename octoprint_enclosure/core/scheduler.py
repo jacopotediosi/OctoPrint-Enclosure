@@ -46,6 +46,9 @@ class Scheduler:
     _condition: threading.Condition
     """Guards the jobs, and wakes the thread up when they change."""
 
+    _stopped: bool
+    """Whether the scheduler is stopped."""
+
     _thread: threading.Thread
 
     def __init__(self, logger: logging.Logger) -> None:
@@ -59,6 +62,7 @@ class Scheduler:
         self._jobs = {}
         self._priorities = itertools.count()
         self._condition = threading.Condition()
+        self._stopped = False
         self._thread = threading.Thread(target=self._run, name="EnclosureScheduler", daemon=True)
         self._thread.start()
 
@@ -94,17 +98,31 @@ class Scheduler:
             self._jobs.clear()
             self._condition.notify()
 
+    def stop(self) -> None:
+        """Cancel every job still waiting and stop running jobs."""
+        with self._condition:
+            self._stopped = True
+            self._jobs.clear()
+            self._condition.notify()
+        self._thread.join()
+
     def _run(self) -> None:
         while True:
             with self._condition:
+                if self._stopped:
+                    return
+
                 if not self._jobs:
                     self._condition.wait()
                     continue
+
                 job = min(self._jobs.values(), key=lambda job: (job.due, job.priority))
+
                 delay = job.due - time.monotonic()
                 if delay > 0:
                     self._condition.wait(min(delay, threading.TIMEOUT_MAX))
                     continue
+
                 del self._jobs[job.job_id]
 
             try:

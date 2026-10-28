@@ -233,9 +233,10 @@ class ControlLoop:
         self._thread.start()
 
     def stop(self) -> None:
-        """Stop taking decisions and turn every output off."""
-        self._put(_Stop())
-        self._thread.join()
+        """Stop taking decisions."""
+        if self._thread.is_alive():
+            self._put(_Stop())
+            self._thread.join()
 
     def evaluate(self) -> None:
         """Take the decisions again now."""
@@ -333,20 +334,18 @@ class ControlLoop:
                 except queue.Empty:
                     continue
 
+            # Stop the loop if the event is a stop
+            if isinstance(event, _Stop):
+                return
+
             # Handle the event
             try:
                 self._handle(event)
             except Exception:
                 self._logger.exception("Error handling %s", event)
 
-            # Stop the loop if the event was a stop
-            if isinstance(event, _Stop):
-                return
-
     def _handle(self, event: _Event) -> None:
-        if isinstance(event, _Stop):
-            self._output_executor.turn_off_all_outputs(wait=True)
-        elif isinstance(event, _Tick):
+        if isinstance(event, _Tick):
             self._decide_all()
         elif isinstance(event, _NewReading):
             sensor_data = self._get_sensor_data()

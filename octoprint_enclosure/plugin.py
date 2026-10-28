@@ -225,8 +225,25 @@ class EnclosurePlugin(
 
     # ~~ ShutdownPlugin mixin
     def on_shutdown(self):
-        self._control_loop.stop()
-        self._notifications.stop()
+        try:
+            self._control_loop.stop()
+        except Exception:
+            self._logger.exception("Error stopping the Control Loop")
+
+        try:
+            self._scheduler.stop()
+        except Exception:
+            self._logger.exception("Error stopping the scheduler")
+
+        try:
+            self._output_executor.shutdown()
+        except Exception:
+            self._logger.exception("Error shutting down the outputs")
+
+        try:
+            self._notifications.stop()
+        except Exception:
+            self._logger.exception("Error stopping the notifications")
 
     # ~~ SettingsPlugin mixin
     def get_settings_version(self):
