@@ -40,7 +40,8 @@ class _DhtSensor(Sensor[DhtConfig]):
         result = subprocess.run(
             command,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=WORKER_TIMEOUT_SECONDS,
             check=False,
         )

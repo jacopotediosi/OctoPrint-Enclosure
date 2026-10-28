@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from subprocess import Popen
 
 from typing_extensions import override
 
 from octoprint_enclosure.core import BaseConfig
 from octoprint_enclosure.utils import get_gcode_param, to_int
 
+from .base import OutputError
 from .color import ColorOutput
 
 WORKER_PATH = Path(__file__).with_name("neopixel_direct_worker.py")
+WORKER_TIMEOUT_SECONDS = 3
+WORKER_TERMINATE_TIMEOUT_SECONDS = 2
+
 SPI_PIN = 10
 
 
@@ -65,7 +69,27 @@ class NeopixelDirectOutput(ColorOutput[NeopixelDirectConfig]):
             command = ["sudo", "-n", *command]
 
         self._logger.debug("Running the NeoPixel worker: %s", command)
-        Popen(command)
+        with subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            errors="replace",
+        ) as process:
+            try:
+                _, stderr = process.communicate(timeout=WORKER_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                process.terminate()
+                try:
+                    process.wait(timeout=WORKER_TERMINATE_TIMEOUT_SECONDS)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                msg = f"The NeoPixel worker didn't end within {WORKER_TIMEOUT_SECONDS} s"
+                raise OutputError(msg) from None
+
+        if process.returncode != 0:
+            msg = f"The NeoPixel worker exited with code {process.returncode}: {stderr.strip()}"
+            raise OutputError(msg)
 
     @override
     def run_enc_command(self, command: str) -> str:
