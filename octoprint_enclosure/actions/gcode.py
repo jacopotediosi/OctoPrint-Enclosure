@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 
 from typing_extensions import override
@@ -8,8 +7,6 @@ from typing_extensions import override
 from octoprint_enclosure.core import BaseConfig
 
 from .base import Action
-
-LINE_DELAY_SECONDS = 0.2
 
 
 @dataclass(frozen=True)
@@ -33,8 +30,6 @@ class GcodeAction(Action[GcodeConfig]):
             Exception: If the G-code can't be sent.
 
         """
-        for line in self.config.gcode.split("\n"):
-            if line:
-                self._printer.commands(line.strip())
-                self._logger.debug("Sending GCODE command: %s", line.strip())
-                time.sleep(LINE_DELAY_SECONDS)
+        lines = [line.strip() for line in self.config.gcode.split("\n") if line.strip()]
+        self._logger.debug("Sending GCODE commands: %s", lines)
+        self._printer.commands(lines)

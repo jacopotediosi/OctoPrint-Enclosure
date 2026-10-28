@@ -15,7 +15,7 @@ from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
 from octoprint.server.util.flask import restricted_access
 from werkzeug.exceptions import BadRequest
 
-from .actions import Actions, GcodeAction, PrinterAction, ShellAction
+from .actions import ActionError, Actions, GcodeAction, PrinterAction, ShellAction
 from .automations import (
     AutomationError,
     Automations,
@@ -122,10 +122,11 @@ class EnclosurePlugin(
         # Init threads
         self._sensor_poller = SensorPoller(self._sensors, self.handle_sensor_reading, self._logger)
         self._scheduler = Scheduler(self._logger)
-        self._executor = Executor(self._outputs, self._actions, self._logger, update_ui_outputs=self.send_ui_outputs)
+        self._executor = Executor(self._outputs, self._logger, update_ui_outputs=self.send_ui_outputs)
         self._control_loop = ControlLoop(
             self._gpio_inputs,
             self._outputs,
+            self._actions,
             self._automations,
             self._executor,
             self._notifications,
@@ -654,19 +655,28 @@ class EnclosurePlugin(
     @octoprint.plugin.BlueprintPlugin.route("/shell/<int:identifier>", methods=["POST"])
     @restricted_access
     def send_shell_command(self, identifier):
-        self._executor.run_action(identifier, ShellAction)
+        try:
+            self._actions.run(identifier, ShellAction)
+        except ActionError as error:
+            self._logger.debug("Can't run action %s: %s", identifier, error)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/gcode/<int:identifier>", methods=["POST"])
     @restricted_access
     def requested_gcode_command(self, identifier):
-        self._executor.run_action(identifier, GcodeAction)
+        try:
+            self._actions.run(identifier, GcodeAction)
+        except ActionError as error:
+            self._logger.debug("Can't run action %s: %s", identifier, error)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/printer/<int:identifier>", methods=["POST"])
     @restricted_access
     def send_printer_command(self, identifier):
-        self._executor.run_action(identifier, PrinterAction)
+        try:
+            self._actions.run(identifier, PrinterAction)
+        except ActionError as error:
+            self._logger.debug("Can't run action %s: %s", identifier, error)
         return make_response("", 204)
 
     def output_color(self, index_id, output_class):

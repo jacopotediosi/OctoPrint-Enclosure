@@ -4,7 +4,6 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import TYPE_CHECKING, TypeVar
 
-from .actions import Action, ActionError
 from .outputs import (
     ColorOutput,
     Output,
@@ -21,7 +20,6 @@ if TYPE_CHECKING:
 
     from typing_extensions import Protocol
 
-    from .actions import Actions
     from .outputs import Outputs
 
 _T = TypeVar("_T")
@@ -42,7 +40,7 @@ COMMAND_TIMEOUT_SECONDS = 5
 
 
 class Executor:
-    """Executes the commands to the outputs and the actions, on a thread of its own.
+    """Executes the commands to the outputs, on a thread of its own.
 
     This is the only place that commands the outputs: from anywhere else they are only read. Every command runs on
     this one thread, one at a time and in the order it was asked, so two commands never write the output
@@ -50,7 +48,6 @@ class Executor:
     """
 
     _outputs: Outputs
-    _actions: Actions
     _logger: logging.Logger
 
     _update_ui_outputs: Callable[[], object]
@@ -65,7 +62,6 @@ class Executor:
     def __init__(
         self,
         outputs: Outputs,
-        actions: Actions,
         logger: logging.Logger,
         *,
         update_ui_outputs: Callable[[], object],
@@ -74,13 +70,11 @@ class Executor:
 
         Args:
             outputs (Outputs): The outputs.
-            actions (Actions): The actions.
             logger (logging.Logger): The logger to write to.
             update_ui_outputs (Callable[[], object]): The function pushing the state of the outputs to the UI.
 
         """
         self._outputs = outputs
-        self._actions = actions
         self._logger = logger.getChild("Executor")
         self._update_ui_outputs = update_ui_outputs
         self._update_ui_outputs_already_requested = False
@@ -195,39 +189,6 @@ class Executor:
                 self._queue_update_ui_outputs()
 
         self._submit(switch_thermostat, wait=wait)
-
-    def run_action(
-        self,
-        index_id: int,
-        action_class: type[Action] = Action,
-        *,
-        wait: bool = False,
-    ) -> Action | None:
-        """Run an action.
-
-        Args:
-            index_id (int): The id of the action.
-            action_class (type[Action]): The class the action must be an instance of; any action by default.
-            wait (bool): Whether to wait for the action, up to the command timeout.
-
-        Returns:
-            Action | None: The action run, or None without waiting, on a timeout or if it couldn't be run.
-
-        """
-
-        def run_action() -> Action | None:
-            try:
-                action = self._actions.get(index_id, action_class)
-                action.run()
-            except ActionError as error:
-                self._logger.debug("Can't run action %s: %s", index_id, error)
-                return None
-            except Exception:
-                self._logger.exception("Error running action %s", index_id)
-                return None
-            return action
-
-        return self._submit(run_action, wait=wait)
 
     def run_enc_command(self, index_id: int, gcode: str, *, wait: bool = False) -> str | None:
         """Apply an ENC command to an output.

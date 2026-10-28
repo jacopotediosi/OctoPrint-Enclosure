@@ -130,24 +130,24 @@ class Actions:
         reason = action.reason if isinstance(action, _InvalidAction) else "The action is not set up"
         raise ActionError(reason)
 
-    def run(self, index_id: int) -> None:
+    def run(self, index_id: int, action_class: type[Action] = Action) -> Action:
         """Run an action.
 
         Args:
             index_id (int): The id of the action.
+            action_class (type[Action]): The class the action must be an instance of; any action by default.
+
+        Returns:
+            Action: The action run.
 
         Raises:
-            ActionError: If no action is set up with that id.
+            ActionError: If no action of that class is set up with that id.
             Exception: If the action can't be run.
 
         """
-        action = self._actions.get(index_id)
-
-        if action is None:
-            msg = "The action is not set up"
-            raise ActionError(msg)
-
+        action = self.get(index_id, action_class)
         action.run()
+        return action
 
     def _create_action(
         self,

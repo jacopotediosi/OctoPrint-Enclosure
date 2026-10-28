@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from octoprint.events import Events
 
-from .actions import GcodeAction, GcodeConfig, PrinterAction
+from .actions import ActionError, GcodeAction, GcodeConfig, PrinterAction
 from .automations import (
     FilamentAutomation,
     GpioInputTrigger,
@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
     from octoprint.printer import PrinterInterface
 
+    from .actions import Actions
     from .automations import Automations
     from .core import Frontend, Settings
     from .executor import Executor
@@ -150,6 +151,7 @@ class ControlLoop:
 
     _gpio_inputs: GpioInputs
     _outputs: Outputs
+    _actions: Actions
     _automations: Automations
     _executor: Executor
     _notifications: Notifications
@@ -179,6 +181,7 @@ class ControlLoop:
         self,
         gpio_inputs: GpioInputs,
         outputs: Outputs,
+        actions: Actions,
         automations: Automations,
         executor: Executor,
         notifications: Notifications,
@@ -194,8 +197,9 @@ class ControlLoop:
         Args:
             gpio_inputs (GpioInputs): The GPIO inputs.
             outputs (Outputs): The outputs.
+            actions (Actions): The actions.
             automations (Automations): The automations.
-            executor (Executor): The executor of the commands to the outputs and the actions.
+            executor (Executor): The executor of the commands to the outputs.
             notifications (Notifications): The notifications.
             printer (PrinterInterface): The OctoPrint printer interface.
             frontend (Frontend): The frontend handler.
@@ -207,6 +211,7 @@ class ControlLoop:
         """
         self._gpio_inputs = gpio_inputs
         self._outputs = outputs
+        self._actions = actions
         self._automations = automations
         self._executor = executor
         self._notifications = notifications
@@ -513,7 +518,11 @@ class ControlLoop:
                 if self._control_output(reaction):
                     self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
             elif isinstance(reaction, RunActionReaction):
-                action = self._executor.run_action(reaction.config.action, wait=True)
+                try:
+                    action = self._actions.run(reaction.config.action)
+                except ActionError as error:
+                    self._logger.debug("Can't run action %s: %s", reaction.config.action, error)
+                    return
                 if isinstance(action, GcodeAction):
                     self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
                 elif isinstance(action, PrinterAction):
@@ -593,7 +602,11 @@ class ControlLoop:
                         f"Setting GPIO{config.controlled_io} to: {config.controlled_io_set_state.value}",
                     )
             elif isinstance(reaction, RunActionReaction):
-                action = self._executor.run_action(reaction.config.action, wait=True)
+                try:
+                    action = self._actions.run(reaction.config.action)
+                except ActionError as error:
+                    self._logger.debug("Can't run action %s: %s", reaction.config.action, error)
+                    return
                 if isinstance(action, GcodeAction):
                     self._notifications.send(
                         NotificationType.GPIO_ACTION,
