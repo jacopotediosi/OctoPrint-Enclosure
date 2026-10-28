@@ -56,16 +56,14 @@ class PwmOutput(Output[PwmConfig]):
     def gpio_pins(self) -> frozenset[int]:
         return frozenset({self.config.gpio_pin})
 
-    def start(self) -> None:
+    @override
+    def setup(self) -> None:
         """Set up the pin and start the PWM with the default duty cycle.
 
         Raises:
             Exception: If the PWM can't be started.
 
         """
-        if self._pwm is not None:
-            return
-
         pin = self.config.gpio_pin
         self._logger.debug("Starting PWM on pin %s at %s Hz", pin, self.config.pwm_frequency)
 

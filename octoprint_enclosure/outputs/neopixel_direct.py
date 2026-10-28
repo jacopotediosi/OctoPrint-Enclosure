@@ -49,6 +49,12 @@ class NeopixelDirectOutput(ColorOutput[NeopixelDirectConfig]):
         return frozenset({self.config.gpio_pin})
 
     @override
+    def setup(self) -> None:
+        """Set up the pin of the neopixel direct output."""
+        # Free the pin in the GPIO backend, so that the worker can drive it
+        self._gpio.cleanup(self.config.gpio_pin)
+
+    @override
     def _write_color(self, red: int, green: int, blue: int) -> None:
         config = self.config
 

@@ -16,7 +16,7 @@ from .outputs import (
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
     from typing_extensions import Protocol
 
@@ -79,6 +79,23 @@ class OutputExecutor:
         self._update_ui_outputs = update_ui_outputs
         self._update_ui_outputs_already_requested = False
         self._thread = ThreadPoolExecutor(max_workers=1, thread_name_prefix="EnclosureOutputExecutor")
+
+    def load_outputs(self, outputs_settings: Iterable[dict], *, wait: bool = False) -> None:
+        """Load the outputs from their settings.
+
+        Args:
+            outputs_settings (Iterable[dict]): The settings of the outputs.
+            wait (bool): Whether to wait for the load, up to the command timeout.
+
+        """
+
+        def load_outputs() -> None:
+            try:
+                self._outputs.load(outputs_settings)
+            except Exception:
+                self._logger.exception("Error loading the outputs")
+
+        self._submit(load_outputs, wait=wait)
 
     def switch_output(self, index_id: int, state: RegularSetState, *, wait: bool = False) -> bool | None:
         """Switch a regular output.

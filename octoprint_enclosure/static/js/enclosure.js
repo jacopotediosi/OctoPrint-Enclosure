@@ -593,19 +593,6 @@ $(function () {
       OctoPrint.patchJson(self.buildPluginUrl("temperature/" + item.index_id()), {temperature: 0});
     };
 
-    self.clearGPIOMode = function () {
-      OctoPrint.post(self.buildPluginUrl("clear-gpio"))
-        .done(function () {
-          new PNotify({
-            title: "Enclosure",
-            title_escape: true,
-            text: "GPIO Mode cleared successfully",
-            text_escape: true,
-            type: "success"
-          });
-        });
-    };
-
     self.getUpdateUI = function () {
       OctoPrint.post(self.buildPluginUrl("update"));
     };

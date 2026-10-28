@@ -475,15 +475,6 @@
         {% endcall %}
         {{ checkbox_control_group("use_board_pin_number", _("Use Board Pin #"), "Use BOARD pin numbers instead of BCM pin numbers") }}
         <div class="control-group">
-            <div class="controls">
-                <button type="button"
-                        class="btn"
-                        data-bind="click: function() { $root.clearGPIOMode(); }">Clear GPIO Mode</button>
-                <span class="help-inline">This will clear any GPIO configuration that might exist on your system, use with caution, it might break other
-                plugins that use GPIO</span>
-            </div>
-        </div>
-        <div class="control-group">
             <label class="control-label">{{ _("Filament Change Gcode") }}</label>
             <div class="controls">
                 <textarea rows="4" class="block" data-bind="value: filament_sensor_gcode"></textarea>

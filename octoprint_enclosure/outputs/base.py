@@ -54,6 +54,14 @@ class Output(ABC, Generic[_ConfigT]):
         """The GPIO pins the output drives, empty for an output that drives none."""
         return frozenset()
 
+    def setup(self) -> None:
+        """Set up the hardware of the output.
+
+        Raises:
+            Exception: If the hardware can't be set up.
+
+        """
+
     def release(self) -> None:
         """Release the hardware of the output, before its GPIO pins are cleaned up.
 

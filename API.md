@@ -290,17 +290,6 @@ Error Responses:
 - 400 - wrong Content-Type or malformed request
 - 406 - missing information (missing attribute given in response body)
 
-## Clear GPIO Pins
-
-Endpoint: **POST** `/clear-gpio`
-
-Body: empty
-
-Response (204): No-Content
-
-Error Responses:
-- none
-
 ## Update UI
 
 Endpoint: **POST** `/update`

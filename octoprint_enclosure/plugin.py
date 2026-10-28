@@ -36,7 +36,6 @@ from .outputs import (
     LedstripOutput,
     NeopixelDirectOutput,
     NeopixelIndirectOutput,
-    Output,
     OutputError,
     Outputs,
     PwmOutput,
@@ -210,15 +209,15 @@ class EnclosurePlugin(
 
         self._sensor_poller.load(self.get_sensor_inputs())
         self._gpio_inputs.load(self.get_gpio_inputs())
-        self._outputs.load(self.rpi_outputs)
+        self.setup_gpio_mode()
+        self._output_executor.load_outputs(self.rpi_outputs, wait=True)
         if self.development_mode:
             self.link_dummy_sensors()
         self._actions.load(self.actions)
         self._automations.load(self.automations)
         self.warn_missing_linked_sensors()
 
-        self.setup_gpio()
-        self.configure_gpio()
+        self.setup_input_pins()
         self.start_outpus_with_server()
 
         self._sensor_poller.start()
@@ -639,13 +638,6 @@ class EnclosurePlugin(
 
         return make_response("", 204)
 
-    @octoprint.plugin.BlueprintPlugin.route("/clear-gpio", methods=["POST"])
-    @restricted_access
-    def clear_gpio_mode(self):
-        self._gpio.cleanup()
-        self.update_ui_outputs()
-        return make_response("", 204)
-
     @octoprint.plugin.BlueprintPlugin.route("/update", methods=["POST"])
     @restricted_access
     def update_ui_requested(self):
@@ -962,7 +954,7 @@ class EnclosurePlugin(
 
         return temperature, humidity, airquality
 
-    def setup_gpio(self):
+    def setup_gpio_mode(self):
         try:
             current_mode = self._gpio.getmode()
             set_mode = self._gpio.BOARD if self._enclosure_settings.use_board_pin_number else self._gpio.BCM
@@ -1002,27 +994,8 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error setting up GPIO mode")
 
-    def clear_channel(self, channel):
+    def setup_input_pins(self):
         try:
-            self._gpio.cleanup(to_int(channel))
-            self._logger.debug("Clearing channel %s", channel)
-        except Exception:
-            self._logger.exception("Error clearing channel %s", channel)
-
-    def configure_gpio(self, outputs_not_changed=()):
-        try:
-            for regular_output in self._outputs.get_all(RegularOutput):
-                if regular_output not in outputs_not_changed:
-                    regular_output.setup_pin()
-            for thermostat in self._outputs.get_all(ThermostatOutput):
-                if thermostat not in outputs_not_changed:
-                    thermostat.setup_pin()
-            for pwm_output in self._outputs.get_all(PwmOutput):
-                pwm_output.start()
-            for neopixel_output in self._outputs.get_all(NeopixelDirectOutput):
-                if neopixel_output not in outputs_not_changed:
-                    self.clear_channel(neopixel_output.config.gpio_pin)
-
             self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
 
             for rpi_input in self.get_sensor_inputs():
@@ -1250,10 +1223,17 @@ class EnclosurePlugin(
         # Update the sensor poller
         self._sensor_poller.load(self.get_sensor_inputs())
 
+        # Set the GPIO mode
+        self.setup_gpio_mode()
+
+        # Release the pins of the GPIO inputs
+        try:
+            self._gpio_inputs.clear()
+        except Exception:
+            self._logger.exception("Error clearing GPIO")
+
         # Update outputs
-        outputs_before = self._outputs.get_all(Output)
-        self._outputs.load(self.rpi_outputs)
-        outputs_not_changed = [output for output in self._outputs.get_all(Output) if output in outputs_before]
+        self._output_executor.load_outputs(self.rpi_outputs, wait=True)
 
         # Link outputs to dummy sensors
         if self.development_mode:
@@ -1266,14 +1246,9 @@ class EnclosurePlugin(
         self._automations.load(self.automations)
         self.warn_missing_linked_sensors()
 
-        # Restart GPIO
-        try:
-            self._gpio_inputs.clear()
-        except Exception:
-            self._logger.exception("Error clearing GPIO")
+        # Reload the GPIO inputs and set up the inputs pins
         self._gpio_inputs.load(self.get_gpio_inputs())
-        self.setup_gpio()
-        self.configure_gpio(outputs_not_changed)
+        self.setup_input_pins()
 
         # Take the decisions again on the new settings
         self._control_loop.evaluate_settings()

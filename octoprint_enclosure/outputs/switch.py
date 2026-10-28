@@ -55,7 +55,8 @@ class SwitchOutput(Output[_ConfigT]):
             return frozenset()
         return frozenset({self.config.gpio_pin})
 
-    def setup_pin(self) -> None:
+    @override
+    def setup(self) -> None:
         """Set up the pin of the output switch.
 
         An output switch driven through I2C has no pin, so nothing is set up.

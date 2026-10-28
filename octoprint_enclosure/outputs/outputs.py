@@ -83,13 +83,14 @@ class Outputs:
         """Load some outputs from their settings.
 
         An output whose settings didn't change is kept as it is, with its state and the hardware it drives.
-        An output that is gone, or whose settings changed, is stopped, and its pins are released unless another
-        output drives them.
+        An output that is gone, or whose settings changed, is turned off and stopped, and its pins are released
+        unless another output drives them. A new or changed output is set up.
 
         Args:
             outputs_settings (Iterable[dict]): The settings of the outputs.
 
         """
+        outputs_before = self._outputs
         outputs: dict[int, Output] = {}
 
         # Create new outputs
@@ -111,20 +112,40 @@ class Outputs:
 
             outputs[output_config.index_id] = output
 
-        outputs_before = self._outputs
-        self._outputs = outputs
-
-        # Stop unused hardware and clear unused GPIO pins
+        # Turn off and stop the outputs that are gone or changed, and clear the GPIO pins no output drives
         pins_in_use = {pin for output in outputs.values() for pin in output.gpio_pins}
         for index_id, output in outputs_before.items():
-            if output in outputs.values():
+            if outputs.get(index_id) is output:
                 continue
+
             try:
-                output.release()
-                for pin in output.gpio_pins - pins_in_use:
-                    self._gpio.cleanup(pin)
+                output.turn_off()
+            except OutputError as error:
+                self._logger.debug("Can't turn off output %s: %s", index_id, error)
             except Exception:
-                self._logger.exception("Error releasing the hardware of output %s", index_id)
+                self._logger.exception("Error turning off output %s", index_id)
+
+            self._release_hardware(index_id, output, pins_in_use)
+
+        # Set up the outputs that are new or changed
+        for index_id, output in list(outputs.items()):
+            if outputs_before.get(index_id) is output:
+                continue
+
+            try:
+                output.setup()
+            except Exception as error:
+                self._logger.exception("Error setting up output %s", index_id)
+                outputs[index_id] = _InvalidOutput(
+                    f"Can't set up the output: {error}",
+                    self._gpio,
+                    self._i2c,
+                    self._get_output_logger(_InvalidOutput, index_id),
+                )
+                pins_in_use = {pin for other in outputs.values() for pin in other.gpio_pins}
+                self._release_hardware(index_id, output, pins_in_use)
+
+        self._outputs = outputs
 
     def get(self, index_id: int, output_class: type[_OutputT]) -> _OutputT:
         """Get an output.
@@ -204,6 +225,14 @@ class Outputs:
         logger = self._get_output_logger(_InvalidOutput, index_id)
         logger.warning("%s", reason)
         return _InvalidOutput(reason, self._gpio, self._i2c, logger)
+
+    def _release_hardware(self, index_id: int, output: Output, pins_in_use: set[int]) -> None:
+        try:
+            output.release()
+            for pin in output.gpio_pins - pins_in_use:
+                self._gpio.cleanup(pin)
+        except Exception:
+            self._logger.exception("Error releasing the hardware of output %s", index_id)
 
     def _get_output_logger(self, output_class: type[Output], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{output_class.__name__}.{index_id}")
