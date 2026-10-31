@@ -5,9 +5,9 @@ from dataclasses import dataclass
 import spidev
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig, HexInt
+from octoprint_enclosure.core import REQUIRED, HexInt
 
-from .base import Reading, Sensor, SensorError
+from .base import Reading, Sensor, SensorError, SensorInputConfig
 
 SPI_BUS = 0
 SPI_MAX_SPEED_HZ = 5_000_000  # The maximum of the MAX31855
@@ -23,10 +23,10 @@ RESPONSE_FAULTS = {
 
 
 @dataclass(frozen=True)
-class Max31855Config(BaseConfig):
+class Max31855Config(SensorInputConfig):
     """The configuration of a MAX31855 sensor."""
 
-    temp_sensor_address: HexInt
+    temp_sensor_address: HexInt = REQUIRED
     """The SPI chip select of the sensor, 0 for CE0 or 1 for CE1."""
 
     def __post_init__(self) -> None:

@@ -6,18 +6,18 @@ import bme280
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig, HexInt
+from octoprint_enclosure.core import REQUIRED, HexInt
 
-from .base import Reading, Sensor
+from .base import Reading, Sensor, SensorInputConfig
 
 BUS = 1
 
 
 @dataclass(frozen=True)
-class Bme280Config(BaseConfig):
+class Bme280Config(SensorInputConfig):
     """The configuration of a BME280 sensor."""
 
-    temp_sensor_address: HexInt
+    temp_sensor_address: HexInt = REQUIRED
     """The I2C address of the sensor."""
 
 

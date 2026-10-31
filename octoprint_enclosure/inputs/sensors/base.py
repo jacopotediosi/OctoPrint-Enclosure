@@ -4,12 +4,36 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.inputs.config import InputConfig, PullResistor
 
 if TYPE_CHECKING:
     import logging
 
-_ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
+
+@dataclass(frozen=True)
+class SensorInputConfig(InputConfig):
+    """The configuration shared by all the inputs with a temperature sensor."""
+
+    temp_sensor_type: str = ""
+    """The type of the sensor."""
+
+    use_fahrenheit: bool = False
+    """Whether the temperature is shown in Fahrenheit."""
+
+    show_graph_temp: bool = False
+    """Whether the temperature is shown in the temperature graph."""
+
+    show_graph_humidity: bool = False
+    """Whether the humidity is shown in the temperature graph."""
+
+    gpio_pin: int = 0
+    """The GPIO pin of the sensor, for the sensors that use one."""
+
+    input_pull_resistor: PullResistor = PullResistor.OFF
+    """The pull resistor of the pin of the sensor."""
+
+
+_ConfigT = TypeVar("_ConfigT", bound=SensorInputConfig)
 
 
 @dataclass(frozen=True)

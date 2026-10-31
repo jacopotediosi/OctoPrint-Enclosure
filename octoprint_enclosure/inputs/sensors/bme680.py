@@ -7,10 +7,9 @@ from bme680 import BME680, constants
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
 from octoprint_enclosure.utils import clamp
 
-from .base import Reading, Sensor
+from .base import Reading, Sensor, SensorInputConfig
 
 BUS = 1
 
@@ -30,7 +29,7 @@ GAS_OHM_UPPER_LIMIT = 50000
 
 
 @dataclass(frozen=True)
-class Bme680Config(BaseConfig):
+class Bme680Config(SensorInputConfig):
     """The configuration of a BME680 sensor."""
 
 

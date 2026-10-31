@@ -7,22 +7,22 @@ from dataclasses import dataclass
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED
 
-from .base import Reading, Sensor, SensorError
+from .base import Reading, Sensor, SensorError, SensorInputConfig
 
 
 @dataclass(frozen=True)
-class RawI2cConfig(BaseConfig):
+class RawI2cConfig(SensorInputConfig):
     """The configuration of a device sending its readings over I2C as raw floats."""
 
-    temp_i2c_bus: int
+    temp_i2c_bus: int = REQUIRED
     """The number of the I2C bus."""
 
-    temp_i2c_address: int
+    temp_i2c_address: int = REQUIRED
     """The I2C address of the device."""
 
-    temp_i2c_register: int
+    temp_i2c_register: int = REQUIRED
     """The register to read the floats from."""
 
 

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED, BaseConfig
 
 from .base import Output, OutputError
 from .registry import OUTPUTS
@@ -23,7 +23,7 @@ _OutputT = TypeVar("_OutputT", bound=Output)
 class OutputConfig(BaseConfig):
     """The configuration shared by all the outputs."""
 
-    index_id: int
+    index_id: int = REQUIRED
     """The id of the output."""
 
     output_type: str = ""

@@ -6,10 +6,9 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
 from octoprint_enclosure.utils import clamp
 
-from .base import Reading, Sensor, SensorError
+from .base import Reading, Sensor, SensorError, SensorInputConfig
 
 if TYPE_CHECKING:
     import logging
@@ -28,7 +27,7 @@ PUSHED_DELTA = 5.0
 
 
 @dataclass(frozen=True)
-class DummyConfig(BaseConfig):
+class DummyConfig(SensorInputConfig):
     """The configuration of a dummy sensor."""
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED, BaseConfig
 from octoprint_enclosure.utils import clamp
 
 from .base import Automation
@@ -15,22 +15,22 @@ class PwmTemperatureLinkedConfig(BaseConfig):
     Between the first and the second temperature, the duty cycle changes linearly from the first to the second one.
     """
 
-    output: int
+    output: int = REQUIRED
     """The id of the PWM output."""
 
-    linked_temp_sensor: int
+    linked_temp_sensor: int = REQUIRED
     """The id of the input of the sensor that reads the temperature."""
 
-    temperature_a: float
+    temperature_a: float = REQUIRED
     """The temperature at which the output gets the first duty cycle."""
 
-    duty_a: float
+    duty_a: float = REQUIRED
     """The duty cycle of the output at the first temperature, from 0 to 100."""
 
-    temperature_b: float
+    temperature_b: float = REQUIRED
     """The temperature at which the output gets the second duty cycle."""
 
-    duty_b: float
+    duty_b: float = REQUIRED
     """The duty cycle of the output at the second temperature, from 0 to 100."""
 
 

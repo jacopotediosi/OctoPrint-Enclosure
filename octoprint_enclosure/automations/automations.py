@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeVar
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED, BaseConfig
 
 from .base import Automation, AutomationError
 from .registry import AUTOMATIONS
@@ -22,7 +22,7 @@ _AutomationT = TypeVar("_AutomationT", bound=Automation)
 class AutomationConfig(BaseConfig):
     """The configuration shared by all the automations."""
 
-    index_id: int
+    index_id: int = REQUIRED
     """The id of the automation."""
 
     automation_type: str = ""

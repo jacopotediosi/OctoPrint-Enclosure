@@ -5,13 +5,11 @@ from dataclasses import dataclass
 from gpiozero import CPUTemperature
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
-
-from .base import Reading, Sensor
+from .base import Reading, Sensor, SensorInputConfig
 
 
 @dataclass(frozen=True)
-class RpiCpuConfig(BaseConfig):
+class RpiCpuConfig(SensorInputConfig):
     """The configuration of a Raspberry Pi CPU temperature sensor."""
 
 

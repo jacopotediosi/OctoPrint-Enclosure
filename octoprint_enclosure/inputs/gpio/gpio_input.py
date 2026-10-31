@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.core import BaseConfig
-from octoprint_enclosure.inputs.pull_resistor import PullResistor
+from octoprint_enclosure.core import REQUIRED
+from octoprint_enclosure.inputs.config import InputConfig, PullResistor
 
 if TYPE_CHECKING:
     import logging
@@ -17,13 +17,13 @@ class GpioInputError(Exception):
 
 
 @dataclass(frozen=True)
-class GpioConfig(BaseConfig):
+class GpioConfig(InputConfig):
     """The configuration of a GPIO input."""
 
-    gpio_pin: int
+    gpio_pin: int = REQUIRED
     """The GPIO pin of the input."""
 
-    input_pull_resistor: PullResistor
+    input_pull_resistor: PullResistor = REQUIRED
     """The pull resistor of the pin."""
 
 
@@ -63,7 +63,12 @@ class GpioInput:
         """
         config = self.config
 
-        pull_resistor = self._gpio.PUD_UP if config.input_pull_resistor is PullResistor.UP else self._gpio.PUD_DOWN
+        pull_resistors = {
+            PullResistor.UP: self._gpio.PUD_UP,
+            PullResistor.DOWN: self._gpio.PUD_DOWN,
+            PullResistor.OFF: self._gpio.PUD_OFF,
+        }
+        pull_resistor = pull_resistors[config.input_pull_resistor]
         self._logger.debug("Setting GPIO pin %s as INPUT with pull resistor: %s", config.gpio_pin, pull_resistor)
         self._gpio.setup(config.gpio_pin, self._gpio.IN, pull_resistor)
 

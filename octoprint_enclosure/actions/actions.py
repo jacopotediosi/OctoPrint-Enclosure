@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED, BaseConfig
 
 from .base import Action, ActionError
 from .registry import ACTIONS
@@ -25,7 +25,7 @@ _ActionT = TypeVar("_ActionT", bound=Action)
 class ActionConfig(BaseConfig):
     """The configuration shared by all the actions."""
 
-    index_id: int
+    index_id: int = REQUIRED
     """The id of the action."""
 
     action_type: str = ""

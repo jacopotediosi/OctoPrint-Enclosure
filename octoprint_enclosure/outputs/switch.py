@@ -5,7 +5,7 @@ from typing import TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED, BaseConfig
 
 from .base import Output
 
@@ -14,31 +14,31 @@ from .base import Output
 class SwitchConfig(BaseConfig):
     """The configuration of an output with a switch, on a GPIO pin or driven by a device on the I2C bus."""
 
-    active_low: bool
+    active_low: bool = REQUIRED
     """Whether the output switch is on when it is low."""
 
-    gpio_i2c_enabled: bool
+    gpio_i2c_enabled: bool = REQUIRED
     """Whether the output switch is driven by a device on the I2C bus, instead of a GPIO pin."""
 
-    gpio_pin: int
+    gpio_pin: int = REQUIRED
     """The GPIO pin of the output switch, when it isn't driven through I2C."""
 
-    gpio_i2c_bus: int
+    gpio_i2c_bus: int = REQUIRED
     """The number of the I2C bus."""
 
-    gpio_i2c_address: int
+    gpio_i2c_address: int = REQUIRED
     """The I2C address of the device."""
 
-    gpio_i2c_register: int
+    gpio_i2c_register: int = REQUIRED
     """The I2C register written to set the output switch high or low."""
 
-    gpio_i2c_register_status: int
+    gpio_i2c_register_status: int = REQUIRED
     """The I2C register read to know whether the output switch is high."""
 
-    gpio_i2c_data_on: int
+    gpio_i2c_data_on: int = REQUIRED
     """The value of the I2C registers when the output switch is high."""
 
-    gpio_i2c_data_off: int
+    gpio_i2c_data_off: int = REQUIRED
     """The value written via I2C to set the output switch low."""
 
 

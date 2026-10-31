@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED, BaseConfig
 from octoprint_enclosure.outputs import RegularSetState
 
 from .base import Reaction
@@ -12,10 +12,10 @@ from .base import Reaction
 class OutputControlConfig(BaseConfig):
     """The configuration of an automation reaction that controls an output."""
 
-    controlled_io: int
+    controlled_io: int = REQUIRED
     """The id of the output to control."""
 
-    controlled_io_set_state: RegularSetState
+    controlled_io_set_state: RegularSetState = REQUIRED
     """What to do with the output."""
 
 

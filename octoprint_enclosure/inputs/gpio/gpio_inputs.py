@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.inputs.config import InputConfig
 
 from .edge import Edge
 from .gpio_input import GpioInput, GpioInputError
@@ -16,14 +15,6 @@ if TYPE_CHECKING:
     from octoprint_enclosure.hardware import GpioBackend
 
 BOUNCE_TIME_MS = 200
-
-
-@dataclass(frozen=True)
-class GpioInputConfig(BaseConfig):
-    """The configuration shared by all the GPIO inputs."""
-
-    index_id: int
-    """The id of the input."""
 
 
 class _InvalidGpioInput:
@@ -78,14 +69,12 @@ class GpioInputs:
 
         for gpio_input_settings in gpio_inputs_settings:
             try:
-                gpio_input_config = GpioInputConfig.from_settings(gpio_input_settings)
+                input_config = InputConfig.from_settings(gpio_input_settings)
             except ValueError as error:
                 self._logger.warning("Invalid settings for a GPIO input: %s", error)
                 continue
 
-            gpio_input = self._create_gpio_input(gpio_input_config.index_id, gpio_input_settings)
-
-            gpio_inputs[gpio_input_config.index_id] = gpio_input
+            gpio_inputs[input_config.index_id] = self._create_gpio_input(input_config.index_id, gpio_input_settings)
 
         self._gpio_inputs = gpio_inputs
 

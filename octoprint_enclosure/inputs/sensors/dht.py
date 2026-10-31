@@ -8,19 +8,19 @@ from typing import ClassVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED
 
-from .base import Reading, Sensor, SensorError
+from .base import Reading, Sensor, SensorError, SensorInputConfig
 
 WORKER_PATH = Path(__file__).with_name("dht_worker.py")
 WORKER_TIMEOUT_SECONDS = 30
 
 
 @dataclass(frozen=True)
-class DhtConfig(BaseConfig):
+class DhtConfig(SensorInputConfig):
     """The configuration of a DHT sensor."""
 
-    gpio_pin: int
+    gpio_pin: int = REQUIRED
     """The GPIO pin the sensor is connected to."""
 
 

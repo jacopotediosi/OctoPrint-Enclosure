@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED, BaseConfig
 
 from .base import Trigger
 
@@ -11,13 +11,13 @@ from .base import Trigger
 class TemperatureTriggerConfig(BaseConfig):
     """The configuration of an automation trigger on the temperature read by a sensor."""
 
-    linked_temp_sensor: int
+    linked_temp_sensor: int = REQUIRED
     """The id of the input of the linked sensor."""
 
-    alarm_set_temp: float
+    alarm_set_temp: float = REQUIRED
     """The temperature above which the automation starts."""
 
-    repeat_while_above: bool
+    repeat_while_above: bool = REQUIRED
     """Whether the automation starts at every temperature reading above the threshold, instead of only when the
     temperature goes above it the first time."""
 

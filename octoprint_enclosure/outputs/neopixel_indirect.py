@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig, HexInt
+from octoprint_enclosure.core import REQUIRED, BaseConfig, HexInt
 from octoprint_enclosure.utils import get_gcode_param, to_int
 
 from .color import ColorOutput
@@ -16,16 +16,16 @@ BUS = 1
 class NeopixelIndirectConfig(BaseConfig):
     """The configuration of NeoPixels driven by a microcontroller on the I2C bus."""
 
-    gpio_pin: int
+    gpio_pin: int = REQUIRED
     """The pin of the microcontroller the NeoPixels are connected to."""
 
-    neopixel_count: int
+    neopixel_count: int = REQUIRED
     """The number of NeoPixels."""
 
-    neopixel_brightness: int
+    neopixel_brightness: int = REQUIRED
     """The brightness of the NeoPixels, from 0 to 255."""
 
-    microcontroller_address: HexInt
+    microcontroller_address: HexInt = REQUIRED
     """The I2C address of the microcontroller."""
 
 

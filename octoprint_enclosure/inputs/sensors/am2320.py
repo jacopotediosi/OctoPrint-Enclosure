@@ -7,10 +7,9 @@ from dataclasses import dataclass
 from smbus2 import SMBus, i2c_msg
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
 from octoprint_enclosure.utils import crc16_modbus
 
-from .base import Reading, Sensor, SensorError
+from .base import Reading, Sensor, SensorError, SensorInputConfig
 
 BUS = 1
 ADDRESS = 0x5C
@@ -27,7 +26,7 @@ READ_RESPONSE_BYTES = 1 + 1 + REGISTER_COUNT + 2
 
 
 @dataclass(frozen=True)
-class Am2320Config(BaseConfig):
+class Am2320Config(SensorInputConfig):
     """The configuration of an AM2320 sensor."""
 
 

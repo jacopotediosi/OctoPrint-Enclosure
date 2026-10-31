@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from smbus2 import SMBus, i2c_msg
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig, HexInt
+from octoprint_enclosure.core import REQUIRED, HexInt
 
-from .base import Reading, Sensor
+from .base import Reading, Sensor, SensorInputConfig
 
 STATUS_COMMAND = 0x71
 
@@ -20,13 +20,13 @@ MEASURE_RESPONSE_BYTES = 1 + 2 * MEASURE_RESPONSE_HUM_TEMP_BITS // 8
 
 
 @dataclass(frozen=True)
-class Dht20Config(BaseConfig):
+class Dht20Config(SensorInputConfig):
     """The configuration of a DHT20 sensor."""
 
-    temp_sensor_address: HexInt
+    temp_sensor_address: HexInt = REQUIRED
     """The I2C address of the sensor."""
 
-    temp_sensor_i2cbus: int
+    temp_sensor_i2cbus: int = REQUIRED
     """The number of the I2C bus."""
 
 

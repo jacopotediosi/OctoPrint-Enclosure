@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED, BaseConfig
 from octoprint_enclosure.inputs import Edge
 
 from .base import Trigger
@@ -12,10 +12,10 @@ from .base import Trigger
 class GpioInputTriggerConfig(BaseConfig):
     """The configuration of an automation trigger on the edges of a GPIO input."""
 
-    input: int
+    input: int = REQUIRED
     """The id of the GPIO input."""
 
-    edge: Edge
+    edge: Edge = REQUIRED
     """The edge of the input that starts the automation."""
 
 

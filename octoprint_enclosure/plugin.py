@@ -25,7 +25,7 @@ from .core import Frontend, PluginContext, Scheduler, Settings
 from .core.migrations import migrate_settings
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
-from .inputs import GpioInputs, SensorError, SensorPoller, Sensors
+from .inputs import GpioInputs, InputType, PullResistor, SensorError, SensorPoller, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
 from .output_executor import OutputExecutor
@@ -193,8 +193,8 @@ class EnclosurePlugin(
         self.actions = self._enclosure_settings.actions
         self.automations = self._enclosure_settings.automations
 
-        self._sensor_poller.load(self.get_sensor_inputs())
-        self._gpio_inputs.load(self.get_gpio_inputs())
+        self._sensor_poller.load(self.get_sensor_inputs_settings())
+        self._gpio_inputs.load(self.get_gpio_inputs_settings())
         self.setup_gpio_mode()
         self._output_executor.load_outputs(self.rpi_outputs, wait=True)
         if self.development_mode:
@@ -256,14 +256,17 @@ class EnclosurePlugin(
 
         return f"rgb({red},{green},{blue})"
 
-    def get_sensor_inputs(self):
-        return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "temperature_sensor"]
+    def get_sensor_inputs_settings(self):
+        return [item for item in self.rpi_inputs if item["input_type"] == InputType.TEMPERATURE_SENSOR.value]
 
-    def get_gpio_inputs(self):
-        return [rpi_input for rpi_input in self.rpi_inputs if rpi_input["input_type"] == "gpio"]
+    def get_gpio_inputs_settings(self):
+        return [item for item in self.rpi_inputs if item["input_type"] == InputType.GPIO.value]
+
+    def get_sensor_inputs(self):
+        return [sensor.config for sensor in self._sensors.get_all().values()]
 
     def warn_missing_linked_sensors(self):
-        sensor_ids = {to_int(rpi_input["index_id"]) for rpi_input in self.get_sensor_inputs()}
+        sensor_ids = set(self._sensors.get_all())
         for rpi_output in self.rpi_outputs:
             if rpi_output["output_type"] != "temp_hum_control":
                 continue
@@ -316,17 +319,17 @@ class EnclosurePlugin(
         self._control_loop.evaluate()
 
     def handle_sensor_reading(self, index_id, sensor_reading):
-        # The input may have been removed by a settings save while its sensor was being read
-        sensor = next((item for item in self.get_sensor_inputs() if item["index_id"] == index_id), None)
-        if sensor is None:
+        try:
+            sensor = self._sensors.get(index_id)
+        except LookupError:
             return
 
         if sensor_reading.error is not None:
-            self.handle_sensor_failure(sensor, sensor_reading.error)
+            self.handle_sensor_failure(sensor.config, sensor_reading.error)
         else:
-            temp, hum, _ = self.convert_reading(sensor, sensor_reading.reading)
-            self.handle_sensor_recovery(sensor)
-            self._mqtt.publish_sensor_reading(sensor["label"], temp, hum)
+            temp, hum, _ = self.convert_reading(sensor.config, sensor_reading.reading)
+            self.handle_sensor_recovery(sensor.config)
+            self._mqtt.publish_sensor_reading(sensor.config.label, temp, hum)
 
         self.update_ui_readings()
         self._control_loop.evaluate_reading(index_id)
@@ -336,7 +339,7 @@ class EnclosurePlugin(
 
         sensor_data = []
         for sensor in self.get_sensor_inputs():
-            sensor_reading = readings.get(sensor["index_id"])
+            sensor_reading = readings.get(sensor.index_id)
             if sensor_reading is None or sensor_reading.error is not None:
                 temp = hum = airquality = None
             else:
@@ -344,7 +347,7 @@ class EnclosurePlugin(
 
             sensor_data.append(
                 {
-                    "index_id": sensor["index_id"],
+                    "index_id": sensor.index_id,
                     "temperature": temp,
                     "humidity": hum,
                     "airquality": airquality,
@@ -354,30 +357,30 @@ class EnclosurePlugin(
         return sensor_data
 
     def handle_sensor_failure(self, sensor, error):
-        if sensor["index_id"] in self.failing_sensors:
-            self._logger.debug("Sensor %s still can't be read: %s", sensor["label"], error)
+        if sensor.index_id in self.failing_sensors:
+            self._logger.debug("Sensor %s still can't be read: %s", sensor.label, error)
             return
 
-        self.failing_sensors.add(sensor["index_id"])
+        self.failing_sensors.add(sensor.index_id)
         self._logger.error(
             "Sensor %s can't be read: %s",
-            sensor["label"],
+            sensor.label,
             error,
             exc_info=not isinstance(error, SensorError),
         )
 
         for rule in self._automations.get_all(RuleAutomation):
             trigger = rule.trigger
-            if isinstance(trigger, TemperatureTrigger) and trigger.config.linked_temp_sensor == sensor["index_id"]:
+            if isinstance(trigger, TemperatureTrigger) and trigger.config.linked_temp_sensor == sensor.index_id:
                 self._notifications.send(
                     NotificationType.TEMPERATURE_ACTION,
-                    f"Temperature alarm: sensor {sensor['label']} can't be read",
+                    f"Temperature alarm: sensor {sensor.label} can't be read",
                 )
 
     def handle_sensor_recovery(self, sensor):
-        if sensor["index_id"] in self.failing_sensors:
-            self.failing_sensors.remove(sensor["index_id"])
-            self._logger.info("Sensor %s has started working again", sensor["label"])
+        if sensor.index_id in self.failing_sensors:
+            self.failing_sensors.remove(sensor.index_id)
+            self._logger.info("Sensor %s has started working again", sensor.label)
 
     def toggle_output(self, output_index, first_run=False):
         for output in [item for item in self.rpi_outputs if item["index_id"] == output_index]:
@@ -513,7 +516,7 @@ class EnclosurePlugin(
 
     def convert_reading(self, sensor, reading):
         temperature = reading.temperature
-        if temperature is not None and sensor["use_fahrenheit"]:
+        if temperature is not None and sensor.use_fahrenheit:
             temperature = temperature * 1.8 + 32
 
         temperature = None if temperature is None else round(float(temperature), 1)
@@ -566,15 +569,14 @@ class EnclosurePlugin(
         try:
             self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
 
-            for rpi_input in self.get_sensor_inputs():
-                gpio_pin = to_int(rpi_input["gpio_pin"])
-                if rpi_input["input_pull_resistor"] == "input_pull_up":
-                    pull_resistor = self._gpio.PUD_UP
-                elif rpi_input["input_pull_resistor"] == "input_pull_down":
-                    pull_resistor = self._gpio.PUD_DOWN
-                else:
-                    pull_resistor = self._gpio.PUD_OFF
-                self._gpio.setup(gpio_pin, self._gpio.IN, pull_up_down=pull_resistor)
+            pull_resistors = {
+                PullResistor.UP: self._gpio.PUD_UP,
+                PullResistor.DOWN: self._gpio.PUD_DOWN,
+                PullResistor.OFF: self._gpio.PUD_OFF,
+            }
+            for sensor in self.get_sensor_inputs():
+                pull_resistor = pull_resistors[sensor.input_pull_resistor]
+                self._gpio.setup(sensor.gpio_pin, self._gpio.IN, pull_up_down=pull_resistor)
         except Exception:
             self._logger.exception("Error configuring GPIO")
 
@@ -823,7 +825,7 @@ class EnclosurePlugin(
         self._logger.debug("New automations: %s", self.automations)
 
         # Update the sensor poller
-        self._sensor_poller.load(self.get_sensor_inputs())
+        self._sensor_poller.load(self.get_sensor_inputs_settings())
 
         # Set the GPIO mode
         self.setup_gpio_mode()
@@ -849,7 +851,7 @@ class EnclosurePlugin(
         self.warn_missing_linked_sensors()
 
         # Reload the GPIO inputs and set up the inputs pins
-        self._gpio_inputs.load(self.get_gpio_inputs())
+        self._gpio_inputs.load(self.get_gpio_inputs_settings())
         self.setup_input_pins()
 
         # Take the decisions again on the new settings
@@ -951,12 +953,12 @@ class EnclosurePlugin(
     def get_graph_data(self, comm, parsed_temps):
         sensor_data = {item["index_id"]: item for item in self.get_sensor_data()}
         for sensor in self.get_sensor_inputs():
-            reading = sensor_data.get(sensor["index_id"])
+            reading = sensor_data.get(sensor.index_id)
             if reading is None:
                 continue
-            if sensor["show_graph_temp"] and reading["temperature"] is not None:
-                parsed_temps[str(sensor["label"])] = (reading["temperature"], None)
-            if sensor["show_graph_humidity"] and reading["humidity"] is not None:
-                parsed_temps[str(sensor["label"]) + " Humidity"] = (reading["humidity"], None)
+            if sensor.show_graph_temp and reading["temperature"] is not None:
+                parsed_temps[sensor.label] = (reading["temperature"], None)
+            if sensor.show_graph_humidity and reading["humidity"] is not None:
+                parsed_temps[sensor.label + " Humidity"] = (reading["humidity"], None)
 
         return parsed_temps

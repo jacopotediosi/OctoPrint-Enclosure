@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
-
-from .base import Sensor, SensorError
+from .base import Sensor, SensorError, SensorInputConfig
 from .dummy import DummySensor
 from .registry import SENSORS
 
@@ -21,27 +18,16 @@ if TYPE_CHECKING:
 _SensorT = TypeVar("_SensorT", bound=Sensor)
 
 
-@dataclass(frozen=True)
-class SensorInputConfig(BaseConfig):
-    """The configuration shared by all the inputs with a temperature sensor."""
-
-    index_id: int
-    """The id of the input."""
-
-    temp_sensor_type: str = ""
-    """The type of the sensor."""
-
-
-class _InvalidSensor(Sensor[BaseConfig]):
+class _InvalidSensor(Sensor[SensorInputConfig]):
     """A sensor that can't be set up."""
 
-    config_class = BaseConfig
+    config_class = SensorInputConfig
 
     _reason: str
     """Why the sensor can't be set up."""
 
-    def __init__(self, reason: str, logger: logging.Logger) -> None:
-        super().__init__(BaseConfig(), logger)
+    def __init__(self, reason: str, config: SensorInputConfig, logger: logging.Logger) -> None:
+        super().__init__(config, logger)
         self._reason = reason
 
     @override
@@ -89,21 +75,21 @@ class Sensors:
 
         for sensor_input_settings in sensor_inputs_settings:
             try:
-                sensor_input_config = SensorInputConfig.from_settings(sensor_input_settings)
+                input_config = SensorInputConfig.from_settings(sensor_input_settings)
             except ValueError as error:
                 self._logger.warning("Invalid settings for an input with a temperature sensor: %s", error)
                 continue
 
-            sensor_class = DummySensor if self._dummy else SENSORS.get(sensor_input_config.temp_sensor_type)
+            sensor_class = DummySensor if self._dummy else SENSORS.get(input_config.temp_sensor_type)
             if sensor_class is None:
                 sensor: Sensor = self._create_invalid_sensor(
-                    sensor_input_config.index_id,
-                    f"Unsupported sensor type: {sensor_input_config.temp_sensor_type!r}",
+                    input_config,
+                    f"Unsupported sensor type: {input_config.temp_sensor_type!r}",
                 )
             else:
-                sensor = self._create_sensor(sensor_class, sensor_input_config.index_id, sensor_input_settings)
+                sensor = self._create_sensor(sensor_class, input_config, sensor_input_settings)
 
-            sensors[sensor_input_config.index_id] = sensor
+            sensors[input_config.index_id] = sensor
 
         with self._lock:
             self._sensors = sensors
@@ -118,6 +104,26 @@ class Sensors:
         with self._lock:
             return dict(self._sensors)
 
+    def get(self, index_id: int) -> Sensor:
+        """Get the sensor of an input.
+
+        Args:
+            index_id (int): The id of the input.
+
+        Returns:
+            Sensor: The sensor of the input.
+
+        Raises:
+            LookupError: If the input has no sensor.
+
+        """
+        with self._lock:
+            sensor = self._sensors.get(index_id)
+        if sensor is None:
+            msg = f"Input {index_id} has no sensor"
+            raise LookupError(msg)
+        return sensor
+
     def get_dummy(self, index_id: int) -> DummySensor:
         """Get the dummy sensor of an input.
 
@@ -131,8 +137,7 @@ class Sensors:
             LookupError: If the input has no dummy sensor.
 
         """
-        with self._lock:
-            sensor = self._sensors.get(index_id)
+        sensor = self.get(index_id)
         if isinstance(sensor, DummySensor):
             return sensor
 
@@ -142,25 +147,25 @@ class Sensors:
     def _create_sensor(
         self,
         sensor_class: type[_SensorT],
-        index_id: int,
+        input_config: SensorInputConfig,
         input_settings: dict,
     ) -> _SensorT | _InvalidSensor:
         try:
             sensor_config = sensor_class.config_class.from_settings(input_settings)
         except ValueError as error:
-            return self._create_invalid_sensor(index_id, f"Invalid settings: {error}")
+            return self._create_invalid_sensor(input_config, f"Invalid settings: {error}")
 
         # An input whose settings didn't change keeps its sensor, with its state
-        sensor = self._sensors.get(index_id)
+        sensor = self._sensors.get(input_config.index_id)
         if isinstance(sensor, sensor_class) and sensor.config == sensor_config:
             return sensor
 
-        return sensor_class(sensor_config, self._get_sensor_logger(sensor_class, index_id))
+        return sensor_class(sensor_config, self._get_sensor_logger(sensor_class, input_config.index_id))
 
-    def _create_invalid_sensor(self, index_id: int, reason: str) -> _InvalidSensor:
-        logger = self._get_sensor_logger(_InvalidSensor, index_id)
+    def _create_invalid_sensor(self, input_config: SensorInputConfig, reason: str) -> _InvalidSensor:
+        logger = self._get_sensor_logger(_InvalidSensor, input_config.index_id)
         logger.warning("%s", reason)
-        return _InvalidSensor(reason, logger)
+        return _InvalidSensor(reason, input_config, logger)
 
     def _get_sensor_logger(self, sensor_class: type[Sensor], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{sensor_class.__name__}.{index_id}")

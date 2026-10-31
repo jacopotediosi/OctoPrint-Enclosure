@@ -12,6 +12,14 @@ if TYPE_CHECKING:
 HexInt = NewType("HexInt", int)
 """An integer saved in hexadecimal, such as an I2C address: "76" and "0x76" are both read as 118."""
 
+
+class _Required:
+    """The marker of a field whose key must be set."""
+
+
+REQUIRED: Any = _Required()
+"""The default of a field whose key must be set."""
+
 _PARSERS: dict[Any, Callable[[Any], Any]] = {
     str: str,
     int: int,
@@ -30,7 +38,8 @@ class BaseConfig:
     def from_settings(cls, settings: dict) -> Self:
         """Read the configuration from settings.
 
-        A key that is missing or empty gives the default of its field.
+        A key that is missing or empty gives the default of its field. A field with no default, or with REQUIRED as
+        default, needs its key.
 
         Args:
             settings (dict): The settings to read.
@@ -40,13 +49,13 @@ class BaseConfig:
 
         Raises:
             TypeError: If a field has a type that can't be read from settings.
-            ValueError: If a key is missing or empty and its field has no default, or its value is not valid for its
-                field or for the configuration.
+            ValueError: If a key is missing or empty and its field needs it, or its value is not valid for its field
+                or for the configuration.
 
         Examples:
             >>> @dataclass(frozen=True)
             ... class I2cConfig(BaseConfig):
-            ...     temp_sensor_address: HexInt
+            ...     temp_sensor_address: HexInt = REQUIRED
             ...     temp_sensor_i2cbus: int = 1
             >>> I2cConfig.from_settings({"label": "Enclosure", "temp_sensor_address": "38", "temp_sensor_i2cbus": "3"})
             I2cConfig(temp_sensor_address=56, temp_sensor_i2cbus=3)
@@ -68,7 +77,7 @@ class BaseConfig:
 
             value = settings.get(field.name, "")
             if value == "":
-                if field.default is MISSING:
+                if field.default is MISSING or field.default is REQUIRED:
                     msg = f"{field.name} is not set"
                     raise ValueError(msg)
 

@@ -5,6 +5,8 @@ from enum import Enum
 
 from typing_extensions import override
 
+from octoprint_enclosure.core import REQUIRED
+
 from .switch import SwitchConfig, SwitchOutput
 
 
@@ -20,17 +22,17 @@ class ThermostatDeviceType(Enum):
 class ThermostatConfig(SwitchConfig):
     """The configuration of a thermostat."""
 
-    linked_temp_sensor: int
+    linked_temp_sensor: int = REQUIRED
     """The id of the input of the sensor that reads the temperature or the humidity."""
 
-    temp_ctr_type: ThermostatDeviceType
+    temp_ctr_type: ThermostatDeviceType = REQUIRED
     """The type of the device that the output switch turns on and off."""
 
-    temp_ctr_deadband: float
+    temp_ctr_deadband: float = REQUIRED
     """How far below the target the value can go before a heater turns on, or a cooler turns off. Between there and
     the target, the device stays as it is. A dehumidifier ignores it."""
 
-    temp_ctr_max_temp: float
+    temp_ctr_max_temp: float = REQUIRED
     """The temperature above which a heater turns its thermostat off, or 0 or less if it has no maximum."""
 
 

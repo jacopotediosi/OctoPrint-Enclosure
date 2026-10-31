@@ -8,15 +8,13 @@ from subprocess import run
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
-
-from .base import Reading, Sensor, SensorError
+from .base import Reading, Sensor, SensorError, SensorInputConfig
 
 DEVICES_DIR = Path("/sys/bus/w1/devices/")
 
 
 @dataclass(frozen=True)
-class Ds18b20Config(BaseConfig):
+class Ds18b20Config(SensorInputConfig):
     """The configuration of a DS18B20 sensor."""
 
     ds18b20_serial: str = ""

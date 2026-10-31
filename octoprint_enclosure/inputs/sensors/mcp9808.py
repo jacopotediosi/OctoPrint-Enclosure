@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig, HexInt
+from octoprint_enclosure.core import REQUIRED, HexInt
 
-from .base import Reading, Sensor
+from .base import Reading, Sensor, SensorInputConfig
 
 CONFIG_REGISTER = 0x01
 CONFIG_CONTINUOUS_CONVERSION = (0x00, 0x00)  # The power-up default
@@ -22,13 +22,13 @@ AMBIENT_TEMPERATURE_BITS = 13
 
 
 @dataclass(frozen=True)
-class Mcp9808Config(BaseConfig):
+class Mcp9808Config(SensorInputConfig):
     """The configuration of an MCP9808 sensor."""
 
-    temp_sensor_address: HexInt
+    temp_sensor_address: HexInt = REQUIRED
     """The I2C address of the sensor."""
 
-    temp_sensor_i2cbus: int
+    temp_sensor_i2cbus: int = REQUIRED
     """The number of the I2C bus."""
 
 

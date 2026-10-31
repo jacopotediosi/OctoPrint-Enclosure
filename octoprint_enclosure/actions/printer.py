@@ -5,7 +5,7 @@ from enum import Enum
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED, BaseConfig
 
 from .base import Action
 
@@ -25,7 +25,7 @@ class PrinterCommand(Enum):
 class PrinterConfig(BaseConfig):
     """The configuration of an action that controls the printer."""
 
-    printer_action: PrinterCommand
+    printer_action: PrinterCommand = REQUIRED
     """The command to send to the printer."""
 
 

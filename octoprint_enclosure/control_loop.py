@@ -575,14 +575,10 @@ class ControlLoop:
                 self._output_executor.write_pwm(output_id, default_duty_cycle)
 
     def _decide_gpio_input_edge(self, input_id: int, level: int) -> None:
-        input_label = next(
-            (
-                rpi_input["label"]
-                for rpi_input in self._settings.rpi_inputs
-                if to_int(rpi_input["index_id"]) == input_id
-            ),
-            "",
-        )
+        try:
+            input_label = self._gpio_inputs.get(input_id).config.label
+        except GpioInputError:
+            input_label = ""
         for automation in self._automations.get_triggered_by_gpio_input(input_id, level):
             if isinstance(automation, RuleAutomation):
                 self._react_to_gpio_edge(automation, input_id, input_label)

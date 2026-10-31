@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED, BaseConfig
 
 from .base import Automation
 from .triggers import GpioInputTrigger
@@ -21,10 +21,10 @@ if TYPE_CHECKING:
 class FilamentConfig(BaseConfig):
     """The configuration of an automation that changes the filament when a sensor detects its end."""
 
-    filament_sensor_enabled: bool
+    filament_sensor_enabled: bool = REQUIRED
     """Whether the end of the filament is detected."""
 
-    filament_sensor_timeout: int
+    filament_sensor_timeout: int = REQUIRED
     """The seconds after an end of the filament during which another end is ignored."""
 
 
