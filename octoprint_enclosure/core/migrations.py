@@ -217,6 +217,62 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                     automation[key] = rpi_output.pop(key)
             automations.append(automation)
 
+        # Up to version 10, every output held the keys of every type of item. The outputs that remain lose the keys of
+        # actions, alarms and PWM curves; the actions and the automations keep only the keys of their type.
+        moved_keys = (
+            "gcode",
+            "shell_script",
+            "alarm_set_temp",
+            "controlled_io",
+            "controlled_io_set_state",
+            "pwm_temperature_linked",
+            "temperature_a",
+            "duty_a",
+            "temperature_b",
+            "duty_b",
+        )
+        for rpi_output in rpi_outputs:
+            for key in moved_keys:
+                rpi_output.pop(key, None)
+        action_keys = {
+            "index_id",
+            "label",
+            "action_type",
+            "gcode",
+            "shell_script",
+            "printer_action",
+            "hide_btn_ui",
+            "show_on_navbar",
+        }
+        for action in actions:
+            for key in set(action) - action_keys:
+                del action[key]
+        automation_keys = {
+            "index_id",
+            "label",
+            "automation_type",
+            "trigger_type",
+            "input",
+            "edge",
+            "linked_temp_sensor",
+            "alarm_set_temp",
+            "repeat_while_above",
+            "reaction_type",
+            "controlled_io",
+            "controlled_io_set_state",
+            "action",
+            "filament_sensor_enabled",
+            "filament_sensor_timeout",
+            "output",
+            "temperature_a",
+            "duty_a",
+            "temperature_b",
+            "duty_b",
+        }
+        for automation in automations:
+            for key in set(automation) - automation_keys:
+                del automation[key]
+
         # Up to version 10, these numbers were read as 0 when empty or missing. From version 11, numbers are read
         # strictly, so these get 0.
         number_keys_by_type = {
