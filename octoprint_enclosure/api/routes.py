@@ -168,51 +168,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
     ### Routes
     ##########
 
-    @octoprint.plugin.BlueprintPlugin.route("/ReadPin/<int:pin>", methods=["GET"])
-    def read_pin(self, pin: int) -> Response:
-        pins = []
-
-        for input_settings in self._settings.rpi_inputs:
-            if pin == to_int(input_settings["gpio_pin"]):
-                active_low = input_settings["input_pull_resistor"] == PullResistor.UP.value
-                pins.append(
-                    {
-                        "Configured_As": "Input",
-                        "label": input_settings["label"],
-                        "GPIO_Pin": pin,
-                        "Active_Low": active_low,
-                        "State": self._pin_state_human(pin, active_low=active_low),
-                    },
-                )
-
-        for output_settings in self._settings.rpi_outputs:
-            if pin == to_int(output_settings["gpio_pin"]):
-                if output_settings["output_type"] in ("regular", "temp_hum_control"):
-                    active_low = bool(output_settings["active_low"])
-                    output_class = RegularOutput if output_settings["output_type"] == "regular" else ThermostatOutput
-                    state = self._output_state_human(to_int(output_settings["index_id"]), output_class)
-                else:
-                    active_low = False
-                    state = self._pin_state_human(pin, active_low=False)
-                pins.append(
-                    {
-                        "Configured_As": "Output",
-                        "label": output_settings["label"],
-                        "GPIO_Pin": pin,
-                        "Active_Low": active_low,
-                        "State": state,
-                    },
-                )
-
-        if not pins:
-            try:
-                state = self._gpio.input(pin)
-            except Exception:
-                state = "GPIO pin not initialized."
-            pins.append({"Configured_As": "Unknown", "GPIO_Pin": pin, "Active_Low": "Unknown", "State": state})
-
-        return jsonify(pins)
-
     @octoprint.plugin.BlueprintPlugin.route("/inputs", methods=["GET"])
     def get_inputs(self) -> Response:
         inputs = []
