@@ -14,7 +14,9 @@ Response (200):
 [
     {
         "index_id": number,
-        "label": string
+        "label": string,
+        "GPIO_Pin": number (null for non-GPIO inputs),
+        "State": string ("ON", "OFF" or "ERROR: Unable to read pin"; null for non-GPIO inputs)
     }
 ]
 ```
@@ -22,7 +24,7 @@ Response (200):
 Error Responses:
  - none
 
-## List a specific input
+## Get an input
 
 Endpoint: **GET** `/inputs/<id>`
 
@@ -31,21 +33,27 @@ Endpoint: **GET** `/inputs/<id>`
 Response (200):
 ```
 {
-    "controlled_io": null,
-    "filament_sensor_timeout": number,
-    "filament_sensor_enabled": boolean,
+    "controlled_io": number, or "" if not set, or null without an automation,
+    "filament_sensor_timeout": number, or null without an automation,
+    "filament_sensor_enabled": boolean, or null without an automation,
     "temp_sensor_address": string,
-    "printer_action": string,
-    "controlled_io_set_state": string,
+    "printer_action": string, or null without an automation,
+    "controlled_io_set_state": string, or null without an automation,
     "temp_sensor_type": string,
+    "temp_sensor_i2cbus": number,
+    "temp_i2c_bus": number,
+    "temp_i2c_address": number,
+    "temp_i2c_register": number,
+    "show_graph_temp": boolean,
+    "show_graph_humidity": boolean,
     "temp_sensor_navbar": boolean,
-    "temp_sensor_humidity": number,
-    "edge": string,
+    "temp_sensor_humidity": number, or "" without a reading,
+    "edge": string, or null without an automation,
     "ds18b20_serial": string,
-    "action_type": string,
+    "action_type": string, or null without an automation,
     "input_pull_resistor": string,
     "input_type": string,
-    "temp_sensor_temp": number,
+    "temp_sensor_temp": number, or "" without a reading,
     "label": string,
     "index_id": number,
     "use_fahrenheit": boolean,
@@ -60,12 +68,16 @@ Error Responses:
 
 Endpoint: **GET** `/outputs`
 
+*Note: lists the regular outputs only*
+
 Response (200):
 ```
 [
     {
         "index_id": number,
-        "label": string
+        "label": string,
+        "GPIO_Pin": number,
+        "State": string ("ON", "OFF" or "ERROR: Unable to read pin")
     }
 ]
 ```
@@ -73,7 +85,7 @@ Response (200):
 Error Responses:
  - none
 
-## List a specific output
+## Get an output
 
 Endpoint: **GET** `/outputs/<id>`
 
@@ -89,6 +101,13 @@ Response (200):
     "temp_ctr_deadband": number,
     "neopixel_brightness": number,
     "gpio_pin": number,
+    "gpio_i2c_enabled": boolean,
+    "gpio_i2c_bus": number,
+    "gpio_i2c_address": number,
+    "gpio_i2c_register": number,
+    "gpio_i2c_data_on": number,
+    "gpio_i2c_data_off": number,
+    "gpio_i2c_register_status": number,
     "default_duty_cycle": number,
     "neopixel_color": string,
     "hide_btn_ui": boolean,
@@ -111,6 +130,7 @@ Response (200):
     "gcode": string,
     "current_value": boolean,
     "shutdown_on_failed": boolean,
+    "shutdown_on_error": boolean,
     "temperature_b": number,
     "ledstrip_color": string,
     "temperature_a": number,
@@ -136,11 +156,11 @@ Response (200):
 Error Responses:
  - 404 if specified id cannot be found
 
-## Control specific output
+## Switch an output
 
 Endpoint: **PATCH** `/outputs/<id>`
 
-*Note: id needs to be int (index_id), one-based index in octoprint settings' enclosure section's `rpi_outputs` list*
+*Note: id needs to be int (index_id)*
 
 Body (Content-Type: `application/json`):
 ```
@@ -156,7 +176,7 @@ Error Responses:
 - 400 - malformed JSON
 - 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
-## Enable/Disable  Output auto-startup
+## Enable the auto-startup of an output
 
 Endpoint: **PATCH** `/outputs/<id>/auto-startup`
 
@@ -176,7 +196,7 @@ Error Responses:
 - 400 - malformed JSON
 - 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
-## Control auto-shutdown for specific output
+## Enable the auto-shutdown of an output
 
 Endpoint: **PATCH** `/outputs/<id>/auto-shutdown`
 
@@ -196,16 +216,16 @@ Error Responses:
 - 400 - malformed JSON
 - 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
-## Control temperature
+## Set the target of a thermostat
 
 Endpoint: **PATCH** `/temperature/<id>`
 
-*Note: id needs to be int (index_id)*
+*Note: id needs to be int (index_id) of a thermostat output*
 
 Body (Content-Type: `application/json`):
 ```
 {
-    "temperature": number
+    "temperature": number (the target temperature, or humidity for a dehumidifier; 0 turns the thermostat off)
 }
 ```
 
@@ -216,7 +236,7 @@ Error Responses:
 - 400 - malformed JSON
 - 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
-## Control filament sensor
+## Enable the filament sensor of an input
 
 Endpoint: **PATCH** `/filament/<id>`
 
@@ -236,7 +256,7 @@ Error Responses:
 - 400 - malformed JSON
 - 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
-## Set PWM value
+## Set the duty cycle of a PWM output
 
 Endpoint: **PATCH** `/pwm/<id>`
 
@@ -256,7 +276,7 @@ Error Responses:
 - 400 - malformed JSON
 - 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
-## Set RGB LED color
+## Set the color of an RGB LED strip
 
 Endpoint: **PATCH** `/rgb-led/<id>`
 
@@ -265,7 +285,7 @@ Endpoint: **PATCH** `/rgb-led/<id>`
 Body (Content-Type: `application/json`):
 ```
 {
-    "rgb": string (rgb(r,g,b))
+    "rgb": string ("rgb(r,g,b)", with r, g and b from 0 to 255)
 }
 ```
 
@@ -276,7 +296,7 @@ Error Responses:
 - 400 - malformed JSON
 - 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
-## Set neopixel color
+## Set the color of a NeoPixel output
 
 Endpoint: **PATCH** `/neopixel/<id>`
 
@@ -298,7 +318,7 @@ Error Responses:
 - 400 - malformed JSON
 - 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
-## Update UI
+## Refresh the UI
 
 Endpoint: **POST** `/update`
 
@@ -309,11 +329,11 @@ Response (204): No-Content
 Error Responses:
 - none
 
-## Send shell command
+## Run a shell action
 
 Endpoint: **POST** `/shell/<id>`
 
-*Note: id needs to be int (index_id)*
+*Note: id needs to be int (index_id) of a shell action*
 
 Body: empty
 
@@ -322,11 +342,11 @@ Response (204): No-Content
 Error Responses:
 - none
 
-## Send gcode command
+## Run a G-code action
 
 Endpoint: **POST** `/gcode/<id>`
 
-*Note: id needs to be int (index_id)*
+*Note: id needs to be int (index_id) of a G-code action*
 
 Body: empty
 
@@ -335,7 +355,7 @@ Response (204): No-Content
 Error Responses:
 - none
 
-## Send printer command
+## Run a printer action
 
 Endpoint: **POST** `/printer/<id>`
 
