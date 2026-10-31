@@ -152,8 +152,9 @@ Body (Content-Type: `application/json`):
 Response (204): No-Content
 
 Error Responses:
-- 400 - wrong Content-Type or malformed request
-- 406 - missing information (missing attribute given in response body)
+- 415 - Content-Type is not application/json
+- 400 - malformed JSON
+- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
 ## Enable/Disable  Output auto-startup
 
@@ -171,8 +172,9 @@ Body (Content-Type: `application/json`):
 Response (204): No-Content
 
 Error Responses:
-- 400 - wrong Content-Type or malformed request
-- 406 - missing information (missing attribute given in response body)
+- 415 - Content-Type is not application/json
+- 400 - malformed JSON
+- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
 ## Control auto-shutdown for specific output
 
@@ -190,8 +192,9 @@ Body (Content-Type: `application/json`):
 Response (204): No-Content
 
 Error Responses:
-- 400 - wrong Content-Type or malformed request
-- 406 - missing information (missing attribute given in response body)
+- 415 - Content-Type is not application/json
+- 400 - malformed JSON
+- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
 ## Control temperature
 
@@ -209,8 +212,9 @@ Body (Content-Type: `application/json`):
 Response (204): No-Content
 
 Error Responses:
-- 400 - wrong Content-Type or malformed request
-- 406 - missing information (missing attribute given in response body)
+- 415 - Content-Type is not application/json
+- 400 - malformed JSON
+- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
 ## Control filament sensor
 
@@ -228,8 +232,9 @@ Body (Content-Type: `application/json`):
 Response (204): No-Content
 
 Error Responses:
-- 400 - wrong Content-Type or malformed request
-- 406 - missing information (missing attribute given in response body)
+- 415 - Content-Type is not application/json
+- 400 - malformed JSON
+- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
 ## Set PWM value
 
@@ -240,15 +245,16 @@ Endpoint: **PATCH** `/pwm/<id>`
 Body (Content-Type: `application/json`):
 ```
 {
-    "duty_cycle": number
+    "duty_cycle": number (0-100)
 }
 ```
 
 Response (204): No-Content
 
 Error Responses:
-- 400 - wrong Content-Type or malformed request
-- 406 - missing information (missing attribute given in response body)
+- 415 - Content-Type is not application/json
+- 400 - malformed JSON
+- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
 ## Set RGB LED color
 
@@ -266,8 +272,9 @@ Body (Content-Type: `application/json`):
 Response (204): No-Content
 
 Error Responses:
-- 400 - wrong Content-Type or malformed request
-- 406 - missing information (missing attribute given in response body)
+- 415 - Content-Type is not application/json
+- 400 - malformed JSON
+- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
 ## Set neopixel color
 
@@ -278,17 +285,18 @@ Endpoint: **PATCH** `/neopixel/<id>`
 Body (Content-Type: `application/json`):
 ```
 {
-    "red": number,
-    "green": number,
-    "blue": number
+    "red": number (0-255),
+    "green": number (0-255),
+    "blue": number (0-255)
 }
 ```
 
 Response (204): No-Content
 
 Error Responses:
-- 400 - wrong Content-Type or malformed request
-- 406 - missing information (missing attribute given in response body)
+- 415 - Content-Type is not application/json
+- 400 - malformed JSON
+- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
 ## Update UI
 

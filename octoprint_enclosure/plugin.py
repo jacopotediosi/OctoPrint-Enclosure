@@ -1,5 +1,4 @@
 import contextlib
-import copy
 import functools
 import logging
 import sys
@@ -9,13 +8,11 @@ from pathlib import Path
 import octoprint.plugin
 import octoprint.util
 import smbus2
-from flask import jsonify, make_response, request
 from octoprint.events import Events
 from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
-from octoprint.server.util.flask import restricted_access
-from werkzeug.exceptions import BadRequest
 
-from .actions import ActionError, Actions, GcodeAction, PrinterAction, ShellAction
+from .actions import Actions
+from .api import Api
 from .automations import (
     AutomationError,
     Automations,
@@ -28,7 +25,7 @@ from .core import Frontend, PluginContext, Scheduler, Settings
 from .core.migrations import migrate_settings
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
-from .inputs import GpioInputs, PullResistor, SensorError, SensorPoller, Sensors
+from .inputs import GpioInputs, SensorError, SensorPoller, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
 from .output_executor import OutputExecutor
@@ -138,6 +135,8 @@ class EnclosurePlugin(
 
         # Init the plugin context
         self._plugin_context = PluginContext(
+            identifier=self._identifier,
+            basefolder=self._basefolder,
             logger=self._logger,
             settings=self._enclosure_settings,
             frontend=self._frontend,
@@ -166,20 +165,15 @@ class EnclosurePlugin(
             handle_event=self.on_event,
         )
 
-    def pin_state_boolean(self, pin, active_low):
-        try:
-            state = self._gpio.input(pin)
-            return (not state) if active_low else bool(state)
-        except Exception:
-            return "ERROR: Unable to read pin"
-
-    def pin_state_human(self, pin, active_low):
-        pin_state = self.pin_state_boolean(pin, active_low)
-        if pin_state is True:
-            return " ON "
-        if pin_state is False:
-            return " OFF "
-        return pin_state
+        # Init the API
+        self._api = Api(
+            self._plugin_context,
+            get_sensor_data=self.get_sensor_data,
+            update_ui=self.update_ui,
+            set_auto_startup_enabled=self.set_auto_startup_enabled,
+            set_auto_shutdown_enabled=self.set_auto_shutdown_enabled,
+            set_filament_sensor_enabled=self.set_filament_sensor_enabled,
+        )
 
     def output_state_boolean(self, index_id, output_class):
         try:
@@ -189,14 +183,6 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error reading output %s", index_id)
             return "ERROR: Unable to read pin"
-
-    def output_state_human(self, index_id, output_class):
-        output_state = self.output_state_boolean(index_id, output_class)
-        if output_state is True:
-            return " ON "
-        if output_state is False:
-            return " OFF "
-        return output_state
 
     # ~~ StartupPlugin mixin
     def on_after_startup(self):
@@ -252,441 +238,12 @@ class EnclosurePlugin(
     def on_settings_migrate(self, target, current=None):
         migrate_settings(target, current, self._settings, self._logger)
 
-    # ~~ Blueprintplugin mixin
+    # ~~ BlueprintPlugin mixin
+    def get_blueprint(self):
+        return self._api.get_blueprint()
+
     def is_blueprint_csrf_protected(self):
         return True
-
-    @octoprint.plugin.BlueprintPlugin.route("/ReadPin/<int:identifier>", methods=["GET"])
-    def read_single_pin(self, identifier):
-        resp = []
-        match_found = False
-        for rpi_input in self.rpi_inputs:
-            if identifier == to_int(rpi_input["gpio_pin"]):
-                match_found = True
-                configured_as = "Input"
-                active_low = rpi_input["input_pull_resistor"] == PullResistor.UP.value
-                pin = to_int(rpi_input["gpio_pin"])
-                val = self.pin_state_human(pin, active_low)
-                label = rpi_input["label"]
-                resp.append(
-                    {
-                        "Configured_As": configured_as,
-                        "label": label,
-                        "GPIO_Pin": pin,
-                        "Active_Low": active_low,
-                        "State": val,
-                    },
-                )
-        for rpi_output in self.rpi_outputs:
-            if identifier == to_int(rpi_output["gpio_pin"]):
-                match_found = True
-                configured_as = "Output"
-                pin = to_int(rpi_output["gpio_pin"])
-                if rpi_output["output_type"] in ("regular", "temp_hum_control"):
-                    active_low = bool(rpi_output["active_low"])
-                    output_class = RegularOutput if rpi_output["output_type"] == "regular" else ThermostatOutput
-                    val = self.output_state_human(to_int(rpi_output["index_id"]), output_class)
-                else:
-                    active_low = False
-                    val = self.pin_state_human(pin, active_low)
-                label = rpi_output["label"]
-                resp.append(
-                    {
-                        "Configured_As": configured_as,
-                        "label": label,
-                        "GPIO_Pin": pin,
-                        "Active_Low": active_low,
-                        "State": val,
-                    },
-                )
-        if not match_found:
-            pin = int(identifier)
-            configured_as = "Unknown"
-            active_low = "Unknown"
-            try:
-                val = self._gpio.input(pin)
-            except Exception:
-                val = "GPIO pin not initialized."
-            resp.append({"Configured_As": configured_as, "GPIO_Pin": pin, "Active_Low": active_low, "State": val})
-        return jsonify(resp)
-
-    @octoprint.plugin.BlueprintPlugin.route("/inputs", methods=["GET"])
-    def get_inputs(self):
-        inputs = []
-        for rpi_input in self.rpi_inputs:
-            index = to_int(rpi_input["index_id"])
-            label = rpi_input["label"]
-            active_low = rpi_input["input_pull_resistor"] == PullResistor.UP.value
-            pin = to_int(rpi_input["gpio_pin"])
-            val = self.pin_state_human(pin, active_low)
-            inputs.append({"index_id": index, "label": label, "GPIO_Pin": pin, "State": val})
-        return jsonify(inputs)
-
-    @octoprint.plugin.BlueprintPlugin.route("/inputs/<int:identifier>", methods=["GET"])
-    def get_input_status(self, identifier):
-        for rpi_input in self.rpi_inputs:
-            if identifier == to_int(rpi_input["index_id"]):
-                out = copy.deepcopy(rpi_input)
-                # In previous versions, the automation of a GPIO input was saved in the rpi_input dict. To keep backward
-                # compatibility, the API returns the input with the keys of its first automation, and the type of the
-                # reaction in action_type. A filament sensor, a rule that stops the thermostats and a rule
-                # that runs a printer action were a printer_control with "filament", "stop_temp_hum_control" or the
-                # command in printer_action, and a rule that runs another action was an output_control with the id of
-                # the action in controlled_io.
-                automation_settings = next(
-                    (
-                        item
-                        for item in self.automations
-                        if (item["automation_type"] == "filament" or item["trigger_type"] == "gpio_input")
-                        and to_int(item["input"]) == identifier
-                    ),
-                    None,
-                )
-                if automation_settings is not None:
-                    input_keys = (
-                        "edge",
-                        "controlled_io",
-                        "controlled_io_set_state",
-                        "filament_sensor_enabled",
-                        "filament_sensor_timeout",
-                    )
-                    out.update({key: automation_settings[key] for key in input_keys if key in automation_settings})
-                    out["printer_action"] = ""
-                    if automation_settings["automation_type"] == "filament":
-                        out["action_type"] = "printer_control"
-                        out["printer_action"] = "filament"
-                    elif automation_settings["reaction_type"] == "stop_temp_hum_control":
-                        out["action_type"] = "printer_control"
-                        out["printer_action"] = "stop_temp_hum_control"
-                    elif automation_settings["reaction_type"] == "run_action":
-                        action_settings = self.get_action_settings(to_int(automation_settings["action"]))
-                        if action_settings is not None and action_settings["action_type"] == "printer":
-                            out["action_type"] = "printer_control"
-                            out["printer_action"] = action_settings["printer_action"]
-                        else:
-                            out["action_type"] = "output_control"
-                            out["controlled_io"] = automation_settings["action"]
-                    else:
-                        out["action_type"] = automation_settings["reaction_type"]
-                reading = next((item for item in self.get_sensor_data() if item["index_id"] == identifier), None)
-                temperature = None if reading is None else reading["temperature"]
-                humidity = None if reading is None else reading["humidity"]
-                out["temp_sensor_temp"] = "" if temperature is None else temperature
-                out["temp_sensor_humidity"] = "" if humidity is None else humidity
-                return jsonify(out)
-        return make_response("", 404)
-
-    @octoprint.plugin.BlueprintPlugin.route("/temperature/<int:identifier>", methods=["PATCH"])
-    @restricted_access
-    def set_thermostat_temperature(self, identifier):
-        if "application/json" not in request.headers["Content-Type"]:
-            return make_response("expected json", 400)
-        try:
-            data = request.json
-        except BadRequest:
-            return make_response("malformed request", 400)
-
-        if "temperature" not in data:
-            return make_response("missing temperature attribute", 406)
-
-        set_value = data["temperature"]
-
-        self.set_thermostat_target(identifier, set_value)
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/filament/<int:identifier>", methods=["PATCH"])
-    @restricted_access
-    def set_filament_sensor(self, identifier):
-        if "application/json" not in request.headers["Content-Type"]:
-            return make_response("expected json", 400)
-        try:
-            data = request.json
-        except BadRequest:
-            return make_response("malformed request", 400)
-
-        if "status" not in data:
-            return make_response("missing status attribute", 406)
-
-        value = data["status"]
-
-        for automation_settings in self.automations:
-            if (
-                automation_settings["automation_type"] == "filament"
-                and to_int(automation_settings["input"]) == identifier
-            ):
-                automation_settings["filament_sensor_enabled"] = value
-                with contextlib.suppress(AutomationError):
-                    index_id = to_int(automation_settings["index_id"])
-                    self._automations.get(index_id, FilamentAutomation).enabled = bool(value)
-                self._logger.info("Setting filament sensor for input %s to : %s", str(identifier), value)
-        self._enclosure_settings.automations = self.automations
-        self.update_ui_filament_sensors()
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/outputs", methods=["GET"])
-    def get_outputs(self):
-        outputs = []
-        for rpi_output in self.rpi_outputs:
-            if rpi_output["output_type"] == "regular":
-                index = to_int(rpi_output["index_id"])
-                label = rpi_output["label"]
-                pin = to_int(rpi_output["gpio_pin"])
-                val = self.output_state_human(index, RegularOutput)
-                outputs.append({"index_id": index, "label": label, "GPIO_Pin": pin, "State": val})
-        return jsonify(outputs)
-
-    @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:identifier>", methods=["GET"])
-    def get_output_status(self, identifier):
-        out = self.get_legacy_output_settings(identifier)
-        if out is None:
-            return make_response("", 404)
-
-        out["gpio_status"] = False
-        out["duty_cycle"] = 0
-        out["neopixel_color"] = "rgb(0,0,0)"
-        out["ledstrip_color"] = "rgb(0,0,0)"
-        out["temp_ctr_set_value"] = 0
-
-        if out["output_type"] == "pwm":
-            with contextlib.suppress(OutputError):
-                out["duty_cycle"] = self._outputs.get(identifier, PwmOutput).duty_cycle
-        if out["output_type"] == "temp_hum_control":
-            target = self._control_loop.get_thermostat_targets().get(identifier)
-            if target is not None:
-                out["temp_ctr_set_value"] = target
-        if out["output_type"] in ("neopixel_indirect", "neopixel_direct"):
-            neopixel_class = NeopixelDirectOutput if out["output_type"] == "neopixel_direct" else NeopixelIndirectOutput
-            out["neopixel_color"] = self.output_color(identifier, neopixel_class)
-        if out["output_type"] == "ledstrip":
-            out["ledstrip_color"] = self.output_color(identifier, LedstripOutput)
-        if out["output_type"] in ("regular", "temp_hum_control"):
-            output_class = RegularOutput if out["output_type"] == "regular" else ThermostatOutput
-            out["current_value"] = self.output_state_boolean(identifier, output_class)
-            out["gpio_status"] = out["current_value"] is True
-        else:
-            out["current_value"] = self.pin_state_boolean(to_int(out.get("gpio_pin")), False)
-        return jsonify(out)
-
-    # In previous versions, actions and temperature alarms were outputs, and PWM outputs linked to the temperature held
-    # their curve, with pwm_temperature_linked on. To keep backward compatibility, the API returns them as they were
-    # saved among the outputs, with their type in output_type.
-    def get_legacy_output_settings(self, index_id):
-        rpi_output = self.get_output_settings(index_id)
-        if rpi_output is not None:
-            out = copy.deepcopy(rpi_output)
-            linked_settings = next(iter(self.get_pwm_temperature_linked_settings(index_id)), None)
-            if out["output_type"] == "pwm":
-                out["pwm_temperature_linked"] = linked_settings is not None
-            if out["output_type"] == "pwm" and linked_settings is not None:
-                linked_keys = ("linked_temp_sensor", "temperature_a", "duty_a", "temperature_b", "duty_b")
-                out.update({key: linked_settings[key] for key in linked_keys})
-            return out
-
-        action_settings = self.get_action_settings(index_id)
-        if action_settings is not None and action_settings["action_type"] != "printer":
-            out = copy.deepcopy(action_settings)
-            out["output_type"] = out.pop("action_type")
-            return out
-
-        alarm_settings = next(
-            (
-                item
-                for item in self.automations
-                if to_int(item["index_id"]) == index_id
-                and item["automation_type"] == "rule"
-                and item["trigger_type"] == "temperature"
-                and item["reaction_type"] == "output_control"
-            ),
-            None,
-        )
-        if alarm_settings is not None:
-            out = copy.deepcopy(alarm_settings)
-            for key in ("automation_type", "trigger_type", "reaction_type"):
-                del out[key]
-            out["output_type"] = "temperature_alarm"
-            return out
-
-        return None
-
-    @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:identifier>", methods=["PATCH"])
-    @restricted_access
-    def set_io(self, identifier):
-        if "application/json" not in request.headers["Content-Type"]:
-            return make_response("expected json", 400)
-        try:
-            data = request.json
-        except BadRequest:
-            return make_response("malformed request", 400)
-
-        if "status" not in data:
-            return make_response("missing status attribute", 406)
-
-        value = data["status"]
-
-        for rpi_output in self.rpi_outputs:
-            if identifier == to_int(rpi_output["index_id"]):
-                self._output_executor.switch_output(
-                    identifier,
-                    RegularSetState.ON if value else RegularSetState.OFF,
-                    wait=True,
-                )
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:identifier>/auto-startup", methods=["PATCH"])
-    @restricted_access
-    def set_auto_startup(self, identifier):
-        if "application/json" not in request.headers["Content-Type"]:
-            return make_response("expected json", 400)
-        try:
-            data = request.json
-        except BadRequest:
-            return make_response("malformed request", 400)
-
-        if "status" not in data:
-            return make_response("missing status attribute", 406)
-
-        value = data["status"]
-
-        if not value:
-            suffix = "auto_startup"
-            queue_id = f"output:{identifier}:{suffix}"
-            self._scheduler.cancel(queue_id)
-        for output in self.rpi_outputs:
-            if identifier == to_int(output["index_id"]):
-                output["auto_startup"] = value
-                self._logger.info("Setting auto startup for output %s to : %s", str(identifier), value)
-        self._enclosure_settings.rpi_outputs = self.rpi_outputs
-        self.update_ui_outputs()
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:identifier>/auto-shutdown", methods=["PATCH"])
-    @restricted_access
-    def set_auto_shutdown(self, identifier):
-        if "application/json" not in request.headers["Content-Type"]:
-            return make_response("expected json", 400)
-        try:
-            data = request.json
-        except BadRequest:
-            return make_response("malformed request", 400)
-
-        if "status" not in data:
-            return make_response("missing status attribute", 406)
-
-        value = data["status"]
-
-        if not value:
-            suffix = "auto_shutdown"
-            queue_id = f"output:{identifier}:{suffix}"
-            self._scheduler.cancel(queue_id)
-
-        for output in self.rpi_outputs:
-            if identifier == to_int(output["index_id"]):
-                output["auto_shutdown"] = value
-                self._logger.info("Setting auto shutdown for output %s to : %s", str(identifier), value)
-        self._enclosure_settings.rpi_outputs = self.rpi_outputs
-        self.update_ui_outputs()
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/pwm/<int:identifier>", methods=["PATCH"])
-    @restricted_access
-    def set_pwm(self, identifier):
-        if "application/json" not in request.headers["Content-Type"]:
-            return make_response("expected json", 400)
-        try:
-            data = request.json
-        except BadRequest:
-            return make_response("malformed request", 400)
-
-        if "duty_cycle" not in data:
-            return make_response("missing duty_cycle attribute", 406)
-
-        set_value = to_int(data["duty_cycle"])
-        self._output_executor.write_pwm(identifier, set_value, wait=True)
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/rgb-led/<int:identifier>", methods=["PATCH"])
-    @restricted_access
-    def set_ledstrip_color(self, identifier):
-        """Set the color of the Open-Smart RGB LED Strip output with the given index."""
-        if "application/json" not in request.headers["Content-Type"]:
-            return make_response("expected json", 400)
-        try:
-            data = request.json
-        except BadRequest:
-            return make_response("malformed request", 400)
-
-        if "rgb" not in data:
-            return make_response("missing rgb attribute", 406)
-        red, green, blue = parse_rgb(data["rgb"])
-
-        for rpi_output in self.rpi_outputs:
-            if identifier == to_int(rpi_output["index_id"]):
-                self._output_executor.set_color(identifier, to_int(red), to_int(green), to_int(blue), wait=True)
-
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/neopixel/<int:identifier>", methods=["PATCH"])
-    @restricted_access
-    def set_neopixel(self, identifier):
-        """Set the color of the NeoPixel output with the given index."""
-        if "application/json" not in request.headers["Content-Type"]:
-            return make_response("expected json", 400)
-        try:
-            data = request.json
-        except BadRequest:
-            return make_response("malformed request", 400)
-
-        if "red" not in data:
-            return make_response("missing red attribute", 406)
-        if "green" not in data:
-            return make_response("missing green attribute", 406)
-        if "blue" not in data:
-            return make_response("missing blue attribute", 406)
-
-        for rpi_output in self.rpi_outputs:
-            if identifier == to_int(rpi_output["index_id"]):
-                self._output_executor.set_color(
-                    identifier,
-                    to_int(data["red"]),
-                    to_int(data["green"]),
-                    to_int(data["blue"]),
-                    wait=True,
-                )
-
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/update", methods=["POST"])
-    @restricted_access
-    def update_ui_requested(self):
-        self.update_ui()
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/shell/<int:identifier>", methods=["POST"])
-    @restricted_access
-    def send_shell_command(self, identifier):
-        try:
-            self._actions.run(identifier, ShellAction)
-        except ActionError as error:
-            self._logger.debug("Can't run action %s: %s", identifier, error)
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/gcode/<int:identifier>", methods=["POST"])
-    @restricted_access
-    def requested_gcode_command(self, identifier):
-        try:
-            self._actions.run(identifier, GcodeAction)
-        except ActionError as error:
-            self._logger.debug("Can't run action %s: %s", identifier, error)
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/printer/<int:identifier>", methods=["POST"])
-    @restricted_access
-    def send_printer_command(self, identifier):
-        try:
-            self._actions.run(identifier, PrinterAction)
-        except ActionError as error:
-            self._logger.debug("Can't run action %s: %s", identifier, error)
-        return make_response("", 204)
 
     def output_color(self, index_id, output_class):
         try:
@@ -741,12 +298,6 @@ class EnclosurePlugin(
                 dummy.is_cooler_on = thermostat.is_on
             elif thermostat.config.temp_ctr_type is ThermostatDeviceType.DEHUMIDIFIER:
                 dummy.is_dehumidifier_on = thermostat.is_on
-
-    def get_output_settings(self, index_id):
-        return next((item for item in self.rpi_outputs if to_int(item["index_id"]) == index_id), None)
-
-    def get_action_settings(self, index_id):
-        return next((item for item in self.actions if to_int(item["index_id"]) == index_id), None)
 
     def get_pwm_temperature_linked_settings(self, output_id=None):
         return [
@@ -1038,6 +589,40 @@ class EnclosurePlugin(
         if wait and self._printer.is_printing():
             self._printer.pause_print()
             self._control_loop.wait_for_temperature(index_id)
+
+    def set_auto_startup_enabled(self, index_id, enabled):
+        if not enabled:
+            self._scheduler.cancel(f"output:{index_id}:auto_startup")
+        for output in self.rpi_outputs:
+            if index_id == to_int(output["index_id"]):
+                output["auto_startup"] = enabled
+                self._logger.info("Setting auto startup for output %s to : %s", str(index_id), enabled)
+        self._enclosure_settings.rpi_outputs = self.rpi_outputs
+        self.update_ui_outputs()
+
+    def set_auto_shutdown_enabled(self, index_id, enabled):
+        if not enabled:
+            self._scheduler.cancel(f"output:{index_id}:auto_shutdown")
+        for output in self.rpi_outputs:
+            if index_id == to_int(output["index_id"]):
+                output["auto_shutdown"] = enabled
+                self._logger.info("Setting auto shutdown for output %s to : %s", str(index_id), enabled)
+        self._enclosure_settings.rpi_outputs = self.rpi_outputs
+        self.update_ui_outputs()
+
+    def set_filament_sensor_enabled(self, input_id, enabled):
+        for automation_settings in self.automations:
+            if (
+                automation_settings["automation_type"] == "filament"
+                and to_int(automation_settings["input"]) == input_id
+            ):
+                automation_settings["filament_sensor_enabled"] = enabled
+                with contextlib.suppress(AutomationError):
+                    index_id = to_int(automation_settings["index_id"])
+                    self._automations.get(index_id, FilamentAutomation).enabled = bool(enabled)
+                self._logger.info("Setting filament sensor for input %s to : %s", str(input_id), enabled)
+        self._enclosure_settings.automations = self.automations
+        self.update_ui_filament_sensors()
 
     # ~~ EventPlugin mixin
     def on_event(self, event, payload):

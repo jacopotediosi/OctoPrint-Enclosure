@@ -28,6 +28,8 @@ class PluginContext:
     """Everything a plugin's component needs to do its work."""
 
     # Plugin general components
+    identifier: str
+    basefolder: str
     logger: logging.Logger
     settings: Settings
     frontend: Frontend

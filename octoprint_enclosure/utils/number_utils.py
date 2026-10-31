@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from typing_extensions import TypeGuard
 
 
 def to_float(value: Any) -> float:  # noqa: ANN401 - value is purposely untyped
@@ -73,3 +76,29 @@ def parse_float(value: Any) -> float:  # noqa: ANN401 - value is purposely untyp
 def clamp(value: float, minimum: float, maximum: float) -> float:
     """Limit a value to the range between minimum and maximum."""
     return max(min(maximum, value), minimum)
+
+
+def is_number(value: object) -> TypeGuard[float]:
+    """Check if a value is a finite number.
+
+    Args:
+        value (object): The value to check.
+
+    Returns:
+        bool: True if the value is a finite number, False otherwise.
+
+    Examples:
+        >>> is_number(2.5)
+        True
+        >>> is_number(True)
+        False
+        >>> is_number("1")
+        False
+        >>> is_number(float("inf"))
+        False
+
+    """
+    try:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    except OverflowError:
+        return False
