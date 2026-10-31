@@ -121,6 +121,7 @@ class EnclosurePlugin(
         self._output_executor = OutputExecutor(self._outputs, self._logger, update_ui_outputs=self.send_ui_outputs)
         self._control_loop = ControlLoop(
             self._gpio_inputs,
+            self._sensor_poller,
             self._outputs,
             self._actions,
             self._automations,
@@ -130,7 +131,6 @@ class EnclosurePlugin(
             self._frontend,
             self._enclosure_settings,
             self._logger,
-            get_sensor_data=self.get_sensor_data,
         )
 
         # Init the plugin context
@@ -168,7 +168,6 @@ class EnclosurePlugin(
         # Init the API
         self._api = Api(
             self._plugin_context,
-            get_sensor_data=self.get_sensor_data,
             update_ui=self.update_ui,
             set_auto_startup_enabled=self.set_auto_startup_enabled,
             set_auto_shutdown_enabled=self.set_auto_shutdown_enabled,
@@ -318,43 +317,22 @@ class EnclosurePlugin(
         self._sensor_poller.read_all()
         self._control_loop.evaluate()
 
-    def handle_sensor_reading(self, index_id, sensor_reading):
+    def handle_sensor_reading(self, index_id, outcome):
         try:
             sensor = self._sensors.get(index_id)
         except LookupError:
             return
 
-        if sensor_reading.error is not None:
-            self.handle_sensor_failure(sensor.config, sensor_reading.error)
+        if outcome.error is not None:
+            self.handle_sensor_failure(sensor.config, outcome.error)
         else:
-            temp, hum, _ = self.convert_reading(sensor.config, sensor_reading.reading)
             self.handle_sensor_recovery(sensor.config)
-            self._mqtt.publish_sensor_reading(sensor.config.label, temp, hum)
+            with contextlib.suppress(LookupError):
+                reading = self._sensor_poller.get_reading(index_id)
+                self._mqtt.publish_sensor_reading(sensor.config.label, reading.temperature, reading.humidity)
 
         self.update_ui_readings()
         self._control_loop.evaluate_reading(index_id)
-
-    def get_sensor_data(self):
-        readings = self._sensor_poller.get_readings()
-
-        sensor_data = []
-        for sensor in self.get_sensor_inputs():
-            sensor_reading = readings.get(sensor.index_id)
-            if sensor_reading is None or sensor_reading.error is not None:
-                temp = hum = airquality = None
-            else:
-                temp, hum, airquality = self.convert_reading(sensor, sensor_reading.reading)
-
-            sensor_data.append(
-                {
-                    "index_id": sensor.index_id,
-                    "temperature": temp,
-                    "humidity": hum,
-                    "airquality": airquality,
-                },
-            )
-
-        return sensor_data
 
     def handle_sensor_failure(self, sensor, error):
         if sensor.index_id in self.failing_sensors:
@@ -437,7 +415,7 @@ class EnclosurePlugin(
         self.update_ui_targets()
 
     def update_ui_readings(self):
-        self._frontend.update_readings(self.get_sensor_data())
+        self._frontend.update_readings(self._sensor_poller.get_readings())
 
     def update_ui_filament_sensors(self):
         try:
@@ -513,17 +491,6 @@ class EnclosurePlugin(
             )
         except Exception:
             self._logger.exception("Error sending outputs status to the UI")
-
-    def convert_reading(self, sensor, reading):
-        temperature = reading.temperature
-        if temperature is not None and sensor.use_fahrenheit:
-            temperature = temperature * 1.8 + 32
-
-        temperature = None if temperature is None else round(float(temperature), 1)
-        humidity = None if reading.humidity is None else round(float(reading.humidity), 1)
-        airquality = None if reading.airquality is None else round(float(reading.airquality), 1)
-
-        return temperature, humidity, airquality
 
     def setup_gpio_mode(self):
         try:
@@ -951,14 +918,14 @@ class EnclosurePlugin(
         self._encdev_handler.handle(comm_instance, command, parameters)
 
     def get_graph_data(self, comm, parsed_temps):
-        sensor_data = {item["index_id"]: item for item in self.get_sensor_data()}
+        readings = self._sensor_poller.get_readings()
         for sensor in self.get_sensor_inputs():
-            reading = sensor_data.get(sensor.index_id)
+            reading = readings.get(sensor.index_id)
             if reading is None:
                 continue
-            if sensor.show_graph_temp and reading["temperature"] is not None:
-                parsed_temps[sensor.label] = (reading["temperature"], None)
-            if sensor.show_graph_humidity and reading["humidity"] is not None:
-                parsed_temps[sensor.label + " Humidity"] = (reading["humidity"], None)
+            if sensor.show_graph_temp and reading.temperature is not None:
+                parsed_temps[sensor.label] = (reading.temperature, None)
+            if sensor.show_graph_humidity and reading.humidity is not None:
+                parsed_temps[sensor.label + " Humidity"] = (reading.humidity, None)
 
         return parsed_temps

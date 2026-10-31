@@ -33,14 +33,14 @@ from .utils import to_int
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable, Iterable
+    from collections.abc import Iterable, Mapping
 
     from octoprint.printer import PrinterInterface
 
     from .actions import Actions
     from .automations import Automations
     from .core import Frontend, Settings
-    from .inputs import GpioInputs
+    from .inputs import ConvertedReading, GpioInputs, SensorPoller
     from .notifications import Notifications
     from .output_executor import OutputExecutor
     from .outputs import Outputs
@@ -150,6 +150,7 @@ class ControlLoop:
     """
 
     _gpio_inputs: GpioInputs
+    _sensor_poller: SensorPoller
     _outputs: Outputs
     _actions: Actions
     _automations: Automations
@@ -159,9 +160,6 @@ class ControlLoop:
     _frontend: Frontend
     _settings: Settings
     _logger: logging.Logger
-
-    _get_sensor_data: Callable[[], list[dict]]
-    """The function giving the last reading of each sensor."""
 
     _thermostats: dict[int, Thermostat]
     """The thermostats, by the id of their output."""
@@ -180,6 +178,7 @@ class ControlLoop:
     def __init__(
         self,
         gpio_inputs: GpioInputs,
+        sensor_poller: SensorPoller,
         outputs: Outputs,
         actions: Actions,
         automations: Automations,
@@ -189,13 +188,12 @@ class ControlLoop:
         frontend: Frontend,
         settings: Settings,
         logger: logging.Logger,
-        *,
-        get_sensor_data: Callable[[], list[dict]],
     ) -> None:
         """Set up the loop, with its thread ready to start.
 
         Args:
             gpio_inputs (GpioInputs): The GPIO inputs.
+            sensor_poller (SensorPoller): The poller of the temperature sensors.
             outputs (Outputs): The outputs.
             actions (Actions): The actions.
             automations (Automations): The automations.
@@ -205,11 +203,10 @@ class ControlLoop:
             frontend (Frontend): The frontend handler.
             settings (Settings): The plugin settings.
             logger (logging.Logger): The logger to write to.
-            get_sensor_data (Callable[[], list[dict]]): The function giving the last reading of each sensor, as a list
-                of dicts with the keys index_id, temperature, humidity and airquality.
 
         """
         self._gpio_inputs = gpio_inputs
+        self._sensor_poller = sensor_poller
         self._outputs = outputs
         self._actions = actions
         self._automations = automations
@@ -219,8 +216,6 @@ class ControlLoop:
         self._frontend = frontend
         self._settings = settings
         self._logger = logger.getChild("ControlLoop")
-
-        self._get_sensor_data = get_sensor_data
 
         self._thermostats = {}
         self._print_job_running = False
@@ -348,10 +343,10 @@ class ControlLoop:
         if isinstance(event, _Tick):
             self._decide_all()
         elif isinstance(event, _NewReading):
-            sensor_data = self._get_sensor_data()
-            self._decide_thermostats(sensor_data, event.index_id)
-            self._decide_temperature_rules(sensor_data, event.index_id)
-            self._decide_pwm_linked_temperature(sensor_data, event.index_id)
+            readings = self._sensor_poller.get_readings()
+            self._decide_thermostats(readings, event.index_id)
+            self._decide_temperature_rules(readings, event.index_id)
+            self._decide_pwm_linked_temperature(readings, event.index_id)
         elif isinstance(event, _GpioInputEdge):
             self._decide_gpio_input_edge(event.input_id, event.level)
         elif isinstance(event, _PrintJobEvent):
@@ -373,10 +368,10 @@ class ControlLoop:
             else:
                 thermostat.set_target(event.target)
                 self._frontend.update_targets(self.get_thermostat_targets())
-                self._decide_thermostats(self._get_sensor_data(), None)
+                self._decide_thermostats(self._sensor_poller.get_readings(), None)
         elif isinstance(event, _WaitForTemperature):
             self._waiting_temperature.add(event.index_id)
-            self._decide_thermostats(self._get_sensor_data(), None)
+            self._decide_thermostats(self._sensor_poller.get_readings(), None)
         elif isinstance(event, _StopThermostats):
             self._stop_thermostats()
         elif isinstance(event, _UpdateUiTargets):
@@ -439,22 +434,22 @@ class ControlLoop:
             self._logger.exception("Error applying the levels of the GPIO inputs")
 
     def _decide_all(self) -> None:
-        sensor_data = self._get_sensor_data()
+        readings = self._sensor_poller.get_readings()
 
-        self._decide_thermostats(sensor_data, None)
-        self._decide_pwm_linked_temperature(sensor_data, None)
+        self._decide_thermostats(readings, None)
+        self._decide_pwm_linked_temperature(readings, None)
 
-    def _decide_thermostats(self, sensor_data: list[dict], sensor_id: int | None) -> None:
+    def _decide_thermostats(self, readings: Mapping[int, ConvertedReading], sensor_id: int | None) -> None:
         try:
             for index_id, thermostat in self._thermostats.items():
                 # If we received a temperature event, check if it is from the sensor linked to this thermostat
                 if sensor_id is not None and thermostat.config.linked_temp_sensor != sensor_id:
                     continue
 
-                # Get linked sensor data
-                linked_sensor_data = self._get_linked_sensor_data(sensor_data, thermostat.config.linked_temp_sensor)
-                temperature = None if linked_sensor_data is None else linked_sensor_data["temperature"]
-                humidity = None if linked_sensor_data is None else linked_sensor_data["humidity"]
+                # Get the reading of the linked sensor
+                linked_reading = readings.get(thermostat.config.linked_temp_sensor)
+                temperature = None if linked_reading is None else linked_reading.temperature
+                humidity = None if linked_reading is None else linked_reading.humidity
 
                 # Turn a heater off above its maximum temperature
                 if thermostat.is_above_max_temp(temperature):
@@ -492,7 +487,7 @@ class ControlLoop:
             self._waiting_temperature.clear()
             self._printer.resume_print()
 
-    def _decide_temperature_rules(self, sensor_data: list[dict], sensor_id: int) -> None:
+    def _decide_temperature_rules(self, readings: Mapping[int, ConvertedReading], sensor_id: int) -> None:
         for rule in self._automations.get_all(RuleAutomation):
             # Get the automation trigger
             trigger = rule.trigger
@@ -501,9 +496,9 @@ class ControlLoop:
             if not isinstance(trigger, TemperatureTrigger) or trigger.config.linked_temp_sensor != sensor_id:
                 continue
 
-            # Get linked sensor data
-            linked_data = self._get_linked_sensor_data(sensor_data, trigger.config.linked_temp_sensor)
-            temperature = None if linked_data is None else linked_data["temperature"]
+            # Get the reading of the linked sensor
+            linked_reading = readings.get(trigger.config.linked_temp_sensor)
+            temperature = None if linked_reading is None else linked_reading.temperature
 
             # React if the automation trigger matches the temperature
             if trigger.matches_temperature(temperature):
@@ -538,7 +533,7 @@ class ControlLoop:
         except Exception:
             self._logger.exception("Error handling an automation on the temperature above %s", threshold)
 
-    def _decide_pwm_linked_temperature(self, sensor_data: list[dict], sensor_id: int | None) -> None:
+    def _decide_pwm_linked_temperature(self, readings: Mapping[int, ConvertedReading], sensor_id: int | None) -> None:
         # The curve drives the PWM only while a print job is on, paused included
         if not self._print_job_running:
             return
@@ -552,9 +547,9 @@ class ControlLoop:
                 # Get the automation output
                 output_id = automation.config.output
 
-                # Get linked sensor data
-                linked_data = self._get_linked_sensor_data(sensor_data, automation.config.linked_temp_sensor)
-                temperature = None if linked_data is None else linked_data["temperature"]
+                # Get the reading of the linked sensor
+                linked_reading = readings.get(automation.config.linked_temp_sensor)
+                temperature = None if linked_reading is None else linked_reading.temperature
 
                 # Calculate the new duty cycle
                 calculated_duty = automation.get_duty_cycle(temperature)
@@ -678,7 +673,7 @@ class ControlLoop:
                 if thermostat is not None:
                     thermostat.set_target(0.0)
         self._frontend.update_targets(self.get_thermostat_targets())
-        self._decide_thermostats(self._get_sensor_data(), None)
+        self._decide_thermostats(self._sensor_poller.get_readings(), None)
 
     def _control_output(self, reaction: OutputControlReaction) -> bool:
         config = reaction.config
@@ -688,6 +683,3 @@ class ControlLoop:
             return False
         self._output_executor.switch_output(config.controlled_io, config.controlled_io_set_state)
         return True
-
-    def _get_linked_sensor_data(self, sensor_data: list[dict], linked_id: int) -> dict | None:
-        return next((data for data in sensor_data if data["index_id"] == linked_id), None)

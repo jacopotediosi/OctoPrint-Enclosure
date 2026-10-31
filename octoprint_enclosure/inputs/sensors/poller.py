@@ -16,22 +16,36 @@ READ_INTERVAL_SECONDS = 10
 READING_MAX_AGE_SECONDS = 30
 
 
-class StaleReadingError(Exception):
-    """The error of a sensor that stopped answering."""
-
-
 @dataclass(frozen=True)
-class SensorReading:
+class ReadingOutcome:
     """The outcome of reading a sensor."""
 
     reading: Reading | None
-    """The values read, or None if there is no current value."""
+    """The values read, or None if the sensor couldn't be read."""
 
     error: Exception | None
-    """Why there is no current value, because the sensor couldn't be read or its last reading is too old, or None."""
+    """Why the sensor couldn't be read, or None."""
 
     time: float
     """When the sensor was read, as a monotonic time."""
+
+
+@dataclass(frozen=True)
+class ConvertedReading:
+    """A reading of a temperature sensor converted to the unit of its input and rounded."""
+
+    temperature: float | None
+    """The temperature, in the unit of the input, or None without a value."""
+
+    humidity: float | None
+    """The relative humidity, in percent, or None without a value."""
+
+    airquality: float | None
+    """The air quality index, or None without a value."""
+
+
+def _round(value: float | None) -> float | None:
+    return None if value is None else round(float(value), 1)
 
 
 class SensorPoller:
@@ -40,16 +54,16 @@ class SensorPoller:
     _sensors: Sensors
     """The sensors class."""
 
-    _on_reading: Callable[[int, SensorReading], object]
-    """The function called after each reading, with the id of the input and the reading outcome."""
+    _on_reading: Callable[[int, ReadingOutcome], object]
+    """The function called after each reading, with the id of the input and the outcome of the reading."""
 
     _logger: logging.Logger
 
     _started: bool
     """Whether the sensor poller has been started."""
 
-    _readings: dict[int, SensorReading]
-    """The last reading of each sensor, by the id of its input."""
+    _outcomes: dict[int, ReadingOutcome]
+    """The outcome of the last reading of each sensor, by the id of its input."""
 
     _polled: dict[int, Sensor]
     """The sensor to read for each input, by the id of the input."""
@@ -63,15 +77,15 @@ class SensorPoller:
     def __init__(
         self,
         sensors: Sensors,
-        on_reading: Callable[[int, SensorReading], object],
+        on_reading: Callable[[int, ReadingOutcome], object],
         logger: logging.Logger,
     ) -> None:
         """Set up the poller, with no sensor until some settings are loaded.
 
         Args:
             sensors (Sensors): The sensors.
-            on_reading (Callable[[int, SensorReading], object]): The function called after each reading, on the
-                thread that read the sensor, with the id of the input and the outcome.
+            on_reading (Callable[[int, ReadingOutcome], object]): The function called after each reading, on the
+                thread that read the sensor, with the id of the input and the outcome of the reading.
             logger (logging.Logger): The logger to write to.
 
         """
@@ -80,7 +94,7 @@ class SensorPoller:
         self._logger = logger.getChild("SensorPoller")
 
         self._started = False
-        self._readings = {}
+        self._outcomes = {}
         self._polled = {}
         self._stale = set()
         self._lock = threading.Lock()
@@ -101,7 +115,7 @@ class SensorPoller:
                 if sensors.get(index_id) is sensor:
                     continue
                 del self._polled[index_id]
-                self._readings.pop(index_id, None)
+                self._outcomes.pop(index_id, None)
                 self._stale.discard(index_id)
 
             # Handle new sensors
@@ -126,38 +140,60 @@ class SensorPoller:
         for index_id, sensor in polled.items():
             self._read(index_id, sensor)
 
-    def get_readings(self) -> dict[int, SensorReading]:
-        """Get the last reading of each sensor.
+    def get_reading(self, index_id: int) -> ConvertedReading:
+        """Get the last reading of an input.
+
+        Args:
+            index_id (int): The id of the input.
 
         Returns:
-            dict[int, SensorReading]: The last reading of each sensor read at least once, by the id of its input.
+            ConvertedReading: The reading, with all its values None if the last reading of the sensor failed.
+
+        Raises:
+            LookupError: If the input has no sensor.
+
+        """
+        with self._lock:
+            sensor = self._polled.get(index_id)
+            if sensor is None:
+                msg = f"Input {index_id} has no sensor"
+                raise LookupError(msg)
+            return self._get_reading(index_id, sensor, time.monotonic())
+
+    def get_readings(self) -> dict[int, ConvertedReading]:
+        """Get the last reading of each input with a sensor.
+
+        Returns:
+            dict[int, ConvertedReading]: The reading of each input, by its id, with all its values None if the last
+                reading of the sensor failed.
 
         """
         with self._lock:
             now = time.monotonic()
-            readings: dict[int, SensorReading] = {}
+            return {index_id: self._get_reading(index_id, sensor, now) for index_id, sensor in self._polled.items()}
 
-            for index_id, last_reading in self._readings.items():
-                age = now - last_reading.time
+    def _get_reading(self, index_id: int, sensor: Sensor, now: float) -> ConvertedReading:
+        outcome = self._outcomes.get(index_id)
+        reading = None if outcome is None else outcome.reading
 
-                if age <= READING_MAX_AGE_SECONDS:
-                    # Reading is not stale
-                    readings[index_id] = last_reading
-                    continue
+        if outcome is not None and now - outcome.time > READING_MAX_AGE_SECONDS:
+            reading = None
+            if index_id not in self._stale:
+                # Reading is stale for the first time
+                self._stale.add(index_id)
+                self._logger.warning(
+                    "The sensor of input %s stopped answering: its last reading is %.0f s old",
+                    index_id,
+                    now - outcome.time,
+                )
 
-                if index_id not in self._stale:
-                    # Reading is stale for the first time
-                    self._stale.add(index_id)
-                    self._logger.warning(
-                        "The sensor of input %s stopped answering: its last reading is %.0f s old",
-                        index_id,
-                        age,
-                    )
+        if reading is None:
+            return ConvertedReading(None, None, None)
 
-                error = StaleReadingError(f"The last reading is {age:.0f} s old")
-                readings[index_id] = SensorReading(None, error, last_reading.time)
-
-            return readings
+        temperature = reading.temperature
+        if temperature is not None and sensor.config.use_fahrenheit:
+            temperature = temperature * 1.8 + 32
+        return ConvertedReading(_round(temperature), _round(reading.humidity), _round(reading.airquality))
 
     def _start_reading(self, index_id: int, sensor: Sensor) -> None:
         polled_position = list(self._polled).index(index_id)
@@ -194,20 +230,20 @@ class SensorPoller:
             reading = sensor.read()
         except Exception as error:
             self._logger.debug("Couldn't read the sensor of input %s: %s", index_id, error)
-            sensor_reading = SensorReading(None, error, time.monotonic())
+            outcome = ReadingOutcome(None, error, time.monotonic())
         else:
             self._logger.debug("Read the sensor of input %s: %s", index_id, reading)
-            sensor_reading = SensorReading(reading, None, time.monotonic())
+            outcome = ReadingOutcome(reading, None, time.monotonic())
 
-        # Save the reading
+        # Save the outcome
         with self._lock:
             # A sensor gone or replaced meanwhile leaves no reading behind
             if self._polled.get(index_id) is not sensor:
                 return
 
-            self._readings[index_id] = sensor_reading
+            self._outcomes[index_id] = outcome
 
-            answers_again = index_id in self._stale and sensor_reading.error is None
+            answers_again = index_id in self._stale and outcome.error is None
             self._stale.discard(index_id)
 
         # Notify if a stale reading answers again
@@ -216,6 +252,6 @@ class SensorPoller:
 
         # Call the reading callback
         try:
-            self._on_reading(index_id, sensor_reading)
+            self._on_reading(index_id, outcome)
         except Exception:
             self._logger.exception("Error handling a reading of the sensor of input %s", index_id)

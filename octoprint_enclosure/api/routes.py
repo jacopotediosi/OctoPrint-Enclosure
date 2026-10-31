@@ -10,7 +10,7 @@ from flask import jsonify, make_response, request
 from werkzeug.exceptions import BadRequest
 
 from octoprint_enclosure.actions import Action, ActionError, GcodeAction, PrinterAction, ShellAction
-from octoprint_enclosure.inputs import PullResistor
+from octoprint_enclosure.inputs import ConvertedReading, PullResistor
 from octoprint_enclosure.outputs import (
     LedstripOutput,
     NeopixelDirectOutput,
@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from octoprint_enclosure.control_loop import ControlLoop
     from octoprint_enclosure.core import PluginContext, Settings
     from octoprint_enclosure.hardware import GpioBackend
+    from octoprint_enclosure.inputs import SensorPoller
     from octoprint_enclosure.output_executor import OutputExecutor
     from octoprint_enclosure.outputs import ColorOutput, Outputs
     from octoprint_enclosure.outputs.switch import SwitchOutput
@@ -104,10 +105,8 @@ class Api(octoprint.plugin.BlueprintPlugin):
     _actions: Actions
     _output_executor: OutputExecutor
     _control_loop: ControlLoop
+    _sensor_poller: SensorPoller
     _logger: logging.Logger
-
-    _get_sensor_data: Callable[[], list[dict]]
-    """The function returning the readings of the sensors."""
 
     _update_ui: Callable[[], None]
     """The function refreshing the UI."""
@@ -128,7 +127,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
         self,
         plugin_context: PluginContext,
         *,
-        get_sensor_data: Callable[[], list[dict]],
         update_ui: Callable[[], None],
         set_auto_startup_enabled: Callable[[int, bool], None],
         set_auto_shutdown_enabled: Callable[[int, bool], None],
@@ -138,7 +136,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
 
         Args:
             plugin_context (PluginContext): The plugin context.
-            get_sensor_data (Callable[[], list[dict]]): The function returning the readings of the sensors.
             update_ui (Callable[[], None]): The function refreshing the UI.
             set_auto_startup_enabled (Callable[[int, bool], None]): The function enabling or disabling the auto
                 startup of an output, with the id of the output and whether to enable it.
@@ -156,9 +153,9 @@ class Api(octoprint.plugin.BlueprintPlugin):
         self._actions = plugin_context.actions
         self._output_executor = plugin_context.output_executor
         self._control_loop = plugin_context.control_loop
+        self._sensor_poller = plugin_context.sensor_poller
         self._logger = plugin_context.logger.getChild("Api")
 
-        self._get_sensor_data = get_sensor_data
         self._update_ui = update_ui
         self._set_auto_startup_enabled = set_auto_startup_enabled
         self._set_auto_shutdown_enabled = set_auto_shutdown_enabled
@@ -236,9 +233,12 @@ class Api(octoprint.plugin.BlueprintPlugin):
                     payload["controlled_io"] = automation_settings["action"]
             else:
                 payload["action_type"] = automation_settings["reaction_type"]
-        reading = next((item for item in self._get_sensor_data() if to_int(item["index_id"]) == input_id), {})
-        payload["temp_sensor_temp"] = "" if reading.get("temperature") is None else reading["temperature"]
-        payload["temp_sensor_humidity"] = "" if reading.get("humidity") is None else reading["humidity"]
+        try:
+            reading = self._sensor_poller.get_reading(input_id)
+        except LookupError:
+            reading = ConvertedReading(None, None, None)
+        payload["temp_sensor_temp"] = "" if reading.temperature is None else reading.temperature
+        payload["temp_sensor_humidity"] = "" if reading.humidity is None else reading.humidity
         return jsonify(payload)
 
     @octoprint.plugin.BlueprintPlugin.route("/temperature/<int:output_id>", methods=["PATCH"])

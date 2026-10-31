@@ -3,8 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from octoprint.plugin.core import PluginManager
     from typing_extensions import Literal
+
+    from octoprint_enclosure.inputs import ConvertedReading
 
 
 class Frontend:
@@ -21,8 +25,17 @@ class Frontend:
         self._plugin_manager = plugin_manager
         self._plugin_identifier = plugin_identifier
 
-    def update_readings(self, sensor_data: list[dict]) -> None:
-        """Update the latest readings of the temperature sensors."""
+    def update_readings(self, readings: Mapping[int, ConvertedReading]) -> None:
+        """Update the latest readings of the inputs with a temperature sensor, by the id of the input."""
+        sensor_data = [
+            {
+                "index_id": index_id,
+                "temperature": reading.temperature,
+                "humidity": reading.humidity,
+                "airquality": reading.airquality,
+            }
+            for index_id, reading in readings.items()
+        ]
         self._send({"sensor_data": sensor_data})
 
     def update_targets(self, targets: dict[int, float]) -> None:
