@@ -5,9 +5,7 @@ from dataclasses import dataclass
 from smbus2 import SMBus, i2c_msg
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, HexInt
-
-from .base import Reading, Sensor, SensorInputConfig
+from .base import I2cSensorConfig, Reading, Sensor
 
 INITIALIZE_COMMAND = 0xE1
 INITIALIZE_PARAMETERS = (0x08, 0x00)  # Bit 3 enables the calibration
@@ -21,14 +19,8 @@ MEASURE_RESPONSE_BYTES = 1 + 2 * MEASURE_RESPONSE_HUM_TEMP_BITS // 8
 
 
 @dataclass(frozen=True)
-class Aht10Config(SensorInputConfig):
+class Aht10Config(I2cSensorConfig):
     """The configuration of an AHT10 sensor."""
-
-    temp_sensor_address: HexInt = REQUIRED
-    """The I2C address of the sensor."""
-
-    temp_sensor_i2cbus: int = REQUIRED
-    """The number of the I2C bus."""
 
 
 class Aht10Sensor(Sensor[Aht10Config]):

@@ -25,7 +25,7 @@ from .core import Frontend, PluginContext, Scheduler, Settings
 from .core.migrations import migrate_settings
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
-from .inputs import GpioInputs, InputType, PullResistor, SensorError, SensorPoller, Sensors
+from .inputs import GpioInputs, InputType, SensorError, SensorPoller, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
 from .output_executor import OutputExecutor
@@ -103,7 +103,7 @@ class EnclosurePlugin(
             self._i2c = smbus2
 
         # Init inputs, outputs, actions and automations
-        self._sensors = Sensors(self._logger, dummy=self.development_mode)
+        self._sensors = Sensors(self._gpio, self._logger, dummy=self.development_mode)
         self._gpio_inputs = GpioInputs(self._gpio, self.handle_gpio_input, self._logger)
         self._outputs = Outputs(self._gpio, self._i2c, self._logger)
         self._actions = Actions(self._printer, self._frontend, self._logger)
@@ -202,7 +202,8 @@ class EnclosurePlugin(
         self._automations.load(self.automations)
         self.warn_missing_linked_sensors()
 
-        self.setup_input_pins()
+        self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
+        self._sensors.setup_pins()
         self.start_outpus_with_server()
 
         self._sensor_poller.start()
@@ -535,21 +536,6 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error setting up GPIO mode")
 
-    def setup_input_pins(self):
-        try:
-            self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
-
-            pull_resistors = {
-                PullResistor.UP: self._gpio.PUD_UP,
-                PullResistor.DOWN: self._gpio.PUD_DOWN,
-                PullResistor.OFF: self._gpio.PUD_OFF,
-            }
-            for sensor in self.get_sensor_inputs():
-                pull_resistor = pull_resistors[sensor.input_pull_resistor]
-                self._gpio.setup(sensor.gpio_pin, self._gpio.IN, pull_up_down=pull_resistor)
-        except Exception:
-            self._logger.exception("Error configuring GPIO")
-
     def handle_gpio_input(self, input_id, level):
         self._control_loop.evaluate_gpio_input_edge(input_id, level)
 
@@ -794,17 +780,15 @@ class EnclosurePlugin(
         self.automations = self._enclosure_settings.automations
         self._logger.debug("New automations: %s", self.automations)
 
-        # Update the sensor poller
-        self._sensor_poller.load(self.get_sensor_inputs_settings())
-
         # Set the GPIO mode
         self.setup_gpio_mode()
 
-        # Release the pins of the GPIO inputs
-        try:
-            self._gpio_inputs.clear()
-        except Exception:
-            self._logger.exception("Error clearing GPIO")
+        # Release the pins of the inputs
+        self._gpio_inputs.clear()
+        self._sensors.clear()
+
+        # Update the sensor poller
+        self._sensor_poller.load(self.get_sensor_inputs_settings())
 
         # Update outputs
         self._output_executor.load_outputs(self.rpi_outputs, wait=True)
@@ -820,9 +804,10 @@ class EnclosurePlugin(
         self._automations.load(self.automations)
         self.warn_missing_linked_sensors()
 
-        # Reload the GPIO inputs and set up the inputs pins
+        # Reload the GPIO inputs and set up the pins of the inputs
         self._gpio_inputs.load(self.get_gpio_inputs_settings())
-        self.setup_input_pins()
+        self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
+        self._sensors.setup_pins()
 
         # Take the decisions again on the new settings
         self._control_loop.evaluate_settings()

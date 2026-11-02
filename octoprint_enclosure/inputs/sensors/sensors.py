@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Iterable
 
+    from octoprint_enclosure.hardware import GpioBackend
+
     from .base import Reading
 
 _SensorT = TypeVar("_SensorT", bound=Sensor)
@@ -26,8 +28,8 @@ class _InvalidSensor(Sensor[SensorInputConfig]):
     _reason: str
     """Why the sensor can't be set up."""
 
-    def __init__(self, reason: str, config: SensorInputConfig, logger: logging.Logger) -> None:
-        super().__init__(config, logger)
+    def __init__(self, reason: str, config: SensorInputConfig, gpio: GpioBackend, logger: logging.Logger) -> None:
+        super().__init__(config, gpio, logger)
         self._reason = reason
 
     @override
@@ -37,6 +39,9 @@ class _InvalidSensor(Sensor[SensorInputConfig]):
 
 class Sensors:
     """The temperature sensors of the inputs."""
+
+    _gpio: GpioBackend
+    """The GPIO backend."""
 
     _logger: logging.Logger
 
@@ -49,14 +54,16 @@ class Sensors:
     _lock: threading.Lock
     """Held by every access to the sensors."""
 
-    def __init__(self, logger: logging.Logger, *, dummy: bool) -> None:
+    def __init__(self, gpio: GpioBackend, logger: logging.Logger, *, dummy: bool) -> None:
         """Set up the sensors of the inputs, with none until some settings are loaded.
 
         Args:
+            gpio (GpioBackend): The GPIO backend, with the API of RPi.GPIO.
             logger (logging.Logger): The logger to write to.
             dummy (bool): Whether every sensor is replaced by the dummy sensor.
 
         """
+        self._gpio = gpio
         self._logger = logger.getChild("Sensors")
         self._dummy = dummy
         self._sensors = {}
@@ -144,6 +151,22 @@ class Sensors:
         msg = f"Input {index_id} has no dummy sensor"
         raise LookupError(msg)
 
+    def setup_pins(self) -> None:
+        """Set up the pins of the sensors."""
+        for index_id, sensor in self.get_all().items():
+            try:
+                sensor.setup()
+            except Exception:
+                self._logger.exception("Error setting up the pins of sensor %s", index_id)
+
+    def clear(self) -> None:
+        """Release the pins of the sensors."""
+        for pin in dict.fromkeys(pin for sensor in self.get_all().values() for pin in sensor.gpio_pins):
+            try:
+                self._gpio.cleanup(pin)
+            except Exception:
+                self._logger.exception("Error releasing pin %s", pin)
+
     def _create_sensor(
         self,
         sensor_class: type[_SensorT],
@@ -160,12 +183,13 @@ class Sensors:
         if isinstance(sensor, sensor_class) and sensor.config == sensor_config:
             return sensor
 
-        return sensor_class(sensor_config, self._get_sensor_logger(sensor_class, input_config.index_id))
+        logger = self._get_sensor_logger(sensor_class, input_config.index_id)
+        return sensor_class(sensor_config, self._gpio, logger)
 
     def _create_invalid_sensor(self, input_config: SensorInputConfig, reason: str) -> _InvalidSensor:
         logger = self._get_sensor_logger(_InvalidSensor, input_config.index_id)
         logger.warning("%s", reason)
-        return _InvalidSensor(reason, input_config, logger)
+        return _InvalidSensor(reason, input_config, self._gpio, logger)
 
     def _get_sensor_logger(self, sensor_class: type[Sensor], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{sensor_class.__name__}.{index_id}")

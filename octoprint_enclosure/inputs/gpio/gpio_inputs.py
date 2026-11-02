@@ -115,39 +115,42 @@ class GpioInputs:
             edges (Mapping[int, Collection[Edge]]): The edges to detect on each input, by the id of the input. The edges
                 of an input not listed aren't detected.
 
-        Raises:
-            Exception: If a pin can't be set up, or its edges can't be detected.
-
         """
         pin_edges: dict[int, set[Edge]] = {}
         for index_id, gpio_input in self._get_valid_gpio_inputs():
-            gpio_input.setup_pin()
+            try:
+                gpio_input.setup_pin()
+            except Exception as error:
+                self._logger.exception("Error setting up input %s", index_id)
+                self._gpio_inputs[index_id] = _InvalidGpioInput(f"Can't set up the pin: {error}")
+                continue
             pin_edges.setdefault(gpio_input.config.gpio_pin, set()).update(edges.get(index_id, ()))
 
-        gpio_edges = {
-            frozenset({Edge.RISE}): self._gpio.RISING,
-            frozenset({Edge.FALL}): self._gpio.FALLING,
-            frozenset({Edge.RISE, Edge.FALL}): self._gpio.BOTH,
-        }
         for pin, detected_edges in pin_edges.items():
             if not detected_edges:
                 continue
 
-            gpio_edge = gpio_edges[frozenset(detected_edges)]
-            self._logger.info("Adding GPIO event detect on pin %s with edge: %s", pin, gpio_edge)
-            self._gpio.add_event_detect(pin, gpio_edge, callback=self._handle_edge, bouncetime=BOUNCE_TIME_MS)
+            try:
+                gpio_edges = {
+                    frozenset({Edge.RISE}): self._gpio.RISING,
+                    frozenset({Edge.FALL}): self._gpio.FALLING,
+                    frozenset({Edge.RISE, Edge.FALL}): self._gpio.BOTH,
+                }
+                gpio_edge = gpio_edges[frozenset(detected_edges)]
+                self._logger.info("Adding GPIO event detect on pin %s with edge: %s", pin, gpio_edge)
+                self._gpio.add_event_detect(pin, gpio_edge, callback=self._handle_edge, bouncetime=BOUNCE_TIME_MS)
+            except Exception:
+                self._logger.exception("Error detecting the edges of pin %s", pin)
 
     def clear(self) -> None:
-        """Stop detecting the edges, and release the pins of the inputs.
-
-        Raises:
-            Exception: If a pin can't be released.
-
-        """
+        """Stop detecting the edges, and release the pins of the inputs."""
         for pin in dict.fromkeys(gpio_input.config.gpio_pin for gpio_input in self.get_all()):
             with contextlib.suppress(Exception):
                 self._gpio.remove_event_detect(pin)
-            self._gpio.cleanup(pin)
+            try:
+                self._gpio.cleanup(pin)
+            except Exception:
+                self._logger.exception("Error releasing pin %s", pin)
 
     def _get_valid_gpio_inputs(self) -> list[tuple[int, GpioInput]]:
         return [

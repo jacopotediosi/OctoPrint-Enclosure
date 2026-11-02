@@ -6,19 +6,12 @@ import bme280
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, HexInt
-
-from .base import Reading, Sensor, SensorInputConfig
-
-BUS = 1
+from .base import I2cSensorConfig, Reading, Sensor
 
 
 @dataclass(frozen=True)
-class Bme280Config(SensorInputConfig):
+class Bme280Config(I2cSensorConfig):
     """The configuration of a BME280 sensor."""
-
-    temp_sensor_address: HexInt = REQUIRED
-    """The I2C address of the sensor."""
 
 
 class Bme280Sensor(Sensor[Bme280Config]):
@@ -28,7 +21,7 @@ class Bme280Sensor(Sensor[Bme280Config]):
 
     @override
     def read(self) -> Reading:
-        with SMBus(BUS) as bus:
+        with SMBus(self.config.temp_sensor_i2cbus) as bus:
             calibration_params = bme280.load_calibration_params(bus, self.config.temp_sensor_address)
             readings = bme280.sample(bus, self.config.temp_sensor_address, calibration_params)
 

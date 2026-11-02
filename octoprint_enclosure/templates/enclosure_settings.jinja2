@@ -90,8 +90,9 @@
                 </div>
                 {{ select_control_group("temp_sensor_address", _("Sensor Address (CE Select)"), [("0", "CE0"), ("1", "CE1")], "CE select: CE0 on GPIO 8 or CE1 on GPIO 7", placeholder="Select CE") }}
             </div>
-            <div data-bind="ifnot: temp_sensor_type() == 'rpi' || temp_sensor_type() == '18b20' || temp_sensor_type() == 'si7021' || temp_sensor_type() == 'bme280' || temp_sensor_type() == 'am2320' || temp_sensor_type() == 'tmp102' || temp_sensor_type() == 'max31855' || temp_sensor_type() == 'mcp9808' || temp_sensor_type() == 'temp_raw_i2c' || temp_sensor_type() == 'hum_raw_i2c'">
-                {{ text_control_group("gpio_pin", _("Sensor Pin"), "GPIO pin for temperature sensor, recommended to use 4 as DS18B20 only works on pin 4") }}
+            <div data-bind="if: temp_sensor_type() == '11' || temp_sensor_type() == '22' || temp_sensor_type() == '2302'">
+                {{ text_control_group("gpio_pin", _("Sensor Pin"), "GPIO pin the data line of the sensor is connected to") }}
+                {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("", "None"), ("input_pull_up", "Input Pullup")], "Whether to enable the built-in pullup for this temperature sensor. If set, then no external pullup is needed.") }}
             </div>
         </div>
         <div data-bind="if: input_type() == 'gpio'">

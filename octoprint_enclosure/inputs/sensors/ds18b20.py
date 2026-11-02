@@ -8,20 +8,20 @@ from subprocess import run
 
 from typing_extensions import override
 
-from .base import Reading, Sensor, SensorError, SensorInputConfig
+from .base import PinSensor, PinSensorConfig, Reading, SensorError
 
 DEVICES_DIR = Path("/sys/bus/w1/devices/")
 
 
 @dataclass(frozen=True)
-class Ds18b20Config(SensorInputConfig):
+class Ds18b20Config(PinSensorConfig):
     """The configuration of a DS18B20 sensor."""
 
     ds18b20_serial: str = ""
     """The serial number of the sensor, such as 28-0123456789ab."""
 
 
-class Ds18b20Sensor(Sensor[Ds18b20Config]):
+class Ds18b20Sensor(PinSensor[Ds18b20Config]):
     """A DS18B20 temperature sensor, read through the 1-Wire driver of the kernel."""
 
     config_class = Ds18b20Config

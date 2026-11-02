@@ -5,11 +5,7 @@ from dataclasses import dataclass
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, HexInt
-
-from .base import Reading, Sensor, SensorInputConfig
-
-BUS = 1
+from .base import I2cSensorConfig, Reading, Sensor
 
 TEMPERATURE_REGISTER = 0x00
 TEMPERATURE_BYTES = 2
@@ -17,11 +13,8 @@ TEMPERATURE_UNUSED_BITS = 4
 
 
 @dataclass(frozen=True)
-class Tmp102Config(SensorInputConfig):
+class Tmp102Config(I2cSensorConfig):
     """The configuration of a TMP102 sensor."""
-
-    temp_sensor_address: HexInt = REQUIRED
-    """The I2C address of the sensor."""
 
     def __post_init__(self) -> None:
         """Check the address.
@@ -43,7 +36,7 @@ class Tmp102Sensor(Sensor[Tmp102Config]):
     @override
     def read(self) -> Reading:
         address = self.config.temp_sensor_address
-        with SMBus(BUS) as bus:
+        with SMBus(self.config.temp_sensor_i2cbus) as bus:
             # Receive the temperature
             temperature_bytes = bus.read_i2c_block_data(address, TEMPERATURE_REGISTER, TEMPERATURE_BYTES)
 

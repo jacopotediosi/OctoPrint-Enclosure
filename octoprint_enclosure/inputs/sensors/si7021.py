@@ -6,9 +6,7 @@ from dataclasses import dataclass
 from smbus2 import SMBus, i2c_msg
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, HexInt
-
-from .base import Reading, Sensor, SensorInputConfig
+from .base import I2cSensorConfig, Reading, Sensor
 
 MEASURE_HUMIDITY_COMMAND = 0xF5
 MEASURE_TEMPERATURE_COMMAND = 0xF3
@@ -21,14 +19,8 @@ TEMP_HUM_BYTES = 2
 
 
 @dataclass(frozen=True)
-class Si7021Config(SensorInputConfig):
+class Si7021Config(I2cSensorConfig):
     """The configuration of an SI7021 sensor."""
-
-    temp_sensor_address: HexInt = REQUIRED
-    """The I2C address of the sensor."""
-
-    temp_sensor_i2cbus: int = REQUIRED
-    """The number of the I2C bus."""
 
 
 class Si7021Sensor(Sensor[Si7021Config]):
