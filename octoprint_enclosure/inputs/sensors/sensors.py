@@ -181,6 +181,7 @@ class Sensors:
         # An input whose settings didn't change keeps its sensor, with its state
         sensor = self._sensors.get(input_config.index_id)
         if isinstance(sensor, sensor_class) and sensor.config == sensor_config:
+            sensor.config = sensor_config
             return sensor
 
         logger = self._get_sensor_logger(sensor_class, input_config.index_id)

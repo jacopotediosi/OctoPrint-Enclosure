@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from octoprint_enclosure.core import REQUIRED, BaseConfig
@@ -31,5 +31,5 @@ class InputConfig(BaseConfig):
     input_type: InputType = REQUIRED
     """The type of the input."""
 
-    label: str = ""
+    label: str = field(default="", compare=False)
     """The name of the input."""

@@ -204,6 +204,7 @@ class Outputs:
         # An output whose settings didn't change is kept, with its state and the hardware it drives
         output = self._outputs.get(output_config.index_id)
         if isinstance(output, output_class) and output.config == config:
+            output.config = config
             return output
 
         logger = self._get_output_logger(output_class, output_config.index_id)

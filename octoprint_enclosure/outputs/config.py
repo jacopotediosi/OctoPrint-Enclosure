@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from octoprint_enclosure.core import REQUIRED, BaseConfig
@@ -27,11 +27,11 @@ class OutputConfig(BaseConfig):
     output_type: OutputType = REQUIRED
     """The type of the output."""
 
-    label: str = ""
+    label: str = field(default="", compare=False)
     """The name of the output."""
 
-    hide_btn_ui: bool = False
+    hide_btn_ui: bool = field(default=False, compare=False)
     """Whether the button of the output is hidden in the Enclosure tab."""
 
-    show_on_navbar: bool = False
+    show_on_navbar: bool = field(default=False, compare=False)
     """Whether the output has a button in the navbar."""

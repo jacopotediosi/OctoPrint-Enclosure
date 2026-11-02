@@ -178,6 +178,7 @@ class GpioInputs:
         # An input whose settings didn't change is kept as it is
         gpio_input = self._gpio_inputs.get(index_id)
         if isinstance(gpio_input, GpioInput) and gpio_input.config == gpio_config:
+            gpio_input.config = gpio_config
             return gpio_input
 
         return GpioInput(gpio_config, self._gpio, self._get_gpio_input_logger(index_id))

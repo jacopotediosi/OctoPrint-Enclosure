@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from typing_extensions import override
@@ -52,10 +52,10 @@ class SensorInputConfig(InputConfig):
     temp_sensor_type: str = ""
     """The type of the sensor."""
 
-    show_graph_temp: bool = False
+    show_graph_temp: bool = field(default=False, compare=False)
     """Whether the temperature is shown in the temperature graph."""
 
-    show_graph_humidity: bool = False
+    show_graph_humidity: bool = field(default=False, compare=False)
     """Whether the humidity is shown in the temperature graph."""
 
 

@@ -388,7 +388,7 @@ class ControlLoop:
             # Keep the thermostat of an output the settings didn't change, with its target
             index_id = output.config.index_id
             thermostat = self._thermostats.get(index_id)
-            if thermostat is None or thermostat.config is not output.config:
+            if thermostat is None or thermostat.config != output.config:
                 thermostat = Thermostat(output.config)
             thermostats[index_id] = thermostat
 
