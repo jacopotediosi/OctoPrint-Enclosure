@@ -5,10 +5,11 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig
+from octoprint_enclosure.core import REQUIRED
 from octoprint_enclosure.utils import clamp, get_gcode_param, to_int
 
 from .base import Output, OutputError
+from .config import OutputConfig
 
 if TYPE_CHECKING:
     import logging
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class PwmConfig(BaseConfig):
+class PwmConfig(OutputConfig):
     """The configuration of a PWM output."""
 
     gpio_pin: int = REQUIRED

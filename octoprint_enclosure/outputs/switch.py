@@ -5,13 +5,14 @@ from typing import TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig
+from octoprint_enclosure.core import REQUIRED
 
 from .base import Output
+from .config import OutputConfig
 
 
 @dataclass(frozen=True)
-class SwitchConfig(BaseConfig):
+class SwitchConfig(OutputConfig):
     """The configuration of an output with a switch, on a GPIO pin or driven by a device on the I2C bus."""
 
     active_low: bool = REQUIRED

@@ -4,16 +4,17 @@ from dataclasses import dataclass
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig, HexInt
+from octoprint_enclosure.core import REQUIRED, HexInt
 from octoprint_enclosure.utils import get_gcode_param, to_int
 
 from .color import ColorOutput
+from .config import OutputConfig
 
 BUS = 1
 
 
 @dataclass(frozen=True)
-class NeopixelIndirectConfig(BaseConfig):
+class NeopixelIndirectConfig(OutputConfig):
     """The configuration of NeoPixels driven by a microcontroller on the I2C bus."""
 
     gpio_pin: int = REQUIRED

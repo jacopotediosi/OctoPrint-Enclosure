@@ -384,21 +384,9 @@ class ControlLoop:
     def _load_thermostats(self) -> None:
         thermostats: dict[int, Thermostat] = {}
 
-        for rpi_output in self._settings.rpi_outputs:
-            # Only the thermostats
-            if rpi_output["output_type"] != "temp_hum_control":
-                continue
-
-            # Get the output
-            index_id = to_int(rpi_output["index_id"])
-            try:
-                output = self._outputs.get(index_id, ThermostatOutput)
-            except OutputError:
-                # If the settings are invalid, we can only skip this thermostat.
-                # There is no risk, as with invalid settings it can't be on in the first place.
-                continue
-
+        for output in self._outputs.get_all(ThermostatOutput):
             # Keep the thermostat of an output the settings didn't change, with its target
+            index_id = output.config.index_id
             thermostat = self._thermostats.get(index_id)
             if thermostat is None or thermostat.config is not output.config:
                 thermostat = Thermostat(output.config)

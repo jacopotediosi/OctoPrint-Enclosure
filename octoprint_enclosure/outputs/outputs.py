@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig
-
 from .base import Output, OutputError
+from .config import OutputConfig
 from .registry import OUTPUTS
 
 if TYPE_CHECKING:
@@ -19,27 +17,23 @@ if TYPE_CHECKING:
 _OutputT = TypeVar("_OutputT", bound=Output)
 
 
-@dataclass(frozen=True)
-class OutputConfig(BaseConfig):
-    """The configuration shared by all the outputs."""
-
-    index_id: int = REQUIRED
-    """The id of the output."""
-
-    output_type: str = ""
-    """The type of the output."""
-
-
-class _InvalidOutput(Output[BaseConfig]):
+class _InvalidOutput(Output[OutputConfig]):
     """An output that can't be set up."""
 
-    config_class = BaseConfig
+    config_class = OutputConfig
 
     reason: str
     """Why the output can't be set up."""
 
-    def __init__(self, reason: str, gpio: GpioBackend, i2c: I2cBackend, logger: logging.Logger) -> None:
-        super().__init__(BaseConfig(), gpio, i2c, logger)
+    def __init__(
+        self,
+        reason: str,
+        config: OutputConfig,
+        gpio: GpioBackend,
+        i2c: I2cBackend,
+        logger: logging.Logger,
+    ) -> None:
+        super().__init__(config, gpio, i2c, logger)
         self.reason = reason
 
     @override
@@ -101,16 +95,8 @@ class Outputs:
                 self._logger.warning("Invalid settings for an output: %s", error)
                 continue
 
-            output_class = OUTPUTS.get(output_config.output_type)
-            if output_class is None:
-                output: Output = self._create_invalid_output(
-                    output_config.index_id,
-                    f"Unsupported output type: {output_config.output_type!r}",
-                )
-            else:
-                output = self._create_output(output_class, output_config.index_id, output_settings)
-
-            outputs[output_config.index_id] = output
+            output_class = OUTPUTS[output_config.output_type]
+            outputs[output_config.index_id] = self._create_output(output_class, output_config, output_settings)
 
         # Turn off and stop the outputs that are gone or changed, and clear the GPIO pins no output drives
         pins_in_use = {pin for output in outputs.values() for pin in output.gpio_pins}
@@ -138,6 +124,7 @@ class Outputs:
                 self._logger.exception("Error setting up output %s", index_id)
                 outputs[index_id] = _InvalidOutput(
                     f"Can't set up the output: {error}",
+                    output.config,
                     self._gpio,
                     self._i2c,
                     self._get_output_logger(_InvalidOutput, index_id),
@@ -206,25 +193,26 @@ class Outputs:
     def _create_output(
         self,
         output_class: type[_OutputT],
-        index_id: int,
+        output_config: OutputConfig,
         output_settings: dict,
     ) -> _OutputT | _InvalidOutput:
         try:
-            output_config = output_class.config_class.from_settings(output_settings)
+            config = output_class.config_class.from_settings(output_settings)
         except ValueError as error:
-            return self._create_invalid_output(index_id, f"Invalid settings: {error}")
+            return self._create_invalid_output(output_config, f"Invalid settings: {error}")
 
         # An output whose settings didn't change is kept, with its state and the hardware it drives
-        output = self._outputs.get(index_id)
-        if isinstance(output, output_class) and output.config == output_config:
+        output = self._outputs.get(output_config.index_id)
+        if isinstance(output, output_class) and output.config == config:
             return output
 
-        return output_class(output_config, self._gpio, self._i2c, self._get_output_logger(output_class, index_id))
+        logger = self._get_output_logger(output_class, output_config.index_id)
+        return output_class(config, self._gpio, self._i2c, logger)
 
-    def _create_invalid_output(self, index_id: int, reason: str) -> _InvalidOutput:
-        logger = self._get_output_logger(_InvalidOutput, index_id)
+    def _create_invalid_output(self, output_config: OutputConfig, reason: str) -> _InvalidOutput:
+        logger = self._get_output_logger(_InvalidOutput, output_config.index_id)
         logger.warning("%s", reason)
-        return _InvalidOutput(reason, self._gpio, self._i2c, logger)
+        return _InvalidOutput(reason, output_config, self._gpio, self._i2c, logger)
 
     def _release_hardware(self, index_id: int, output: Output, pins_in_use: set[int]) -> None:
         try:

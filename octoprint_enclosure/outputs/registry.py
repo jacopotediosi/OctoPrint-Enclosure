@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .config import OutputType
 from .ledstrip import LedstripOutput
 from .neopixel_direct import NeopixelDirectOutput
 from .neopixel_indirect import NeopixelIndirectOutput
@@ -12,12 +13,12 @@ from .thermostat import ThermostatOutput
 if TYPE_CHECKING:
     from .base import Output
 
-OUTPUTS: dict[str, type[Output]] = {
-    "ledstrip": LedstripOutput,
-    "neopixel_direct": NeopixelDirectOutput,
-    "neopixel_indirect": NeopixelIndirectOutput,
-    "pwm": PwmOutput,
-    "regular": RegularOutput,
-    "temp_hum_control": ThermostatOutput,
+OUTPUTS: dict[OutputType, type[Output]] = {
+    OutputType.REGULAR: RegularOutput,
+    OutputType.PWM: PwmOutput,
+    OutputType.NEOPIXEL_INDIRECT: NeopixelIndirectOutput,
+    OutputType.NEOPIXEL_DIRECT: NeopixelDirectOutput,
+    OutputType.LEDSTRIP: LedstripOutput,
+    OutputType.THERMOSTAT: ThermostatOutput,
 }
-"""The supported types of outputs, by identifier."""
+"""The class of each type of output."""

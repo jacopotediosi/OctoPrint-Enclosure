@@ -5,16 +5,15 @@ from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
-
 from .base import Output
+from .config import OutputConfig
 
 if TYPE_CHECKING:
     import logging
 
     from octoprint_enclosure.hardware import GpioBackend, I2cBackend
 
-_ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
+_ConfigT = TypeVar("_ConfigT", bound=OutputConfig)
 
 
 class ColorOutput(Output[_ConfigT]):

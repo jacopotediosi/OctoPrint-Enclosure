@@ -266,14 +266,13 @@ class EnclosurePlugin(
 
     def warn_missing_linked_sensors(self):
         sensor_ids = set(self._sensors.get_all())
-        for rpi_output in self.rpi_outputs:
-            if rpi_output["output_type"] != "temp_hum_control":
-                continue
-            if to_int(rpi_output["linked_temp_sensor"]) not in sensor_ids:
+        for thermostat_output in self._outputs.get_all(ThermostatOutput):
+            config = thermostat_output.config
+            if config.linked_temp_sensor not in sensor_ids:
                 self._logger.warning(
                     "Output %s is linked to sensor %s, which doesn't exist",
-                    rpi_output["index_id"],
-                    rpi_output["linked_temp_sensor"],
+                    config.index_id,
+                    config.linked_temp_sensor,
                 )
         for automation in self.automations:
             is_temperature_rule = (

@@ -8,11 +8,12 @@ from pathlib import Path
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig
+from octoprint_enclosure.core import REQUIRED
 from octoprint_enclosure.utils import get_gcode_param, to_int
 
 from .base import OutputError
 from .color import ColorOutput
+from .config import OutputConfig
 
 WORKER_PATH = Path(__file__).with_name("neopixel_direct_worker.py")
 WORKER_TIMEOUT_SECONDS = 3
@@ -22,7 +23,7 @@ SPI_PIN = 10
 
 
 @dataclass(frozen=True)
-class NeopixelDirectConfig(BaseConfig):
+class NeopixelDirectConfig(OutputConfig):
     """The configuration of NeoPixels connected directly to the Raspberry Pi."""
 
     gpio_pin: int = REQUIRED
