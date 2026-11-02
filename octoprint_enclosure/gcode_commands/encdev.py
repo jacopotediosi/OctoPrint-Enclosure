@@ -10,6 +10,7 @@ from octoprint.events import Events
 
 from octoprint_enclosure.hardware import dummy_gpio, dummy_i2c
 from octoprint_enclosure.inputs import PullResistor
+from octoprint_enclosure.outputs import Output
 from octoprint_enclosure.utils import to_int
 
 if TYPE_CHECKING:
@@ -19,8 +20,9 @@ if TYPE_CHECKING:
     from octoprint.util.comm import MachineCom
 
     from octoprint_enclosure.core import PluginContext, Settings
-    from octoprint_enclosure.inputs import Sensors
+    from octoprint_enclosure.inputs import GpioInputs, Sensors
     from octoprint_enclosure.inputs.sensors.dummy import DummySensor
+    from octoprint_enclosure.outputs import Outputs
 
 NUMBER_REGEX = r"-?\d+(?:\.\d+)?"
 
@@ -50,6 +52,8 @@ class EncDevHandler:
 
     _settings: Settings
     _sensors: Sensors
+    _gpio_inputs: GpioInputs
+    _outputs: Outputs
     _logger: logging.Logger
 
     _development_mode: bool
@@ -84,6 +88,8 @@ class EncDevHandler:
         """
         self._settings = plugin_context.settings
         self._sensors = plugin_context.sensors
+        self._gpio_inputs = plugin_context.gpio_inputs
+        self._outputs = plugin_context.outputs
         self._logger = plugin_context.logger.getChild("EncDevHandler")
         self._development_mode = development_mode
         self._read_sensors_now = read_sensors_now
@@ -165,15 +171,11 @@ class EncDevHandler:
     ##########
 
     def _status(self, send_reply: Callable[[str], None]) -> None:
-        # Pin numbering
-        numbering = {dummy_gpio.BOARD: "BOARD", dummy_gpio.BCM: "BCM", None: "not set"}[dummy_gpio.getmode()]
-        send_reply(f"Pin numbering: {numbering}")
-
         # Pins
         pin_labels = self._get_pin_labels()
         edges = {dummy_gpio.RISING: "rising", dummy_gpio.FALLING: "falling", dummy_gpio.BOTH: "both"}
         for pin, status in sorted(dummy_gpio.get_pins().items()):
-            line = f"Pin {pin} - {pin_labels[pin]}" if pin in pin_labels else f"Pin {pin}"
+            line = f"GPIO {pin} - {pin_labels[pin]}" if pin in pin_labels else f"GPIO {pin}"
             line += f": {'HIGH' if status.level else 'LOW'}"
             if status.edge is not None:
                 line += f", detecting {edges.get(status.edge, status.edge)} edges"
@@ -272,7 +274,7 @@ class EncDevHandler:
             send_reply(f"  @ENCDEV {encdev_command.usage}")
 
     def _describe_sensor(self, config: dict) -> str:
-        description = f"Sensor {config['index_id']} ({config['label']}) on pin {to_int(config['gpio_pin'])}"
+        description = f"Sensor {config['index_id']} ({config['label']})"
 
         try:
             sensor = self._get_dummy_sensor(config)
@@ -298,25 +300,15 @@ class EncDevHandler:
     def _get_pin_labels(self) -> dict[int, str]:
         labels: dict[int, list[str]] = {}
 
-        def add(pin: object, label: str) -> None:
-            if pin != "":
-                labels.setdefault(to_int(pin), []).append(label)
-
-        for config in self._settings.rpi_inputs:
-            if config["input_type"] == "gpio":
-                add(config["gpio_pin"], f"Input {config['index_id']} ({config['label']})")
-            elif config["input_type"] == "temperature_sensor":
-                add(config["gpio_pin"], f"Sensor {config['index_id']} ({config['label']})")
-        for config in self._settings.rpi_outputs:
-            output_type = config["output_type"]
-            label = f"Output {config['index_id']} ({config['label']})"
-            if output_type == "pwm" or (
-                output_type in ("regular", "temp_hum_control") and not config["gpio_i2c_enabled"]
-            ):
-                add(config["gpio_pin"], label)
-            elif output_type == "ledstrip":
-                add(config["ledstrip_gpio_clk"], f"{label} CLK")
-                add(config["ledstrip_gpio_dat"], f"{label} DAT")
+        for gpio_input in self._gpio_inputs.get_all():
+            config = gpio_input.config
+            labels.setdefault(config.gpio_pin, []).append(f"Input {config.index_id} ({config.label})")
+        for sensor in self._sensors.get_all().values():
+            for pin in sensor.gpio_pins:
+                labels.setdefault(pin, []).append(f"Sensor {sensor.config.index_id} ({sensor.config.label})")
+        for output in self._outputs.get_all(Output):
+            for pin in output.gpio_pins:
+                labels.setdefault(pin, []).append(f"Output {output.config.index_id} ({output.config.label})")
 
         return {pin: ", ".join(pin_labels) for pin, pin_labels in labels.items()}
 

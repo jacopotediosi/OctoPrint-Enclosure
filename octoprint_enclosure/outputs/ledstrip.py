@@ -44,8 +44,6 @@ class LedstripOutput(ColorOutput[LedstripConfig]):
 
     @override
     def _write_color(self, red: int, green: int, blue: int) -> None:
-        self._gpio.setwarnings(False)
-        self._gpio.setmode(self._gpio.BCM)
         self._gpio.setup(self.config.ledstrip_gpio_clk, self._gpio.OUT)
         self._gpio.setup(self.config.ledstrip_gpio_dat, self._gpio.OUT)
 

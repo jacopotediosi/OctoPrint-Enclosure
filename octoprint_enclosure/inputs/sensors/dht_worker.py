@@ -2,7 +2,10 @@
 
 Usage: dht_worker.py <DHT11|DHT22> <BCM pin number>
 
-It runs in its own process because importing Adafruit Blinka sets the GPIO numbering of the whole process to BCM.
+It runs in its own process because adafruit_dht reads the pulses through a helper process (libgpiod_pulsein) it talks
+to over a SysV message queue, waiting with no timeout: if the helper dies or hangs, the caller blocks forever. A
+process of its own gets killed by the timeout of the plugin, so a hang costs one reading, and leaves no helper
+process inside OctoPrint.
 """
 
 import sys

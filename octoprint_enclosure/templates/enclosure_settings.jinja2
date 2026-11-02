@@ -1,5 +1,5 @@
 {% from "enclosure_macros.jinja2" import checkbox_control_group, gpio_alert, select_control_group, temperature_control_group, text_control_group %}
-{{ gpio_alert(plugin_enclosure_development_mode, plugin_enclosure_gpio_import_error) }}
+{{ gpio_alert(plugin_enclosure_development_mode, plugin_enclosure_gpio_import_error, plugin_enclosure_gpio_numbering_is_board) }}
 <h4>{{ _("Raspberry Pi Inputs") }}</h4>
 <p>
     Configure all
@@ -52,20 +52,20 @@
                 {{ text_control_group("temp_i2c_register", _("I2C Register"), "I2C register in HEX value") }}
             </div>
             <div data-bind="if: temp_sensor_type() == '18b20'">
-                {{ text_control_group("gpio_pin", _("Sensor Pin"), "GPIO pin for temperature sensor, recommended to use 4 as DS18B20 has default support to pin #4 (BCM)") }}
+                {{ text_control_group("gpio_pin", _("GPIO"), "GPIO the data line is connected to, 4 unless you changed the 1-Wire overlay") }}
                 {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("", "None"), ("input_pull_up", "Input Pullup")], "Whether to enable the built-in pullup for this temperature sensor. If set, then no external pullup is needed.") }}
                 {{ text_control_group("ds18b20_serial", _("DS18B20 Serial"), "DS18B20 serial value, needs to be used to have support for multiple sensors, read documentation on github page for more information. The serial is typically in the form of 28-0123456789ab.") }}
             </div>
             <div data-bind="if: temp_sensor_type() == 'si7021' || temp_sensor_type() == '20' || temp_sensor_type() == 'bme280' || temp_sensor_type() == 'am2320' || temp_sensor_type() == 'aht10' || temp_sensor_type() == 'tmp102' || temp_sensor_type() == 'mcp9808'">
                 <div class="control-group">
-                    <label class="control-label">{{ _("Sensor Pin") }}</label>
+                    <label class="control-label">{{ _("GPIO") }}</label>
                     <div class="controls">
                         <input type="text"
                                class="input-block-level"
                                value="SCL / SDA"
                                disabled="true">
-                        <span class="help-inline">GPIO pin for temperature sensor need to connect the sensor to I2C. SCL Clock to GPIO 3 (SCL) and SDA Data to GPIO
-                            2 (SDA)
+                        <span class="help-inline">The sensor connects to the I2C bus: SDA to GPIO 2 (SDA), SCL to GPIO
+                            3 (SCL)
                         </span>
                     </div>
                 </div>
@@ -77,13 +77,13 @@
             </div>
             <div data-bind="if: temp_sensor_type() == 'max31855'">
                 <div class="control-group">
-                    <label class="control-label">{{ _("Sensor Pin") }}</label>
+                    <label class="control-label">{{ _("GPIO") }}</label>
                     <div class="controls">
                         <input type="text"
                                class="input-block-level"
                                value="MISO / SCLK"
                                disabled="true">
-                        <span class="help-inline">GPIO pin for temperature sensor need to connect the sensor to SPI. Serial Clock to GPIO 1 (SCLK) and Master In/Slave Out Data to GPIO
+                        <span class="help-inline">The sensor connects to the SPI bus: SCLK to GPIO 11 (SCLK), MISO to GPIO
                             9 (MISO)
                         </span>
                     </div>
@@ -91,12 +91,12 @@
                 {{ select_control_group("temp_sensor_address", _("Sensor Address (CE Select)"), [("0", "CE0"), ("1", "CE1")], "CE select: CE0 on GPIO 8 or CE1 on GPIO 7", placeholder="Select CE") }}
             </div>
             <div data-bind="if: temp_sensor_type() == '11' || temp_sensor_type() == '22' || temp_sensor_type() == '2302'">
-                {{ text_control_group("gpio_pin", _("Sensor Pin"), "GPIO pin the data line of the sensor is connected to") }}
+                {{ text_control_group("gpio_pin", _("GPIO"), "GPIO the data line of the sensor is connected to") }}
                 {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("", "None"), ("input_pull_up", "Input Pullup")], "Whether to enable the built-in pullup for this temperature sensor. If set, then no external pullup is needed.") }}
             </div>
         </div>
         <div data-bind="if: input_type() == 'gpio'">
-            {{ text_control_group("gpio_pin", _("Input IO Number"), "Input GPIO that will detect the event that should trigger the automations. For example if you have a filament sensor you put the GPIO pin that the sensor is connected. This can also be a press of a button or any other signal that you want to detect. You can not use GPIO 4 here if you are using temperature sensor DS18B20") }}
+            {{ text_control_group("gpio_pin", _("GPIO"), "GPIO that detects the event that triggers the automations. For example if you have a filament sensor you put the GPIO that the sensor is connected to. This can also be a press of a button or any other signal that you want to detect. You can not use GPIO 4 here if you are using temperature sensor DS18B20") }}
             {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("input_pull_up", "Input Pullup"), ("input_pull_down", "Input Pulldown")], "Choose what type of pull resistors that you want on the input. If your signal is active low, that means it should trigger the automations when receive a low signal (ground), you should choose PULL UP resistors.", placeholder="Select Pull Resistor") }}
         </div>
         <div data-bind="if: input_type() == 'temperature_sensor'">
@@ -153,17 +153,17 @@
         ], placeholder="Select Output Type") }}
         {{ text_control_group("label", _("Label"), "Name displayed on Enclosure Tab") }}
         {{ text_control_group("index_id", _("Id"), "Id used for API control", disabled=true) }}
-        <div data-bind="ifnot: output_type() == '' || output_type() == 'ledstrip' || (output_type() == 'regular' && gpio_i2c_enabled())">
-            {% call text_control_group("gpio_pin", _("IO Number")) %}
-                <span class="help-inline"
-                      data-bind="visible: output_type() != 'neopixel_indirect'">GPIO number that will be controlled.</span>
-                <span class="help-inline"
-                      data-bind="visible: output_type() == 'neopixel_indirect'">
+        <div data-bind="if: output_type() == 'neopixel_indirect'">
+            {% call text_control_group("gpio_pin", _("Microcontroller Pin")) %}
+                <span class="help-inline">
                     <span class="label label-important">Attention</span> Neopixel requires a microcontroller (ex: arduino)
                     connected to I2C bus. This is the pin on the
                     microcontroller that is connected to the Neopixel.
                 </span>
             {% endcall %}
+        </div>
+        <div data-bind="ifnot: output_type() == '' || output_type() == 'ledstrip' || output_type() == 'neopixel_indirect' || (output_type() == 'regular' && gpio_i2c_enabled())">
+            {{ text_control_group("gpio_pin", _("GPIO"), "GPIO that is controlled") }}
         </div>
         <div data-bind="if: output_type() == 'regular' || (output_type() == 'pwm' && !$root.isPwmLinked(index_id()))">
             {{ checkbox_control_group("toggle_timer", _("Timer Toggle"), "Toggle output every amount of seconds. It will start when the print starts and stop when print is complete. For PWM pins it will use the default PWM value when ON.") }}
@@ -251,8 +251,8 @@
             {% endcall %}
         </div>
         <div data-bind="if: output_type() == 'ledstrip'">
-            {{ text_control_group("ledstrip_gpio_clk", _("CLK"), "Choose any GPIO pin to provide the Clock signal") }}
-            {{ text_control_group("ledstrip_gpio_dat", _("DAT"), "Choose any GPIO pin to provide the Data") }}
+            {{ text_control_group("ledstrip_gpio_clk", _("CLK GPIO"), "GPIO of the clock line") }}
+            {{ text_control_group("ledstrip_gpio_dat", _("DAT GPIO"), "GPIO of the data line") }}
             <div class="control-group">
                 <label class="control-label">{{ _("Color") }}</label>
                 <div class="controls">
@@ -483,7 +483,6 @@
             <span class="help-inline">Use gcode to control outputs, check the documentation on
                 <a href="https://github.com/jacopotediosi/OctoPrint-Enclosure">github</a> page</span>
         {% endcall %}
-        {{ checkbox_control_group("use_board_pin_number", _("Use Board Pin #"), "Use BOARD pin numbers instead of BCM pin numbers") }}
         {{ select_control_group("temperature_unit", _("Temperature Unit"), [("celsius", "Celsius (°C)"), ("fahrenheit", "Fahrenheit (°F)")], "Unit of every temperature shown and entered in the plugin") }}
         <div class="control-group">
             <label class="control-label">{{ _("Filament Change Gcode") }}</label>

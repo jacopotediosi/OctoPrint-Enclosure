@@ -194,7 +194,6 @@ class EnclosurePlugin(
 
         self._sensor_poller.load(self.get_sensor_inputs_settings())
         self._gpio_inputs.load(self.get_gpio_inputs_settings())
-        self.setup_gpio_mode()
         self._output_executor.load_outputs(self.rpi_outputs, wait=True)
         if self.development_mode:
             self.link_dummy_sensors()
@@ -496,46 +495,6 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error sending outputs status to the UI")
 
-    def setup_gpio_mode(self):
-        try:
-            current_mode = self._gpio.getmode()
-            set_mode = self._gpio.BOARD if self._enclosure_settings.use_board_pin_number else self._gpio.BCM
-            if current_mode is None:
-                inputs = list(filter(lambda item: item["input_type"] == "gpio", self.rpi_inputs))
-                outputs = list(
-                    filter(
-                        lambda item: (
-                            (
-                                item["output_type"] == "regular"
-                                or item["output_type"] == "pwm"
-                                or item["output_type"] == "temp_hum_control"
-                                or item["output_type"] == "neopixel_direct"
-                            )
-                            and not item["gpio_i2c_enabled"]
-                        ),
-                        self.rpi_outputs,
-                    ),
-                )
-                gpios = inputs + outputs
-                if gpios:
-                    self._gpio.setmode(set_mode)
-                    tempstr = "BOARD" if set_mode == self._gpio.BOARD else "BCM"
-                    self._logger.info("Setting GPIO mode to %s", tempstr)
-            elif current_mode != set_mode:
-                self._gpio.setmode(current_mode)
-                tempstr = "BOARD" if current_mode == self._gpio.BOARD else "BCM"
-                self._enclosure_settings.use_board_pin_number = current_mode == self._gpio.BOARD
-                warn_msg = (
-                    "GPIO mode was configured before, GPIO mode will be forced to use: "
-                    + tempstr
-                    + " as pin numbers. Please update GPIO accordingly!"
-                )
-                self._logger.info(warn_msg)
-                self._frontend.show_message(warn_msg, "error")
-            self._gpio.setwarnings(False)
-        except Exception:
-            self._logger.exception("Error setting up GPIO mode")
-
     def handle_gpio_input(self, input_id, level):
         self._control_loop.evaluate_gpio_input_edge(input_id, level)
 
@@ -780,9 +739,6 @@ class EnclosurePlugin(
         self.automations = self._enclosure_settings.automations
         self._logger.debug("New automations: %s", self.automations)
 
-        # Set the GPIO mode
-        self.setup_gpio_mode()
-
         # Release the pins of the inputs
         self._gpio_inputs.clear()
         self._sensors.clear()
@@ -838,7 +794,6 @@ class EnclosurePlugin(
                 "G92 E0         ;Set Extruder to 0"
             ),
             "gcode_control": False,
-            "use_board_pin_number": False,
             "notification_provider": "",
             "notification_api_key": "",
             "notification_event_name": "printer_event",
@@ -852,6 +807,7 @@ class EnclosurePlugin(
         return {
             "development_mode": self.development_mode,
             "gpio_import_error": str(gpio_import_error) if gpio_import_error is not None else None,
+            "gpio_numbering_is_board": gpio_import_error is None and self._gpio.getmode() == self._gpio.BOARD,
         }
 
     def get_template_configs(self):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.utils import parse_bool, to_float, to_int
+from octoprint_enclosure.utils import to_float, to_int
 
 from .measurement import TemperatureUnit
 
@@ -324,7 +324,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
         fahrenheit_sensor_ids = set()
         celsius_sensor_ids = set()
         for rpi_input in rpi_inputs:
-            use_fahrenheit = parse_bool(rpi_input.pop("use_fahrenheit", False))
+            use_fahrenheit = bool(rpi_input.pop("use_fahrenheit", False))
             if rpi_input.get("input_type") != "temperature_sensor":
                 continue
             if use_fahrenheit:
@@ -347,7 +347,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                 or to_int(rpi_output.get("linked_temp_sensor")) not in fahrenheit_sensor_ids
             ):
                 continue
-            if to_float(rpi_output.get("temp_ctr_default_value")) > 0:
+            if to_float(rpi_output.get("temp_ctr_default_value")) != 0:
                 rpi_output["temp_ctr_default_value"] = fahrenheit.to_celsius(
                     to_float(rpi_output.get("temp_ctr_default_value")),
                 )
@@ -375,6 +375,28 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
         # Up to version 10, the global use_sudo key chose whether the scripts of the sensors and of the NeoPixels ran
         # with sudo. From version 11, the plugin decides it by itself, and the key is removed.
         settings.remove(["use_sudo"])
+
+        # Up to version 10, the global setting use_board_pin_number chose whether the GPIO pins were numbered by their
+        # position on the header (BOARD) instead of by their BCM number. From version 11 every pin is a BCM number, so
+        # the BOARD numbers need to be converted.
+        if settings.get_boolean(["use_board_pin_number"]):
+            # The pin_to_gpio_rev3 table of RPi.GPIO (source/common.c)
+            board_to_bcm = {
+                3: 2, 5: 3, 7: 4, 8: 14, 10: 15, 11: 17, 12: 18, 13: 27, 15: 22, 16: 23, 18: 24, 19: 10, 21: 9,
+                22: 25, 23: 11, 24: 8, 26: 7, 29: 5, 31: 6, 32: 12, 33: 13, 35: 19, 36: 16, 37: 26, 38: 20, 40: 21,
+            }  # fmt: skip
+            for rpi_input in rpi_inputs:
+                pin = to_int(rpi_input.get("gpio_pin"))
+                if rpi_input.get("input_type") == "gpio" and pin > 0:
+                    rpi_input["gpio_pin"] = board_to_bcm.get(pin, "")
+            for rpi_output in rpi_outputs:
+                output_type = rpi_output.get("output_type")
+                is_switch = output_type in ("regular", "temp_hum_control")
+                uses_pin = output_type == "pwm" or (is_switch and not rpi_output.get("gpio_i2c_enabled"))
+                pin = to_int(rpi_output.get("gpio_pin"))
+                if uses_pin and pin > 0:
+                    rpi_output["gpio_pin"] = board_to_bcm.get(pin, "")
+        settings.remove(["use_board_pin_number"])
 
     settings.set(["rpi_inputs"], rpi_inputs)
     settings.set(["rpi_outputs"], rpi_outputs)

@@ -86,20 +86,6 @@ class Settings:
             return TemperatureUnit.CELSIUS
 
     ##########
-    ### GPIO
-    ##########
-
-    @property
-    def use_board_pin_number(self) -> bool:
-        """Whether GPIO pins are numbered by their position on the board, instead of by their BCM number."""
-        return bool(self._settings.get_boolean(["use_board_pin_number"]))
-
-    @use_board_pin_number.setter
-    def use_board_pin_number(self, value: bool) -> None:
-        with self.write_lock:
-            self._settings.set_boolean(["use_board_pin_number"], value)
-
-    ##########
     ### G-code
     ##########
 

@@ -52,7 +52,7 @@
         </div>
     </div>
 {% endmacro %}
-{% macro gpio_alert(development_mode, gpio_import_error) %}
+{% macro gpio_alert(development_mode, gpio_import_error, gpio_numbering_is_board) %}
     {% if development_mode %}
         <div class="alert alert-error enclosure-gpio-alert">
             <strong>{{ _("Development mode is enabled:") }}</strong> {{ _("GPIO and I2C (pins, sensors, etc) are simulated.") }}
@@ -62,6 +62,10 @@
             <strong>{{ _("The GPIO library failed to load:") }}</strong> {{ gpio_import_error }}
             <br>
             {{ _("This usually happens when OctoPrint isn't running on a Raspberry Pi. GPIO (pins, sensors, etc) won't work.") }}
+        </div>
+    {% elif gpio_numbering_is_board %}
+        <div class="alert alert-error enclosure-gpio-alert">
+            <strong>{{ _("Another plugin set the GPIO numbering to BOARD:") }}</strong> {{ _("this plugin needs BCM, so its GPIO pins won't work.") }}
         </div>
     {% endif %}
 {% endmacro %}
