@@ -23,6 +23,29 @@ $(function () {
     }
   };
 
+  ko.bindingHandlers.temperature = {
+    init: function (element, valueAccessor, allBindings, viewModel, bindingContext) {
+      ko.utils.registerEventHandler(element, "change", function () {
+        var value = parseFloat(element.value);
+        if (isNaN(value) || (value === 0 && allBindings.get("temperatureZeroOff"))) {
+          valueAccessor()(isNaN(value) ? element.value : 0);
+          return;
+        }
+        var toCelsius = allBindings.get("temperatureInterval") ? bindingContext.$root.toCelsiusInterval : bindingContext.$root.toCelsius;
+        valueAccessor()(toCelsius(value));
+      });
+    },
+    update: function (element, valueAccessor, allBindings, viewModel, bindingContext) {
+      var value = parseFloat(ko.unwrap(valueAccessor()));
+      if (isNaN(value) || (value === 0 && allBindings.get("temperatureZeroOff"))) {
+        element.value = ko.unwrap(valueAccessor());
+        return;
+      }
+      var fromCelsius = allBindings.get("temperatureInterval") ? bindingContext.$root.fromCelsiusInterval : bindingContext.$root.fromCelsius;
+      element.value = fromCelsius(value);
+    }
+  };
+
   ko.bindingHandlers.placeholderWhenUnset = {
     after: ["options", "value"],
     update: function (element, valueAccessor, allBindings) {
@@ -51,6 +74,34 @@ $(function () {
     self.automations = ko.observableArray();
 
     self.settingsOpen = false;
+
+    self.temperatureUnit = ko.pureComputed(function () {
+      return self.settingsViewModel.settings.plugins.enclosure.temperature_unit();
+    });
+
+    self.temperatureUnitLabel = ko.pureComputed(function () {
+      return self.temperatureUnit() === "fahrenheit" ? "°F" : "°C";
+    });
+
+    self.fromCelsius = function (celsius) {
+      if (self.temperatureUnit() !== "fahrenheit") return celsius;
+      return Math.round((celsius * 1.8 + 32) * 10) / 10;
+    };
+
+    self.fromCelsiusInterval = function (interval) {
+      if (self.temperatureUnit() !== "fahrenheit") return interval;
+      return Math.round(interval * 1.8 * 10) / 10;
+    };
+
+    self.toCelsius = function (temperature) {
+      if (self.temperatureUnit() !== "fahrenheit") return temperature;
+      return Math.round((temperature - 32) / 1.8 * 100) / 100;
+    };
+
+    self.toCelsiusInterval = function (interval) {
+      if (self.temperatureUnit() !== "fahrenheit") return interval;
+      return Math.round(interval / 1.8 * 100) / 100;
+    };
 
     self.settings_gpio_inputs = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs(), function (item) {
@@ -464,7 +515,6 @@ $(function () {
         temp_sensor_type: ko.observable(""),
         temp_sensor_address: ko.observable(""),
         ds18b20_serial: ko.observable(""),
-        use_fahrenheit: ko.observable(false),
         temp_sensor_navbar: ko.observable(true),
         temp_sensor_i2cbus: ko.observable(1),
         temp_i2c_bus: ko.observable(1),

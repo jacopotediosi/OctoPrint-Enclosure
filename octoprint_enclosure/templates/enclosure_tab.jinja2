@@ -27,7 +27,7 @@
                 <td class="temperature_actual"
                     data-bind="visible: first, attr: {rowspan: rowspan}, with: sensor">
                     <span data-bind="text: temp_sensor_temp, attr: {title: temp_sensor_temp}"></span>
-                    <span class="add-on" data-bind="text: use_fahrenheit() ? '°F' : '°C'"></span>
+                    <span class="add-on" data-bind="text: $root.temperatureUnitLabel()"></span>
                 </td>
                 <td class="humidity_actual"
                     data-bind="visible: first && $root.humidityCapableSensor(sensor.temp_sensor_type()), attr: {rowspan: rowspan}, with: sensor">
@@ -51,7 +51,7 @@
                                    class="input-mini input-nospin"
                                    data-bind="enable: $root.isUser(), value: temp_ctr_new_set_value, valueUpdate: 'input', attr: {placeholder:$root.getCleanTemperature(temp_ctr_set_value())}">
                             <span class="add-on"
-                                  data-bind="text: temp_ctr_type() == 'dehumidifier' ? '%' : ($parent.sensor.use_fahrenheit() ? '°F' : '°C')"></span>
+                                  data-bind="text: temp_ctr_type() == 'dehumidifier' ? '%' : $root.temperatureUnitLabel()"></span>
                         </div>
                         <div class="btn-group">
                             <button type="submit"

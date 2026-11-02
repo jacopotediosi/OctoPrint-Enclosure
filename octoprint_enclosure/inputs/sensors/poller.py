@@ -5,11 +5,13 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .base import Reading
+
 if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Iterable
 
-    from .base import Reading, Sensor
+    from .base import Sensor
     from .sensors import Sensors
 
 READ_INTERVAL_SECONDS = 10
@@ -28,24 +30,6 @@ class ReadingOutcome:
 
     time: float
     """When the sensor was read, as a monotonic time."""
-
-
-@dataclass(frozen=True)
-class ConvertedReading:
-    """A reading of a temperature sensor converted to the unit of its input and rounded."""
-
-    temperature: float | None
-    """The temperature, in the unit of the input, or None without a value."""
-
-    humidity: float | None
-    """The relative humidity, in percent, or None without a value."""
-
-    airquality: float | None
-    """The air quality index, or None without a value."""
-
-
-def _round(value: float | None) -> float | None:
-    return None if value is None else round(float(value), 1)
 
 
 class SensorPoller:
@@ -140,44 +124,45 @@ class SensorPoller:
         for index_id, sensor in polled.items():
             self._read(index_id, sensor)
 
-    def get_reading(self, index_id: int) -> ConvertedReading:
+    def get_reading(self, index_id: int) -> Reading:
         """Get the last reading of an input.
 
         Args:
             index_id (int): The id of the input.
 
         Returns:
-            ConvertedReading: The reading, with all its values None if the last reading of the sensor failed.
+            Reading: The reading, with all its values None if the last reading of the sensor failed, is too old or is
+                still to come.
 
         Raises:
             LookupError: If the input has no sensor.
 
         """
         with self._lock:
-            sensor = self._polled.get(index_id)
-            if sensor is None:
+            if index_id not in self._polled:
                 msg = f"Input {index_id} has no sensor"
                 raise LookupError(msg)
-            return self._get_reading(index_id, sensor, time.monotonic())
+            return self._get_reading(index_id, time.monotonic())
 
-    def get_readings(self) -> dict[int, ConvertedReading]:
+    def get_readings(self) -> dict[int, Reading]:
         """Get the last reading of each input with a sensor.
 
         Returns:
-            dict[int, ConvertedReading]: The reading of each input, by its id, with all its values None if the last
-                reading of the sensor failed.
+            dict[int, Reading]: The reading of each input, by its id, with all its values None if the last reading of
+                the sensor failed, is too old or is still to come.
 
         """
         with self._lock:
             now = time.monotonic()
-            return {index_id: self._get_reading(index_id, sensor, now) for index_id, sensor in self._polled.items()}
+            return {index_id: self._get_reading(index_id, now) for index_id in self._polled}
 
-    def _get_reading(self, index_id: int, sensor: Sensor, now: float) -> ConvertedReading:
+    def _get_reading(self, index_id: int, now: float) -> Reading:
         outcome = self._outcomes.get(index_id)
-        reading = None if outcome is None else outcome.reading
 
-        if outcome is not None and now - outcome.time > READING_MAX_AGE_SECONDS:
-            reading = None
+        if outcome is None or outcome.reading is None:
+            return Reading()
+
+        if now - outcome.time > READING_MAX_AGE_SECONDS:
             if index_id not in self._stale:
                 # Reading is stale for the first time
                 self._stale.add(index_id)
@@ -186,14 +171,9 @@ class SensorPoller:
                     index_id,
                     now - outcome.time,
                 )
+            return Reading()
 
-        if reading is None:
-            return ConvertedReading(None, None, None)
-
-        temperature = reading.temperature
-        if temperature is not None and sensor.config.use_fahrenheit:
-            temperature = temperature * 1.8 + 32
-        return ConvertedReading(_round(temperature), _round(reading.humidity), _round(reading.airquality))
+        return outcome.reading
 
     def _start_reading(self, index_id: int, sensor: Sensor) -> None:
         polled_position = list(self._polled).index(index_id)

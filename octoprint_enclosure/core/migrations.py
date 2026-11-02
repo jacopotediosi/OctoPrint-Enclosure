@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.utils import to_float, to_int
+from octoprint_enclosure.utils import parse_bool, to_float, to_int
+
+from .measurement import TemperatureUnit
 
 if TYPE_CHECKING:
     import logging
@@ -314,6 +316,54 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
         for automation in automations:
             for key, value in automation_defaults.items():
                 automation.setdefault(key, value)
+
+        # Up to version 10, each sensor had its own unit (via `use_fahrenheit`), and the plugin stored temperatures in
+        # that unit. From version 11 onwards, the plugin uses a single, centralized `temperature_unit` setting, which
+        # determines how temperatures are converted for the frontend, while on the backend, they are always handled
+        # exclusively in Celsius.
+        fahrenheit_sensor_ids = set()
+        celsius_sensor_ids = set()
+        for rpi_input in rpi_inputs:
+            use_fahrenheit = parse_bool(rpi_input.pop("use_fahrenheit", False))
+            if rpi_input.get("input_type") != "temperature_sensor":
+                continue
+            if use_fahrenheit:
+                fahrenheit_sensor_ids.add(to_int(rpi_input.get("index_id")))
+            else:
+                celsius_sensor_ids.add(to_int(rpi_input.get("index_id")))
+        new_unit_should_be_fahrenheit = len(fahrenheit_sensor_ids) > len(celsius_sensor_ids)
+        settings.set(
+            ["temperature_unit"],
+            (TemperatureUnit.FAHRENHEIT if new_unit_should_be_fahrenheit else TemperatureUnit.CELSIUS).value,
+        )
+        fahrenheit = TemperatureUnit.FAHRENHEIT
+        for rpi_output in rpi_outputs:
+            is_temperature_thermostat = (
+                rpi_output.get("output_type") == "temp_hum_control"
+                and rpi_output.get("temp_ctr_type") != "dehumidifier"
+            )
+            if (
+                not is_temperature_thermostat
+                or to_int(rpi_output.get("linked_temp_sensor")) not in fahrenheit_sensor_ids
+            ):
+                continue
+            if to_float(rpi_output.get("temp_ctr_default_value")) > 0:
+                rpi_output["temp_ctr_default_value"] = fahrenheit.to_celsius(
+                    to_float(rpi_output.get("temp_ctr_default_value")),
+                )
+            rpi_output["temp_ctr_deadband"] = fahrenheit.to_celsius_interval(
+                to_float(rpi_output.get("temp_ctr_deadband")),
+            )
+            if to_float(rpi_output.get("temp_ctr_max_temp")) > 0:
+                rpi_output["temp_ctr_max_temp"] = fahrenheit.to_celsius(to_float(rpi_output.get("temp_ctr_max_temp")))
+        for automation in automations:
+            if to_int(automation.get("linked_temp_sensor")) not in fahrenheit_sensor_ids:
+                continue
+            if automation.get("automation_type") == "pwm_temperature_linked":
+                for key in ("temperature_a", "temperature_b"):
+                    automation[key] = fahrenheit.to_celsius(to_float(automation.get(key)))
+            elif automation.get("trigger_type") == "temperature" and to_float(automation.get("alarm_set_temp")) != 0:
+                automation["alarm_set_temp"] = fahrenheit.to_celsius(to_float(automation.get("alarm_set_temp")))
 
         # Up to version 10, the global neopixel_dma key stored the DMA channel of all the NeoPixels connected directly
         # to the Raspberry Pi. From version 11, each output has its own neopixel_dma key with the same value.

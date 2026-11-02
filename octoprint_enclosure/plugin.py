@@ -90,7 +90,7 @@ class EnclosurePlugin(
 
         # Init general plugin components
         self._enclosure_settings = Settings(self._settings)
-        self._frontend = Frontend(self._plugin_manager, self._identifier)
+        self._frontend = Frontend(self._plugin_manager, self._identifier, self._enclosure_settings)
 
         # Init hardware
         self.development_mode = self._enclosure_settings.development_mode
@@ -329,7 +329,11 @@ class EnclosurePlugin(
             self.handle_sensor_recovery(sensor.config)
             with contextlib.suppress(LookupError):
                 reading = self._sensor_poller.get_reading(index_id)
-                self._mqtt.publish_sensor_reading(sensor.config.label, reading.temperature, reading.humidity)
+                temperature_unit = self._enclosure_settings.temperature_unit
+                temperature = (
+                    None if reading.temperature is None else temperature_unit.from_celsius(reading.temperature)
+                )
+                self._mqtt.publish_sensor_reading(sensor.config.label, temperature, reading.humidity)
 
         self.update_ui_readings()
         self._control_loop.evaluate_reading(index_id)
@@ -833,6 +837,7 @@ class EnclosurePlugin(
             "rpi_outputs": [],
             "actions": [],
             "automations": [],
+            "temperature_unit": "celsius",
             "filament_sensor_gcode": (
                 "G91  ;Set Relative Mode \n"
                 "G1 E-5.000000 F500 ;Retract 5mm\n"

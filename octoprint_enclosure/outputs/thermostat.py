@@ -5,7 +5,7 @@ from enum import Enum
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED
+from octoprint_enclosure.core import REQUIRED, MeasurementType
 
 from .switch import SwitchConfig, SwitchOutput
 
@@ -16,6 +16,13 @@ class ThermostatDeviceType(Enum):
     HEATER = "heater"
     COOLER = "cooler"
     DEHUMIDIFIER = "dehumidifier"
+
+    @property
+    def measurement_type(self) -> MeasurementType:
+        """What the device acts on: the humidity for a dehumidifier, the temperature for the others."""
+        if self is ThermostatDeviceType.DEHUMIDIFIER:
+            return MeasurementType.HUMIDITY
+        return MeasurementType.TEMPERATURE
 
 
 @dataclass(frozen=True)

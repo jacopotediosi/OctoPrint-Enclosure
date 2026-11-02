@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from .actions import Actions
     from .automations import Automations
     from .core import Frontend, Settings
-    from .inputs import ConvertedReading, GpioInputs, SensorPoller
+    from .inputs import GpioInputs, Reading, SensorPoller
     from .notifications import Notifications
     from .output_executor import OutputExecutor
     from .outputs import Outputs
@@ -280,15 +280,14 @@ class ControlLoop:
         """
         self._put(_ThermostatTargetChanged(index_id, target))
 
-    def get_thermostat_targets(self) -> dict[int, float]:
-        """Get the targets of the thermostats.
+    def get_thermostats(self) -> dict[int, Thermostat]:
+        """Get the thermostats.
 
         Returns:
-            dict[int, float]: The target temperature or humidity of each thermostat, 0 if it is off, by the id of
-                its output.
+            dict[int, Thermostat]: The thermostats, by the id of their output.
 
         """
-        return {index_id: thermostat.target for index_id, thermostat in self._thermostats.items()}
+        return dict(self._thermostats)
 
     def wait_for_temperature(self, index_id: int) -> None:
         """Resume the paused print once a thermostat reaches its target.
@@ -353,7 +352,7 @@ class ControlLoop:
             self._decide_print_job_event(event.event)
         elif isinstance(event, _SettingsLoaded):
             self._load_thermostats()
-            self._frontend.update_targets(self.get_thermostat_targets())
+            self._frontend.update_targets(self.get_thermostats())
 
             # While printing every filament automation has to watch: start the ones that don't yet
             if self._printer.is_printing():
@@ -367,7 +366,7 @@ class ControlLoop:
                 self._logger.debug("Can't set the target of output %s: it isn't a thermostat", event.index_id)
             else:
                 thermostat.set_target(event.target)
-                self._frontend.update_targets(self.get_thermostat_targets())
+                self._frontend.update_targets(self.get_thermostats())
                 self._decide_thermostats(self._sensor_poller.get_readings(), None)
         elif isinstance(event, _WaitForTemperature):
             self._waiting_temperature.add(event.index_id)
@@ -375,7 +374,7 @@ class ControlLoop:
         elif isinstance(event, _StopThermostats):
             self._stop_thermostats()
         elif isinstance(event, _UpdateUiTargets):
-            self._frontend.update_targets(self.get_thermostat_targets())
+            self._frontend.update_targets(self.get_thermostats())
 
     def _start_deciding(self) -> None:
         self._load_thermostats()
@@ -439,7 +438,7 @@ class ControlLoop:
         self._decide_thermostats(readings, None)
         self._decide_pwm_linked_temperature(readings, None)
 
-    def _decide_thermostats(self, readings: Mapping[int, ConvertedReading], sensor_id: int | None) -> None:
+    def _decide_thermostats(self, readings: Mapping[int, Reading], sensor_id: int | None) -> None:
         try:
             for index_id, thermostat in self._thermostats.items():
                 # If we received a temperature event, check if it is from the sensor linked to this thermostat
@@ -455,7 +454,7 @@ class ControlLoop:
                 if thermostat.is_above_max_temp(temperature):
                     self._logger.warning("Thermostat %s reached its maximum temperature: turning it off", index_id)
                     thermostat.set_target(0.0)
-                    self._frontend.update_targets(self.get_thermostat_targets())
+                    self._frontend.update_targets(self.get_thermostats())
 
                 # Decide whether the device has to be on, and switch it
                 should_be_on = thermostat.decide(temperature, humidity)
@@ -487,7 +486,7 @@ class ControlLoop:
             self._waiting_temperature.clear()
             self._printer.resume_print()
 
-    def _decide_temperature_rules(self, readings: Mapping[int, ConvertedReading], sensor_id: int) -> None:
+    def _decide_temperature_rules(self, readings: Mapping[int, Reading], sensor_id: int) -> None:
         for rule in self._automations.get_all(RuleAutomation):
             # Get the automation trigger
             trigger = rule.trigger
@@ -506,7 +505,8 @@ class ControlLoop:
 
     def _react_to_temperature(self, rule: RuleAutomation, threshold: float) -> None:
         reaction = rule.reaction
-        cause = f"enclosure temperature exceed {threshold:g}"
+        temperature_unit = self._settings.temperature_unit
+        cause = f"enclosure temperature exceed {temperature_unit.from_celsius(threshold):g} {temperature_unit.symbol}"
         try:
             if isinstance(reaction, OutputControlReaction):
                 if self._control_output(reaction):
@@ -533,7 +533,7 @@ class ControlLoop:
         except Exception:
             self._logger.exception("Error handling an automation on the temperature above %s", threshold)
 
-    def _decide_pwm_linked_temperature(self, readings: Mapping[int, ConvertedReading], sensor_id: int | None) -> None:
+    def _decide_pwm_linked_temperature(self, readings: Mapping[int, Reading], sensor_id: int | None) -> None:
         # The curve drives the PWM only while a print job is on, paused included
         if not self._print_job_running:
             return
@@ -672,7 +672,7 @@ class ControlLoop:
                 thermostat = self._thermostats.get(to_int(rpi_output["index_id"]))
                 if thermostat is not None:
                     thermostat.set_target(0.0)
-        self._frontend.update_targets(self.get_thermostat_targets())
+        self._frontend.update_targets(self.get_thermostats())
         self._decide_thermostats(self._sensor_poller.get_readings(), None)
 
     def _control_output(self, reaction: OutputControlReaction) -> bool:

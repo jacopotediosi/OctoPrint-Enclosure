@@ -10,7 +10,8 @@ from flask import jsonify, make_response, request
 from werkzeug.exceptions import BadRequest
 
 from octoprint_enclosure.actions import Action, ActionError, GcodeAction, PrinterAction, ShellAction
-from octoprint_enclosure.inputs import ConvertedReading, PullResistor
+from octoprint_enclosure.core import MeasurementType, TemperatureUnit
+from octoprint_enclosure.inputs import PullResistor, Reading
 from octoprint_enclosure.outputs import (
     LedstripOutput,
     NeopixelDirectOutput,
@@ -21,7 +22,7 @@ from octoprint_enclosure.outputs import (
     RegularSetState,
     ThermostatOutput,
 )
-from octoprint_enclosure.utils import is_number, is_rgb, parse_rgb, to_int
+from octoprint_enclosure.utils import is_number, is_rgb, parse_float, parse_rgb, to_float, to_int
 
 if TYPE_CHECKING:
     import logging
@@ -236,15 +237,27 @@ class Api(octoprint.plugin.BlueprintPlugin):
         try:
             reading = self._sensor_poller.get_reading(input_id)
         except LookupError:
-            reading = ConvertedReading(None, None, None)
-        payload["temp_sensor_temp"] = "" if reading.temperature is None else reading.temperature
+            reading = Reading()
+        temperature_unit = self._settings.temperature_unit
+        payload["use_fahrenheit"] = temperature_unit is TemperatureUnit.FAHRENHEIT
+        payload["temp_sensor_temp"] = (
+            "" if reading.temperature is None else temperature_unit.from_celsius(reading.temperature)
+        )
         payload["temp_sensor_humidity"] = "" if reading.humidity is None else reading.humidity
         return jsonify(payload)
 
     @octoprint.plugin.BlueprintPlugin.route("/temperature/<int:output_id>", methods=["PATCH"])
     @_expects_json(temperature="number")
     def set_thermostat_target(self, output_id: int, *, temperature: float) -> Response:
-        self._control_loop.set_thermostat_target(output_id, float(temperature))
+        try:
+            thermostat_output = self._outputs.get(output_id, ThermostatOutput)
+        except OutputError:
+            return make_response("", 204)
+        # 0 turns the thermostat off, in every unit
+        target = float(temperature)
+        if target != 0 and thermostat_output.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE:
+            target = self._settings.temperature_unit.to_celsius(target)
+        self._control_loop.set_thermostat_target(output_id, target)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/filament/<int:input_id>", methods=["PATCH"])
@@ -332,13 +345,39 @@ class Api(octoprint.plugin.BlueprintPlugin):
         payload["ledstrip_color"] = "rgb(0,0,0)"
         payload["temp_ctr_set_value"] = 0
 
+        # The settings hold the temperatures in Celsius, the API gives them in the temperature unit of the settings
         output_type = payload["output_type"]
-        if output_type in ("regular", "temp_hum_control"):
-            output_class = RegularOutput if output_type == "regular" else ThermostatOutput
-            payload["current_value"] = self._output_state_boolean(output_id, output_class)
+        temperature_unit = self._settings.temperature_unit
+        if output_type == "temp_hum_control" and payload["temp_ctr_type"] != "dehumidifier":
+            # 0 is the thermostat off, or no maximum, in every unit
+            for key in ("temp_ctr_default_value", "temp_ctr_max_temp"):
+                if to_float(payload[key]) > 0:
+                    payload[key] = self._converted(payload[key], temperature_unit.from_celsius)
+            payload["temp_ctr_deadband"] = self._converted(
+                payload["temp_ctr_deadband"],
+                temperature_unit.from_celsius_interval,
+            )
+        elif output_type == "pwm" and payload["pwm_temperature_linked"]:
+            for key in ("temperature_a", "temperature_b"):
+                payload[key] = self._converted(payload[key], temperature_unit.from_celsius)
+        elif output_type == "temperature_alarm":
+            payload["alarm_set_temp"] = self._converted(payload["alarm_set_temp"], temperature_unit.from_celsius)
+
+        if output_type == "regular":
+            payload["current_value"] = self._output_state_boolean(output_id, RegularOutput)
             payload["gpio_status"] = payload["current_value"] is True
-            if output_type == "temp_hum_control":
-                payload["temp_ctr_set_value"] = self._control_loop.get_thermostat_targets().get(output_id, 0)
+        elif output_type == "temp_hum_control":
+            payload["current_value"] = self._output_state_boolean(output_id, ThermostatOutput)
+            payload["gpio_status"] = payload["current_value"] is True
+            thermostat = self._control_loop.get_thermostats().get(output_id)
+            if thermostat is not None:
+                # 0 is the thermostat off, in every unit
+                temperature_unit = self._settings.temperature_unit
+                target = thermostat.target
+                is_temperature = thermostat.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE
+                if target != 0 and is_temperature:
+                    target = temperature_unit.from_celsius(target)
+                payload["temp_ctr_set_value"] = target
         elif output_type == "pwm":
             with contextlib.suppress(OutputError):
                 payload["duty_cycle"] = self._outputs.get(output_id, PwmOutput).duty_cycle
@@ -414,6 +453,14 @@ class Api(octoprint.plugin.BlueprintPlugin):
     ##########
     ### Helpers
     ##########
+
+    def _converted(self, value: object, convert: Callable[[float], float]) -> object:
+        # A value that isn't a number is returned as it is
+        try:
+            number = parse_float(value)
+        except (TypeError, ValueError, OverflowError):
+            return value
+        return convert(number)
 
     def _run_action(self, action_id: int, action_class: type[Action]) -> Response:
         try:

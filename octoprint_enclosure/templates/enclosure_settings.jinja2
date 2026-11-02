@@ -1,4 +1,4 @@
-{% from "enclosure_macros.jinja2" import checkbox_control_group, gpio_alert, select_control_group, text_control_group %}
+{% from "enclosure_macros.jinja2" import checkbox_control_group, gpio_alert, select_control_group, temperature_control_group, text_control_group %}
 {{ gpio_alert(plugin_enclosure_development_mode, plugin_enclosure_gpio_import_error) }}
 <h4>{{ _("Raspberry Pi Inputs") }}</h4>
 <p>
@@ -93,7 +93,6 @@
             <div data-bind="ifnot: temp_sensor_type() == 'rpi' || temp_sensor_type() == '18b20' || temp_sensor_type() == 'si7021' || temp_sensor_type() == 'bme280' || temp_sensor_type() == 'am2320' || temp_sensor_type() == 'tmp102' || temp_sensor_type() == 'max31855' || temp_sensor_type() == 'mcp9808' || temp_sensor_type() == 'temp_raw_i2c' || temp_sensor_type() == 'hum_raw_i2c'">
                 {{ text_control_group("gpio_pin", _("Sensor Pin"), "GPIO pin for temperature sensor, recommended to use 4 as DS18B20 only works on pin 4") }}
             </div>
-            {{ checkbox_control_group("use_fahrenheit", _("Use Fahrenheit Unit"), "Choose if you want to work with Celsius or Fahrenheit") }}
         </div>
         <div data-bind="if: input_type() == 'gpio'">
             {{ text_control_group("gpio_pin", _("Input IO Number"), "Input GPIO that will detect the event that should trigger the automations. For example if you have a filament sensor you put the GPIO pin that the sensor is connected. This can also be a press of a button or any other signal that you want to detect. You can not use GPIO 4 here if you are using temperature sensor DS18B20") }}
@@ -223,11 +222,21 @@
         <div data-bind="if: output_type() == 'temp_hum_control'">
             {{ select_control_group("temp_ctr_type", _("Device Type"), [("heater", _("Heater")), ("cooler", _("Cooler")), ("dehumidifier", _("Dehumidifier"))], placeholder="Select Device Type") }}
             <div data-bind="if: auto_startup() || startup_with_server()">
-                {{ text_control_group("temp_ctr_default_value", _("Default Value"), "Default temperature / humidity the thermostat will be set to when the print starts or the server starts.") }}
+                <div data-bind="if: temp_ctr_type() == 'dehumidifier'">
+                    {{ text_control_group("temp_ctr_default_value", _("Default Value"), "Default humidity the thermostat will be set to when the print starts or the server starts.") }}
+                </div>
+                <div data-bind="ifnot: temp_ctr_type() == 'dehumidifier'">
+                    {{ temperature_control_group("temp_ctr_default_value", _("Default Value"), "Default temperature the thermostat will be set to when the print starts or the server starts.", zero_off=true) }}
+                </div>
             </div>
-            {{ text_control_group("temp_ctr_deadband", _("Value Deadband"), "Allowable drift of the thermostat below its target. Set it to zero to disable.") }}
+            <div data-bind="if: temp_ctr_type() == 'dehumidifier'">
+                {{ text_control_group("temp_ctr_deadband", _("Value Deadband"), "Allowable drift of the thermostat below its target. Set it to zero to disable.") }}
+            </div>
+            <div data-bind="ifnot: temp_ctr_type() == 'dehumidifier'">
+                {{ temperature_control_group("temp_ctr_deadband", _("Value Deadband"), "Allowable drift of the thermostat below its target. Set it to zero to disable.", interval=true) }}
+            </div>
             <div data-bind="if: temp_ctr_type() == 'heater'">
-                {{ text_control_group("temp_ctr_max_temp", _("Maximum Temperature"), "Maximum temperature that the enclosure should reach, if this temperature is hit, the heater will be disabled until it's set temperature is set again.") }}
+                {{ temperature_control_group("temp_ctr_max_temp", _("Maximum Temperature"), "Maximum temperature that the enclosure should reach, if this temperature is hit, the heater will be disabled until it's set temperature is set again.", zero_off=true) }}
             </div>
         </div>
         <div data-bind="if: output_type() == 'pwm'">
@@ -391,7 +400,7 @@
         </div>
         <div data-bind="if: automation_type() == 'rule' && trigger_type() == 'temperature'">
             {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_temperature_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", placeholder="Select Sensor") }}
-            {{ text_control_group("alarm_set_temp", _("Set Temperature"), "Temperature above which the automation runs.") }}
+            {{ temperature_control_group("alarm_set_temp", _("Set Temperature"), "Temperature above which the automation runs.") }}
             {{ checkbox_control_group("repeat_while_above", _("Repeat while above"), "Run the automation at every reading above the set temperature, instead of only when the temperature goes above it the first time.") }}
         </div>
         <div data-bind="if: automation_type() == 'rule'">
@@ -435,9 +444,9 @@
             {{ select_control_group("output", _("Controlled IO"), "$root.settings_outputs_pwm", "PWM output whose duty cycle follows the temperature. Configured on the output side of the plugin.", placeholder="Select Output") }}
             {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_temperature_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", placeholder="Select Sensor") }}
             {{ text_control_group("duty_a", _("Duty A")) }}
-            {{ text_control_group("temperature_a", _("Temperature A")) }}
+            {{ temperature_control_group("temperature_a", _("Temperature A")) }}
             {{ text_control_group("duty_b", _("Duty B")) }}
-            {{ text_control_group("temperature_b", _("Temperature B")) }}
+            {{ temperature_control_group("temperature_b", _("Temperature B")) }}
         </div>
         <div class="control-group">
             <a title="Delete Automation"
@@ -474,6 +483,7 @@
                 <a href="https://github.com/jacopotediosi/OctoPrint-Enclosure">github</a> page</span>
         {% endcall %}
         {{ checkbox_control_group("use_board_pin_number", _("Use Board Pin #"), "Use BOARD pin numbers instead of BCM pin numbers") }}
+        {{ select_control_group("temperature_unit", _("Temperature Unit"), [("celsius", "Celsius (°C)"), ("fahrenheit", "Fahrenheit (°F)")], "Unit of every temperature shown and entered in the plugin") }}
         <div class="control-group">
             <label class="control-label">{{ _("Filament Change Gcode") }}</label>
             <div class="controls">

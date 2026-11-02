@@ -53,10 +53,10 @@ Response (200):
     "action_type": string, or null without an automation,
     "input_pull_resistor": string,
     "input_type": string,
-    "temp_sensor_temp": number, or "" without a reading,
+    "temp_sensor_temp": number (in the temperature unit of the plugin settings), or "" without a reading,
     "label": string,
     "index_id": number,
-    "use_fahrenheit": boolean,
+    "use_fahrenheit": boolean (whether the temperature unit of the plugin settings is Fahrenheit),
     "gpio_pin": string
 }
 ```
@@ -98,7 +98,7 @@ Response (200):
     "linked_temp_sensor": string,
     "ledstrip_gpio_dat": string,
     "startup_time": number,
-    "temp_ctr_deadband": number,
+    "temp_ctr_deadband": number (in the temperature unit of the plugin settings, or humidity for a dehumidifier),
     "neopixel_brightness": number,
     "gpio_pin": number,
     "gpio_i2c_enabled": boolean,
@@ -112,7 +112,7 @@ Response (200):
     "neopixel_color": string,
     "hide_btn_ui": boolean,
     "temp_ctr_set_value": number,
-    "temp_ctr_default_value": number,
+    "temp_ctr_default_value": number (in the temperature unit of the plugin settings, or humidity for a dehumidifier),
     "default_neopixel_color": string,
     "controlled_io_set_state": string,
     "auto_shutdown": boolean,
@@ -121,7 +121,7 @@ Response (200):
     "default_ledstrip_color": string,
     "duty_a": number,
     "toggle_timer_off": number,
-    "alarm_set_temp": number,
+    "alarm_set_temp": number (in the temperature unit of the plugin settings),
     "ledstrip_gpio_clk": string,
     "auto_startup": boolean,
     "controlled_io": number,
@@ -131,9 +131,9 @@ Response (200):
     "current_value": boolean,
     "shutdown_on_failed": boolean,
     "shutdown_on_error": boolean,
-    "temperature_b": number,
+    "temperature_b": number (in the temperature unit of the plugin settings),
     "ledstrip_color": string,
-    "temperature_a": number,
+    "temperature_a": number (in the temperature unit of the plugin settings),
     "neopixel_count": number,
     "neopixel_dma": number,
     "duty_cycle": number,
@@ -145,7 +145,7 @@ Response (200):
     "pwm_frequency": number,
     "startup_with_server": boolean,
     "active_low": boolean,
-    "temp_ctr_max_temp": number,
+    "temp_ctr_max_temp": number (in the temperature unit of the plugin settings),
     "pwm_temperature_linked": boolean,
     "output_type": string,
     "microcontroller_address": number,
@@ -225,7 +225,7 @@ Endpoint: **PATCH** `/temperature/<id>`
 Body (Content-Type: `application/json`):
 ```
 {
-    "temperature": number (the target temperature, or humidity for a dehumidifier; 0 turns the thermostat off)
+    "temperature": number (the target temperature in the temperature unit of the plugin settings, or humidity for a dehumidifier; 0 turns the thermostat off)
 }
 ```
 

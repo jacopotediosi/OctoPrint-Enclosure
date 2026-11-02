@@ -3,6 +3,8 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING
 
+from .measurement import TemperatureUnit
+
 if TYPE_CHECKING:
     from octoprint.plugin import PluginSettings
 
@@ -70,6 +72,18 @@ class Settings:
     def automations(self, value: list[dict]) -> None:
         with self.write_lock:
             self._settings.set(["automations"], value)
+
+    ##########
+    ### Temperatures
+    ##########
+
+    @property
+    def temperature_unit(self) -> TemperatureUnit:
+        """The unit the temperatures are shown and entered in."""
+        try:
+            return TemperatureUnit(self._settings.get(["temperature_unit"]))
+        except ValueError:
+            return TemperatureUnit.CELSIUS
 
     ##########
     ### GPIO

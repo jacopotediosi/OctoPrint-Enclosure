@@ -1,14 +1,14 @@
 from .config import InputType, PullResistor
 from .gpio import Edge, GpioInputError, GpioInputs
-from .sensors import ConvertedReading, SensorError, SensorPoller, Sensors
+from .sensors import Reading, SensorError, SensorPoller, Sensors
 
 __all__ = [
-    "ConvertedReading",
     "Edge",
     "GpioInputError",
     "GpioInputs",
     "InputType",
     "PullResistor",
+    "Reading",
     "SensorError",
     "SensorPoller",
     "Sensors",

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from octoprint_enclosure.core import MeasurementType
+from octoprint_enclosure.outputs import Output, OutputError, ThermostatOutput
 from octoprint_enclosure.utils import get_gcode_param, to_float, to_int
 
 if TYPE_CHECKING:
@@ -12,18 +14,20 @@ if TYPE_CHECKING:
 
     from octoprint_enclosure.core import PluginContext, Settings
     from octoprint_enclosure.output_executor import OutputExecutor
+    from octoprint_enclosure.outputs import Outputs
 
 
 class EncHandler:
     """Handles the ENC G-code commands."""
 
     _settings: Settings
+    _outputs: Outputs
     _output_executor: OutputExecutor
     _logger: logging.Logger
 
     _set_temperature: Callable[[int, float, bool], None]
-    """The function called to set the target of a thermostat, with the id of the output,
-    the target and whether the print has to pause until the target is reached."""
+    """The function called to set the target of a thermostat, with the id of the output, the target (in Celsius for a
+    temperature) and whether the print has to pause until the target is reached."""
 
     def __init__(
         self,
@@ -35,11 +39,12 @@ class EncHandler:
         Args:
             plugin_context (PluginContext): The plugin context.
             set_temperature (Callable[[int, float, bool], None]): The function called to set the target of a
-                thermostat, with the id of the output, the target and whether the print has to pause
-                until the target is reached.
+                thermostat, with the id of the output, the target (in Celsius for a temperature) and whether the
+                print has to pause until the target is reached.
 
         """
         self._settings = plugin_context.settings
+        self._outputs = plugin_context.outputs
         self._output_executor = plugin_context.output_executor
         self._logger = plugin_context.logger.getChild("EncHandler")
         self._set_temperature = set_temperature
@@ -56,18 +61,27 @@ class EncHandler:
             return
 
         self._logger.debug("Received ENC command: %s", cmd)
-
         index_id = to_int(get_gcode_param(cmd, "O"))
-        output = next((item for item in self._settings.rpi_outputs if item["index_id"] == index_id), None)
-        if output is None:
+
+        try:
+            output = self._outputs.get(index_id, Output)
+        except OutputError as error:
+            self._logger.debug("Can't run ENC command %s: %s", cmd, error)
             return
 
-        if output["output_type"] == "temp_hum_control":
-            temperature = to_float(get_gcode_param(cmd, "S"))
+        if isinstance(output, ThermostatOutput):
+            value = to_float(get_gcode_param(cmd, "S"))
             wait = to_int(get_gcode_param(cmd, "W")) == 1
-            self._set_temperature(index_id, temperature, wait)
-            comm_instance._log(f"Setting thermostat output {index_id} to value {temperature}")
+            # 0 turns the thermostat off, in every unit
+            target = value
+            if target != 0 and output.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE:
+                target = self._settings.temperature_unit.to_celsius(target)
+
+            self._set_temperature(index_id, target, wait)
+
+            comm_instance._log(f"Setting thermostat output {index_id} to value {value}")
         else:
             reply = self._output_executor.run_enc_command(index_id, cmd, wait=True)
+
             if reply is not None:
                 comm_instance._log(reply)

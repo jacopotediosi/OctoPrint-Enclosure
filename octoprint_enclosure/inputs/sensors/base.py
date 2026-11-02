@@ -17,9 +17,6 @@ class SensorInputConfig(InputConfig):
     temp_sensor_type: str = ""
     """The type of the sensor."""
 
-    use_fahrenheit: bool = False
-    """Whether the temperature is shown in Fahrenheit."""
-
     show_graph_temp: bool = False
     """Whether the temperature is shown in the temperature graph."""
 
@@ -48,6 +45,13 @@ class Reading:
 
     airquality: float | None = None
     """The air quality index."""
+
+    def __post_init__(self) -> None:
+        """Round the values to one decimal."""
+        for name in ("temperature", "humidity", "airquality"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, round(float(value), 1))
 
 
 class SensorError(Exception):
