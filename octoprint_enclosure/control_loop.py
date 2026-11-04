@@ -17,7 +17,6 @@ from .automations import (
     PwmTemperatureLinkedAutomation,
     RuleAutomation,
     RunActionReaction,
-    StopThermostatsReaction,
     TemperatureTrigger,
 )
 from .inputs import GpioInputError
@@ -31,7 +30,6 @@ from .outputs import (
     ThermostatOutput,
     ThermostatStatus,
 )
-from .utils import to_int
 
 if TYPE_CHECKING:
     import logging
@@ -131,11 +129,6 @@ class _WaitForTemperature(_Event):
 
     index_id: int
     """The id of the thermostat."""
-
-
-@dataclass(frozen=True)
-class _StopThermostats(_Event):
-    """The thermostats with Auto Shutdown on turn off."""
 
 
 @dataclass(frozen=True)
@@ -300,10 +293,6 @@ class ControlLoop:
         """
         self._put(_WaitForTemperature(index_id))
 
-    def stop_thermostats(self) -> None:
-        """Turn off the thermostats with Auto Shutdown on."""
-        self._put(_StopThermostats())
-
     def update_ui_targets(self) -> None:
         """Update the targets of the thermostats in the UI."""
         self._put(_UpdateUiTargets())
@@ -373,8 +362,6 @@ class ControlLoop:
         elif isinstance(event, _WaitForTemperature):
             self._waiting_temperature.add(event.index_id)
             self._decide_thermostats(self._sensor_poller.get_readings(), None)
-        elif isinstance(event, _StopThermostats):
-            self._stop_thermostats()
         elif isinstance(event, _UpdateUiTargets):
             self._frontend.update_targets(self.get_thermostats())
 
@@ -516,12 +503,6 @@ class ControlLoop:
                             NotificationType.PRINTER_ACTION,
                             f"Printer action: {action.config.printer_action.value} caused by {cause}",
                         )
-                elif isinstance(reaction, StopThermostatsReaction):
-                    self._stop_thermostats()
-                    self._notifications.send(
-                        NotificationType.PRINTER_ACTION,
-                        f"Printer action: stop_temp_hum_control caused by {cause}",
-                    )
             except Exception:
                 self._logger.exception("Error handling an automation on the temperature above %s", threshold)
 
@@ -599,12 +580,6 @@ class ControlLoop:
                             NotificationType.PRINTER_ACTION,
                             f"Printer action: {action.config.printer_action.value} caused by input: {input_label}",
                         )
-                elif isinstance(reaction, StopThermostatsReaction):
-                    self._stop_thermostats()
-                    self._notifications.send(
-                        NotificationType.PRINTER_ACTION,
-                        f"Printer action: stop_temp_hum_control caused by input: {input_label}",
-                    )
             except Exception:
                 self._logger.exception("Error handling an automation of input %s", input_id)
 
@@ -657,15 +632,6 @@ class ControlLoop:
                     automation.arm()
         except Exception:
             self._logger.exception("Error starting filament detection")
-
-    def _stop_thermostats(self) -> None:
-        for rpi_output in self._settings.rpi_outputs:
-            if rpi_output["auto_shutdown"] and rpi_output["output_type"] == "temp_hum_control":
-                thermostat = self._thermostats.get(to_int(rpi_output["index_id"]))
-                if thermostat is not None:
-                    thermostat.set_target(0.0)
-        self._frontend.update_targets(self.get_thermostats())
-        self._decide_thermostats(self._sensor_poller.get_readings(), None)
 
     def _control_output(self, reaction: OutputControlReaction) -> bool:
         config = reaction.config

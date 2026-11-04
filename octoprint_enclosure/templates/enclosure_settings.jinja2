@@ -409,7 +409,6 @@
                 {% call select_control_group("reaction_type", _("Reaction"), [
                     ("output_control", _("Output Control")),
                     ("run_action", _("Run Action")),
-                    ("stop_temp_hum_control", _("Stop Thermostats")),
                 ], placeholder="Select Reaction") %}
                     <span class="help-inline"
                           data-bind="visible: reaction_type() == 'output_control'">
@@ -420,11 +419,6 @@
                           data-bind="visible: reaction_type() == 'run_action'">
                         <span class="label label-info">Info:</span> Will run an action when a condition is met, for example send gcode or a command to the printer, or
                         run a shell script, when a button is pressed.
-                    </span>
-                    <span class="help-inline"
-                          data-bind="visible: reaction_type() == 'stop_temp_hum_control'">
-                        <span class="label label-info">Info:</span> Will stop all the thermostats with Auto Shutdown when a condition is met, for
-                        example the press of a button.
                     </span>
                 {% endcall %}
                 <div data-bind="if: reaction_type() == 'output_control'">

@@ -135,6 +135,14 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
         next_action_id = max(action_ids, default=0) + 1
         next_automation_id = 1
         automations: list[dict] = []
+        # The printer action stop_temp_hum_control turned off the thermostats with auto_shutdown on when it ran. It
+        # becomes a rule that turns off every heater and every other thermostat with auto_shutdown on at migration time.
+        stopped_thermostats = [
+            rpi_output.get("index_id")
+            for rpi_output in rpi_outputs
+            if rpi_output.get("output_type") == "temp_hum_control"
+            and (rpi_output.get("temp_ctr_type") == "heater" or rpi_output.get("auto_shutdown"))
+        ]
         for rpi_input in rpi_inputs:
             moved = {key: rpi_input.pop(key) for key in input_keys if key in rpi_input}
             action_type = moved.get("action_type", "")
@@ -142,6 +150,12 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             if rpi_input.get("input_type") != "gpio":
                 continue
             if action_type == "output_control" and moved.get("controlled_io") in ("", None):
+                continue
+            if (
+                action_type == "printer_control"
+                and printer_action == "stop_temp_hum_control"
+                and not stopped_thermostats
+            ):
                 continue
 
             automation = {
@@ -156,6 +170,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                 automation["edge"] = moved["edge"]
 
             reaction = {}
+            reactions = [reaction]
             if action_type == "printer_control" and printer_action == "filament":
                 # A filament sensor is an automation of its own type, not a rule
                 automation["automation_type"] = "filament"
@@ -163,7 +178,10 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                     if key in moved:
                         automation[key] = moved[key]
             elif action_type == "printer_control" and printer_action == "stop_temp_hum_control":
-                reaction["reaction_type"] = "stop_temp_hum_control"
+                reactions = [
+                    {"reaction_type": "output_control", "controlled_io": index_id, "controlled_io_set_state": "off"}
+                    for index_id in stopped_thermostats
+                ]
             elif action_type == "printer_control":
                 # A printer command becomes a new action, that the rule runs
                 reaction["reaction_type"] = "run_action"
@@ -188,7 +206,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                 for key in ("controlled_io", "controlled_io_set_state"):
                     if key in moved:
                         reaction[key] = moved[key]
-            automation["reactions"] = [reaction]
+            automation["reactions"] = reactions
             automations.append(automation)
 
         # A temperature alarm moves to the automations, with a new id and its keys, as a rule that sets controlled_io at

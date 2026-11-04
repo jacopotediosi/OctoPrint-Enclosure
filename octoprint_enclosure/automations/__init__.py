@@ -2,7 +2,7 @@ from .automations import Automations
 from .base import AutomationError
 from .filament import FilamentAutomation
 from .pwm_temperature_linked import PwmTemperatureLinkedAutomation
-from .reactions import OutputControlReaction, OutputSetState, RunActionReaction, StopThermostatsReaction
+from .reactions import OutputControlReaction, OutputSetState, RunActionReaction
 from .rule import RuleAutomation
 from .triggers import GpioInputTrigger, TemperatureTrigger
 
@@ -16,6 +16,5 @@ __all__ = [
     "PwmTemperatureLinkedAutomation",
     "RuleAutomation",
     "RunActionReaction",
-    "StopThermostatsReaction",
     "TemperatureTrigger",
 ]
