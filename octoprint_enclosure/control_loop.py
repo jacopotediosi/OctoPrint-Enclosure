@@ -399,11 +399,12 @@ class ControlLoop:
     def _decide_gpio_input_levels(self) -> None:
         try:
             for rule in self._automations.get_all(RuleAutomation):
-                # Get automation rule trigger and reaction
-                trigger, reaction = rule.trigger, rule.reaction
+                # Get the trigger and the reactions that control an output
+                trigger = rule.trigger
+                reactions = [reaction for reaction in rule.reactions if isinstance(reaction, OutputControlReaction)]
 
-                # Skip automation rules which don't react to gpio inputs
-                if not isinstance(trigger, GpioInputTrigger) or not isinstance(reaction, OutputControlReaction):
+                # Skip automation rules which don't react to gpio inputs by controlling an output
+                if not isinstance(trigger, GpioInputTrigger) or not reactions:
                     continue
 
                 # Get the trigger input id
@@ -418,7 +419,8 @@ class ControlLoop:
 
                 # React if the input level matches the trigger
                 if trigger.matches_level(level):
-                    self._control_output(reaction)
+                    for reaction in reactions:
+                        self._control_output(reaction)
         except Exception:
             self._logger.exception("Error applying the levels of the GPIO inputs")
 
@@ -494,34 +496,34 @@ class ControlLoop:
                 self._react_to_temperature(rule, trigger.config.alarm_set_temp)
 
     def _react_to_temperature(self, rule: RuleAutomation, threshold: float) -> None:
-        reaction = rule.reaction
         temperature_unit = self._settings.temperature_unit
         cause = f"enclosure temperature exceed {temperature_unit.from_celsius(threshold):g} {temperature_unit.symbol}"
-        try:
-            if isinstance(reaction, OutputControlReaction):
-                if self._control_output(reaction):
-                    self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
-            elif isinstance(reaction, RunActionReaction):
-                try:
-                    action = self._actions.run(reaction.config.action)
-                except ActionError as error:
-                    self._logger.debug("Can't run action %s: %s", reaction.config.action, error)
-                    return
-                if isinstance(action, GcodeAction):
-                    self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
-                elif isinstance(action, PrinterAction):
+        for reaction in rule.reactions:
+            try:
+                if isinstance(reaction, OutputControlReaction):
+                    if self._control_output(reaction):
+                        self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
+                elif isinstance(reaction, RunActionReaction):
+                    try:
+                        action = self._actions.run(reaction.config.action)
+                    except ActionError as error:
+                        self._logger.debug("Can't run action %s: %s", reaction.config.action, error)
+                        continue
+                    if isinstance(action, GcodeAction):
+                        self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
+                    elif isinstance(action, PrinterAction):
+                        self._notifications.send(
+                            NotificationType.PRINTER_ACTION,
+                            f"Printer action: {action.config.printer_action.value} caused by {cause}",
+                        )
+                elif isinstance(reaction, StopThermostatsReaction):
+                    self._stop_thermostats()
                     self._notifications.send(
                         NotificationType.PRINTER_ACTION,
-                        f"Printer action: {action.config.printer_action.value} caused by {cause}",
+                        f"Printer action: stop_temp_hum_control caused by {cause}",
                     )
-            elif isinstance(reaction, StopThermostatsReaction):
-                self._stop_thermostats()
-                self._notifications.send(
-                    NotificationType.PRINTER_ACTION,
-                    f"Printer action: stop_temp_hum_control caused by {cause}",
-                )
-        except Exception:
-            self._logger.exception("Error handling an automation on the temperature above %s", threshold)
+            except Exception:
+                self._logger.exception("Error handling an automation on the temperature above %s", threshold)
 
     def _decide_pwm_linked_temperature(self, readings: Mapping[int, Reading], sensor_id: int | None) -> None:
         # The curve drives the PWM only while a print job is on, paused included
@@ -571,40 +573,40 @@ class ControlLoop:
                 self._detect_filament_end(automation, input_id, input_label)
 
     def _react_to_gpio_edge(self, rule: RuleAutomation, input_id: int, input_label: str) -> None:
-        reaction = rule.reaction
-        try:
-            if isinstance(reaction, OutputControlReaction):
-                config = reaction.config
-                if self._control_output(reaction):
-                    self._notifications.send(
-                        NotificationType.GPIO_ACTION,
-                        f"GPIO control action caused by input {input_label}. "
-                        f"Setting GPIO{config.controlled_io} to: {config.controlled_io_set_state.value}",
-                    )
-            elif isinstance(reaction, RunActionReaction):
-                try:
-                    action = self._actions.run(reaction.config.action)
-                except ActionError as error:
-                    self._logger.debug("Can't run action %s: %s", reaction.config.action, error)
-                    return
-                if isinstance(action, GcodeAction):
-                    self._notifications.send(
-                        NotificationType.GPIO_ACTION,
-                        f"GPIO control action caused by input {input_label}. Sending GCODE command",
-                    )
-                elif isinstance(action, PrinterAction):
+        for reaction in rule.reactions:
+            try:
+                if isinstance(reaction, OutputControlReaction):
+                    config = reaction.config
+                    if self._control_output(reaction):
+                        self._notifications.send(
+                            NotificationType.GPIO_ACTION,
+                            f"GPIO control action caused by input {input_label}. "
+                            f"Setting GPIO{config.controlled_io} to: {config.controlled_io_set_state.value}",
+                        )
+                elif isinstance(reaction, RunActionReaction):
+                    try:
+                        action = self._actions.run(reaction.config.action)
+                    except ActionError as error:
+                        self._logger.debug("Can't run action %s: %s", reaction.config.action, error)
+                        continue
+                    if isinstance(action, GcodeAction):
+                        self._notifications.send(
+                            NotificationType.GPIO_ACTION,
+                            f"GPIO control action caused by input {input_label}. Sending GCODE command",
+                        )
+                    elif isinstance(action, PrinterAction):
+                        self._notifications.send(
+                            NotificationType.PRINTER_ACTION,
+                            f"Printer action: {action.config.printer_action.value} caused by input: {input_label}",
+                        )
+                elif isinstance(reaction, StopThermostatsReaction):
+                    self._stop_thermostats()
                     self._notifications.send(
                         NotificationType.PRINTER_ACTION,
-                        f"Printer action: {action.config.printer_action.value} caused by input: {input_label}",
+                        f"Printer action: stop_temp_hum_control caused by input: {input_label}",
                     )
-            elif isinstance(reaction, StopThermostatsReaction):
-                self._stop_thermostats()
-                self._notifications.send(
-                    NotificationType.PRINTER_ACTION,
-                    f"Printer action: stop_temp_hum_control caused by input: {input_label}",
-                )
-        except Exception:
-            self._logger.exception("Error handling an automation of input %s", input_id)
+            except Exception:
+                self._logger.exception("Error handling an automation of input %s", input_id)
 
     def _detect_filament_end(self, automation: FilamentAutomation, input_id: int, input_label: str) -> None:
         try:

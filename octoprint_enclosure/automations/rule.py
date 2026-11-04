@@ -27,34 +27,37 @@ class RuleConfig(BaseConfig):
     trigger_type: str = ""
     """The type of the trigger of the rule."""
 
-    reaction_type: str = ""
-    """The type of the reaction of the rule."""
-
 
 class RuleAutomation(Automation[RuleConfig]):
-    """An automation that reacts to a trigger."""
+    """An automation that reacts to a trigger, with one or more reactions."""
 
     config_class = RuleConfig
 
     _trigger: Trigger
     """What starts the rule."""
 
-    reaction: Reaction
-    """What the rule does."""
+    reactions: list[Reaction]
+    """What the rule does, in order."""
 
-    def __init__(self, config: RuleConfig, trigger: Trigger, reaction: Reaction, logger: logging.Logger) -> None:
+    def __init__(
+        self,
+        config: RuleConfig,
+        trigger: Trigger,
+        reactions: list[Reaction],
+        logger: logging.Logger,
+    ) -> None:
         """Set up the automation rule.
 
         Args:
             config (RuleConfig): The configuration of the automation rule.
             trigger (Trigger): What starts the automation rule.
-            reaction (Reaction): What the automation rule does.
+            reactions (list[Reaction]): What the automation rule does, in order.
             logger (logging.Logger): The logger to write to.
 
         """
         super().__init__(config, logger)
         self._trigger = trigger
-        self.reaction = reaction
+        self.reactions = reactions
 
     @property
     @override
@@ -69,8 +72,11 @@ class RuleAutomation(Automation[RuleConfig]):
             and super().has_same_config(other)
             and type(other.trigger) is type(self.trigger)
             and other.trigger.config == self.trigger.config
-            and type(other.reaction) is type(self.reaction)
-            and other.reaction.config == self.reaction.config
+            and len(other.reactions) == len(self.reactions)
+            and all(
+                type(other_reaction) is type(reaction) and other_reaction.config == reaction.config
+                for reaction, other_reaction in zip(self.reactions, other.reactions)
+            )
         )
 
     @classmethod
@@ -83,9 +89,22 @@ class RuleAutomation(Automation[RuleConfig]):
             msg = f"Unsupported trigger type: {config.trigger_type!r}"
             raise ValueError(msg)
 
-        reaction_class = REACTIONS.get(config.reaction_type)
-        if reaction_class is None:
-            msg = f"Unsupported reaction type: {config.reaction_type!r}"
+        reactions_settings = settings.get("reactions")
+        if (
+            not isinstance(reactions_settings, list)
+            or not reactions_settings
+            or not all(isinstance(item, dict) for item in reactions_settings)
+        ):
+            msg = "reactions is not a list of at least one reaction"
             raise ValueError(msg)
 
-        return cls(config, trigger_class.from_settings(settings), reaction_class.from_settings(settings), logger)
+        reactions = []
+        for reaction_settings in reactions_settings:
+            reaction_type = reaction_settings.get("reaction_type", "")
+            reaction_class = REACTIONS.get(reaction_type)
+            if reaction_class is None:
+                msg = f"Unsupported reaction type: {reaction_type!r}"
+                raise ValueError(msg)
+            reactions.append(reaction_class.from_settings(reaction_settings))
+
+        return cls(config, trigger_class.from_settings(settings), reactions, logger)

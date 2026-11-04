@@ -633,13 +633,7 @@ $(function () {
         linked_temp_sensor: ko.observable(""),
         alarm_set_temp: ko.observable(""),
         repeat_while_above: ko.observable(false),
-        reaction_type: ko.observable(""),
-        controlled_io: ko.observable(""),
-        controlled_io_set_state: ko.observable("on"),
-        duty_cycle: ko.observable(0),
-        color: ko.observable(""),
-        target: ko.observable(0),
-        action: ko.observable(""),
+        reactions: ko.observableArray([self.newReaction()]),
         filament_sensor_enabled: ko.observable(true),
         filament_sensor_timeout: ko.observable(120),
         output: ko.observable(""),
@@ -652,6 +646,26 @@ $(function () {
 
     self.removeAutomation = function (data) {
       self.settingsViewModel.settings.plugins.enclosure.automations.remove(data);
+    };
+
+    self.newReaction = function () {
+      return {
+        reaction_type: ko.observable(""),
+        controlled_io: ko.observable(""),
+        controlled_io_set_state: ko.observable("on"),
+        duty_cycle: ko.observable(0),
+        color: ko.observable(""),
+        target: ko.observable(0),
+        action: ko.observable("")
+      };
+    };
+
+    self.addReaction = function (automation) {
+      automation.reactions.push(self.newReaction());
+    };
+
+    self.removeReaction = function (automation, reaction) {
+      automation.reactions.remove(reaction);
     };
 
     self.turnOffHeater = function (item) {

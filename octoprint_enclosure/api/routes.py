@@ -193,49 +193,7 @@ class Api(octoprint.plugin.BlueprintPlugin):
         if input_settings is None:
             return make_response("", 404)
 
-        # In previous versions, the automation of a GPIO input was saved in the rpi_input dict. To keep backward
-        # compatibility, the API returns the input with the keys of its first automation, and the type of the
-        # reaction in action_type. A filament sensor, a rule that stops the thermostats and a rule
-        # that runs a printer action were a printer_control with "filament", "stop_temp_hum_control" or the
-        # command in printer_action, and a rule that runs another action was an output_control with the id of
-        # the action in controlled_io.
         payload = copy.deepcopy(input_settings)
-        input_keys = (
-            "edge",
-            "controlled_io",
-            "controlled_io_set_state",
-            "filament_sensor_enabled",
-            "filament_sensor_timeout",
-        )
-        payload.update(dict.fromkeys((*input_keys, "action_type", "printer_action")))
-        automation_settings = next(
-            (
-                item
-                for item in self._settings.automations
-                if (item["automation_type"] == "filament" or item["trigger_type"] == "gpio_input")
-                and to_int(item["input"]) == input_id
-            ),
-            None,
-        )
-        if automation_settings is not None:
-            payload.update({key: automation_settings[key] for key in input_keys if key in automation_settings})
-            payload["printer_action"] = ""
-            if automation_settings["automation_type"] == "filament":
-                payload["action_type"] = "printer_control"
-                payload["printer_action"] = "filament"
-            elif automation_settings["reaction_type"] == "stop_temp_hum_control":
-                payload["action_type"] = "printer_control"
-                payload["printer_action"] = "stop_temp_hum_control"
-            elif automation_settings["reaction_type"] == "run_action":
-                action_settings = self._get_action_settings(to_int(automation_settings["action"]))
-                if action_settings is not None and action_settings["action_type"] == "printer":
-                    payload["action_type"] = "printer_control"
-                    payload["printer_action"] = action_settings["printer_action"]
-                else:
-                    payload["action_type"] = "output_control"
-                    payload["controlled_io"] = automation_settings["action"]
-            else:
-                payload["action_type"] = automation_settings["reaction_type"]
         try:
             reading = self._sensor_poller.get_reading(input_id)
         except LookupError:
@@ -286,63 +244,15 @@ class Api(octoprint.plugin.BlueprintPlugin):
 
     @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:output_id>", methods=["GET"])
     def get_output(self, output_id: int) -> Response:
-        # In previous versions, actions and temperature alarms were outputs, and PWM outputs linked to the temperature
-        # held their curve, with pwm_temperature_linked on. To keep backward compatibility, the API returns them as
-        # they were saved among the outputs, with their type in output_type.
         output_settings = self._get_output_settings(output_id)
-        action_settings = self._get_action_settings(output_id)
-        alarm_settings = next(
-            (
-                item
-                for item in self._settings.automations
-                if to_int(item["index_id"]) == output_id
-                and item["automation_type"] == "rule"
-                and item["trigger_type"] == "temperature"
-                and item["reaction_type"] == "output_control"
-            ),
-            None,
-        )
-        if output_settings is not None:
-            payload = {
-                "gcode": "",
-                "shell_script": "",
-                "alarm_set_temp": 0,
-                "controlled_io": 0,
-                "controlled_io_set_state": "on",
-                "pwm_temperature_linked": False,
-                "temperature_a": 0,
-                "duty_a": 0,
-                "temperature_b": 0,
-                "duty_b": 0,
-                **copy.deepcopy(output_settings),
-            }
-            if payload["output_type"] == "pwm":
-                linked_settings = next(
-                    (
-                        item
-                        for item in self._settings.automations
-                        if item["automation_type"] == "pwm_temperature_linked" and to_int(item["output"]) == output_id
-                    ),
-                    None,
-                )
-                payload["pwm_temperature_linked"] = linked_settings is not None
-                if linked_settings is not None:
-                    linked_keys = ("linked_temp_sensor", "temperature_a", "duty_a", "temperature_b", "duty_b")
-                    payload.update({key: linked_settings[key] for key in linked_keys})
-        elif action_settings is not None and action_settings["action_type"] != "printer":
-            payload = copy.deepcopy(action_settings)
-            payload["output_type"] = payload.pop("action_type")
-        elif alarm_settings is not None:
-            payload = copy.deepcopy(alarm_settings)
-            for key in ("automation_type", "trigger_type", "reaction_type"):
-                del payload[key]
-            payload["output_type"] = "temperature_alarm"
-        else:
+
+        if output_settings is None:
             return make_response("", 404)
 
+        payload = copy.deepcopy(output_settings)
         payload["gpio_status"] = False
         payload["current_value"] = False
-        payload.setdefault("duty_cycle", 0)
+        payload["duty_cycle"] = 0
         payload["neopixel_color"] = "rgb(0,0,0)"
         payload["ledstrip_color"] = "rgb(0,0,0)"
         payload["temp_ctr_set_value"] = 0
@@ -366,20 +276,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
                 payload["temp_ctr_deadband"],
                 temperature_unit.from_celsius_interval,
             )
-        elif output_type == "pwm" and payload["pwm_temperature_linked"]:
-            for key in ("temperature_a", "temperature_b"):
-                payload[key] = self._converted(payload[key], temperature_unit.from_celsius)
-        elif output_type == "temperature_alarm":
-            payload["alarm_set_temp"] = self._converted(payload["alarm_set_temp"], temperature_unit.from_celsius)
-            # 0 is the thermostat off, in every unit
-            controlled_settings = self._get_output_settings(to_int(payload["controlled_io"]))
-            if (
-                controlled_settings is not None
-                and controlled_settings["output_type"] == "temp_hum_control"
-                and controlled_settings["temp_ctr_type"] != "dehumidifier"
-                and to_float(payload["target"]) != 0
-            ):
-                payload["target"] = self._converted(payload["target"], temperature_unit.from_celsius)
 
         if output_type == "regular":
             payload["current_value"] = self._output_state_boolean(output_id, RegularOutput)
@@ -500,9 +396,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
 
     def _get_output_settings(self, output_id: int) -> dict | None:
         return next((item for item in self._settings.rpi_outputs if to_int(item["index_id"]) == output_id), None)
-
-    def _get_action_settings(self, action_id: int) -> dict | None:
-        return next((item for item in self._settings.actions if to_int(item["index_id"]) == action_id), None)
 
     def _pin_state_human(self, pin: int, *, active_low: bool) -> str:
         try:

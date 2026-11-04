@@ -133,7 +133,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
         )
         action_ids = {to_int(action.get("index_id")) for action in actions}
         next_id = max((to_int(item.get("index_id")) for item in [*rpi_outputs, *actions]), default=0) + 1
-        automations = []
+        automations: list[dict] = []
         for rpi_input in rpi_inputs:
             moved = {key: rpi_input.pop(key) for key in input_keys if key in rpi_input}
             action_type = moved.get("action_type", "")
@@ -154,6 +154,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             if "edge" in moved:
                 automation["edge"] = moved["edge"]
 
+            reaction = {}
             if action_type == "printer_control" and printer_action == "filament":
                 # A filament sensor is an automation of its own type, not a rule
                 automation["automation_type"] = "filament"
@@ -161,11 +162,11 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                     if key in moved:
                         automation[key] = moved[key]
             elif action_type == "printer_control" and printer_action == "stop_temp_hum_control":
-                automation["reaction_type"] = "stop_temp_hum_control"
+                reaction["reaction_type"] = "stop_temp_hum_control"
             elif action_type == "printer_control":
                 # A printer command becomes a new action, that the rule runs
-                automation["reaction_type"] = "run_action"
-                automation["action"] = next_id
+                reaction["reaction_type"] = "run_action"
+                reaction["action"] = next_id
                 actions.append(
                     {
                         "index_id": next_id,
@@ -179,13 +180,14 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                 next_id += 1
             elif action_type == "output_control" and to_int(moved.get("controlled_io")) in action_ids:
                 # The G-code and shell script actions were outputs, so a GPIO input could control them like outputs
-                automation["reaction_type"] = "run_action"
-                automation["action"] = moved["controlled_io"]
+                reaction["reaction_type"] = "run_action"
+                reaction["action"] = moved["controlled_io"]
             else:
-                automation["reaction_type"] = action_type
+                reaction["reaction_type"] = action_type
                 for key in ("controlled_io", "controlled_io_set_state"):
                     if key in moved:
-                        automation[key] = moved[key]
+                        reaction[key] = moved[key]
+            automation["reactions"] = [reaction]
             automations.append(automation)
 
         # A temperature alarm moves to the automations, with the same id and keys, as a rule that sets controlled_io at
@@ -198,7 +200,11 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                 continue
             del alarm["output_type"]
             alarm.update({"automation_type": "rule", "trigger_type": "temperature", "repeat_while_above": True})
-            alarm["reaction_type"] = "output_control"
+            reaction = {"reaction_type": "output_control"}
+            for key in ("controlled_io", "controlled_io_set_state"):
+                if key in alarm:
+                    reaction[key] = alarm.pop(key)
+            alarm["reactions"] = [reaction]
             automations.append(alarm)
 
         # A PWM with pwm_temperature_linked on stored the line of its duty cycle. The line moves to a new
@@ -259,10 +265,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "linked_temp_sensor",
             "alarm_set_temp",
             "repeat_while_above",
-            "reaction_type",
-            "controlled_io",
-            "controlled_io_set_state",
-            "action",
+            "reactions",
             "filament_sensor_enabled",
             "filament_sensor_timeout",
             "output",
@@ -301,13 +304,6 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "linked_temp_sensor": "",
             "alarm_set_temp": "",
             "repeat_while_above": False,
-            "reaction_type": "output_control",
-            "controlled_io": "",
-            "controlled_io_set_state": "on",
-            "duty_cycle": 0,
-            "color": "",
-            "target": 0,
-            "action": "",
             "filament_sensor_enabled": True,
             "filament_sensor_timeout": 120,
             "output": "",
@@ -316,9 +312,22 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "temperature_b": 0,
             "duty_b": 0,
         }
+        reaction_defaults = {
+            "reaction_type": "output_control",
+            "controlled_io": "",
+            "controlled_io_set_state": "on",
+            "duty_cycle": 0,
+            "color": "",
+            "target": 0,
+            "action": "",
+        }
         for automation in automations:
             for key, value in automation_defaults.items():
                 automation.setdefault(key, value)
+            automation.setdefault("reactions", [{}])
+            for reaction in automation["reactions"]:
+                for key, value in reaction_defaults.items():
+                    reaction.setdefault(key, value)
 
         # Up to version 10, each sensor had its own unit (via `use_fahrenheit`), and the plugin stored temperatures in
         # that unit. From version 11 onwards, the plugin uses a single, centralized `temperature_unit` setting, which

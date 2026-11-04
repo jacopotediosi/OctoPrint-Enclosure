@@ -33,12 +33,7 @@ Endpoint: **GET** `/inputs/<id>`
 Response (200):
 ```
 {
-    "controlled_io": number, or "" if not set, or null without an automation,
-    "filament_sensor_timeout": number, or null without an automation,
-    "filament_sensor_enabled": boolean, or null without an automation,
     "temp_sensor_address": string,
-    "printer_action": string, or null without an automation,
-    "controlled_io_set_state": string, or null without an automation,
     "temp_sensor_type": string,
     "temp_sensor_i2cbus": number,
     "temp_i2c_bus": number,
@@ -48,9 +43,7 @@ Response (200):
     "show_graph_humidity": boolean,
     "temp_sensor_navbar": boolean,
     "temp_sensor_humidity": number, or "" without a reading,
-    "edge": string, or null without an automation,
     "ds18b20_serial": string,
-    "action_type": string, or null without an automation,
     "input_pull_resistor": string,
     "input_type": string,
     "temp_sensor_temp": number (in the temperature unit of the plugin settings), or "" without a reading,
@@ -114,41 +107,29 @@ Response (200):
     "temp_ctr_set_value": number,
     "temp_ctr_default_value": number (in the temperature unit of the plugin settings, or humidity for a dehumidifier),
     "default_neopixel_color": string,
-    "controlled_io_set_state": string,
-    "color": string ("#rrggbb"), or "" if not set,
-    "target": number (in the temperature unit of the plugin settings, or humidity for a dehumidifier),
     "auto_shutdown": boolean,
-    "shell_script": string,
     "label": string,
     "default_ledstrip_color": string,
-    "duty_a": number,
     "toggle_timer_off": number,
-    "alarm_set_temp": number (in the temperature unit of the plugin settings),
     "ledstrip_gpio_clk": string,
     "auto_startup": boolean,
-    "controlled_io": number,
     "shutdown_time": number,
     "temp_ctr_type": string,
-    "gcode": string,
     "current_value": boolean,
     "shutdown_on_failed": boolean,
     "shutdown_on_error": boolean,
-    "temperature_b": number (in the temperature unit of the plugin settings),
     "ledstrip_color": string,
-    "temperature_a": number (in the temperature unit of the plugin settings),
     "neopixel_count": number,
     "neopixel_dma": number,
     "duty_cycle": number,
     "toggle_timer_on": number,
     "show_on_navbar": boolean,
-    "duty_b": number,
     "toggle_timer": boolean,
     "gpio_status": boolean,
     "pwm_frequency": number,
     "startup_with_server": boolean,
     "active_low": boolean,
     "temp_ctr_max_temp": number (in the temperature unit of the plugin settings),
-    "pwm_temperature_linked": boolean,
     "output_type": string,
     "microcontroller_address": number,
     "index_id": number
@@ -156,7 +137,7 @@ Response (200):
 ```
 
 Error Responses:
- - 404 if specified id cannot be found
+ - 404 if no output has the specified id
 
 ## Switch an output
 
