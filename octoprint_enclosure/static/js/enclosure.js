@@ -514,9 +514,15 @@ $(function () {
       }
     };
 
+    self.nextIndexId = function (items) {
+      var indexes = items.map(function (item) {
+        return parseInt(item.index_id(), 10) || 0;
+      });
+      return indexes.length == 0 ? 1 : Math.max.apply(null, indexes) + 1;
+    };
+
     self.addRpiInput = function () {
-      var arrRelaysLength = self.settingsViewModel.settings.plugins.enclosure.rpi_inputs().length;
-      var nextIndex = arrRelaysLength == 0 ? 1 : self.settingsViewModel.settings.plugins.enclosure.rpi_inputs()[arrRelaysLength - 1].index_id() + 1;
+      var nextIndex = self.nextIndexId(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs());
 
       self.settingsViewModel.settings.plugins.enclosure.rpi_inputs.push({
         index_id: ko.observable(nextIndex),
@@ -541,17 +547,8 @@ $(function () {
       self.settingsViewModel.settings.plugins.enclosure.rpi_inputs.remove(definition);
     };
 
-    // Outputs, actions and automations share the ids, because many actions and automations used to be inputs/outputs and keep their ids
-    self.nextSharedIndex = function () {
-      var enclosure = self.settingsViewModel.settings.plugins.enclosure;
-      var indexes = enclosure.rpi_outputs().concat(enclosure.actions(), enclosure.automations()).map(function (item) {
-        return parseInt(item.index_id(), 10) || 0;
-      });
-      return indexes.length == 0 ? 1 : Math.max.apply(null, indexes) + 1;
-    };
-
     self.addRpiOutput = function () {
-      var nextIndex = self.nextSharedIndex();
+      var nextIndex = self.nextIndexId(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs());
 
       self.settingsViewModel.settings.plugins.enclosure.rpi_outputs.push({
         index_id: ko.observable(nextIndex),
@@ -602,7 +599,7 @@ $(function () {
     };
 
     self.addAction = function () {
-      var nextIndex = self.nextSharedIndex();
+      var nextIndex = self.nextIndexId(self.settingsViewModel.settings.plugins.enclosure.actions());
 
       self.settingsViewModel.settings.plugins.enclosure.actions.push({
         index_id: ko.observable(nextIndex),
@@ -621,7 +618,7 @@ $(function () {
     };
 
     self.addAutomation = function () {
-      var nextIndex = self.nextSharedIndex();
+      var nextIndex = self.nextIndexId(self.settingsViewModel.settings.plugins.enclosure.automations());
 
       self.settingsViewModel.settings.plugins.enclosure.automations.push({
         index_id: ko.observable(nextIndex),

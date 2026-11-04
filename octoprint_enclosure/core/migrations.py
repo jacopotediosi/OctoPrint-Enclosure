@@ -132,7 +132,8 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "filament_sensor_timeout",
         )
         action_ids = {to_int(action.get("index_id")) for action in actions}
-        next_id = max((to_int(item.get("index_id")) for item in [*rpi_outputs, *actions]), default=0) + 1
+        next_action_id = max(action_ids, default=0) + 1
+        next_automation_id = 1
         automations: list[dict] = []
         for rpi_input in rpi_inputs:
             moved = {key: rpi_input.pop(key) for key in input_keys if key in rpi_input}
@@ -144,13 +145,13 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                 continue
 
             automation = {
-                "index_id": next_id,
+                "index_id": next_automation_id,
                 "label": rpi_input.get("label"),
                 "automation_type": "rule",
                 "trigger_type": "gpio_input",
                 "input": rpi_input.get("index_id"),
             }
-            next_id += 1
+            next_automation_id += 1
             if "edge" in moved:
                 automation["edge"] = moved["edge"]
 
@@ -166,10 +167,10 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             elif action_type == "printer_control":
                 # A printer command becomes a new action, that the rule runs
                 reaction["reaction_type"] = "run_action"
-                reaction["action"] = next_id
+                reaction["action"] = next_action_id
                 actions.append(
                     {
-                        "index_id": next_id,
+                        "index_id": next_action_id,
                         "label": rpi_input.get("label"),
                         "action_type": "printer",
                         "printer_action": printer_action,
@@ -177,7 +178,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                         "show_on_navbar": False,
                     },
                 )
-                next_id += 1
+                next_action_id += 1
             elif action_type == "output_control" and to_int(moved.get("controlled_io")) in action_ids:
                 # The G-code and shell script actions were outputs, so a GPIO input could control them like outputs
                 reaction["reaction_type"] = "run_action"
@@ -190,15 +191,19 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             automation["reactions"] = [reaction]
             automations.append(automation)
 
-        # A temperature alarm moves to the automations, with the same id and keys, as a rule that sets controlled_io at
+        # A temperature alarm moves to the automations, with a new id and its keys, as a rule that sets controlled_io at
         # every reading of linked_temp_sensor above alarm_set_temp.
-        alarms = [rpi_output for rpi_output in rpi_outputs if rpi_output.get("output_type") == "temperature_alarm"]
+        temperature_alarms = [
+            rpi_output for rpi_output in rpi_outputs if rpi_output.get("output_type") == "temperature_alarm"
+        ]
         rpi_outputs = [rpi_output for rpi_output in rpi_outputs if rpi_output.get("output_type") != "temperature_alarm"]
-        for alarm in alarms:
+        for alarm in temperature_alarms:
             # An alarm whose alarm_set_temp was 0 was off and did nothing, so it is dropped
             if int(to_float(alarm.get("alarm_set_temp"))) == 0:
                 continue
             del alarm["output_type"]
+            alarm["index_id"] = next_automation_id
+            next_automation_id += 1
             alarm.update({"automation_type": "rule", "trigger_type": "temperature", "repeat_while_above": True})
             reaction = {"reaction_type": "output_control"}
             for key in ("controlled_io", "controlled_io_set_state"):
@@ -214,12 +219,12 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                 continue
             del rpi_output["pwm_temperature_linked"]
             automation = {
-                "index_id": next_id,
+                "index_id": next_automation_id,
                 "label": rpi_output.get("label"),
                 "automation_type": "pwm_temperature_linked",
                 "output": rpi_output.get("index_id"),
             }
-            next_id += 1
+            next_automation_id += 1
             for key in ("linked_temp_sensor", "temperature_a", "duty_a", "temperature_b", "duty_b"):
                 if key in rpi_output:
                     automation[key] = rpi_output.pop(key)
