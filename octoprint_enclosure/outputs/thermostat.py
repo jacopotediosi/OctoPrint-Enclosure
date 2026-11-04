@@ -2,12 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, MeasurementType
+from octoprint_enclosure.core import REQUIRED, BaseConfig, MeasurementType
 
-from .switch import SwitchConfig, SwitchOutput
+from .base import Output
+from .switch import Switch, SwitchConfig
+
+if TYPE_CHECKING:
+    import logging
+
+    from octoprint_enclosure.hardware import GpioBackend, I2cBackend
 
 
 class ThermostatDeviceType(Enum):
@@ -43,10 +50,73 @@ class ThermostatConfig(SwitchConfig):
     """The temperature above which a heater turns its thermostat off, or 0 or less if it has no maximum."""
 
 
-class ThermostatOutput(SwitchOutput[ThermostatConfig]):
+@dataclass(frozen=True)
+class ThermostatSetpoint(BaseConfig):
+    """The setpoint a thermostat is turned on to."""
+
+    target: float = 0
+    """The target temperature in Celsius, or the target humidity for a dehumidifier; 0 turns the thermostat off."""
+
+
+class ThermostatOutput(Output[ThermostatConfig, ThermostatSetpoint]):
     """The output of a thermostat: the switch of its device, turned on and off as the thermostat decides."""
 
     config_class = ThermostatConfig
+    setpoint_class = ThermostatSetpoint
+
+    switch: Switch
+    """The switch of the device of the thermostat."""
+
+    def __init__(
+        self,
+        config: ThermostatConfig,
+        gpio: GpioBackend,
+        i2c: I2cBackend,
+        logger: logging.Logger,
+    ) -> None:
+        """Set up the output.
+
+        Args:
+            config (ThermostatConfig): The configuration of the output.
+            gpio (GpioBackend): The GPIO backend.
+            i2c (I2cBackend): The I2C backend.
+            logger (logging.Logger): The logger to write to.
+
+        """
+        super().__init__(config, gpio, i2c, logger)
+        self.switch = Switch(config, gpio, i2c, logger)
+
+    @property
+    @override
+    def gpio_pins(self) -> frozenset[int]:
+        return self.switch.gpio_pins
+
+    @override
+    def setup(self) -> None:
+        self.switch.setup()
+
+    @override
+    def is_on(self) -> bool:
+        """Read whether the device of the thermostat is on.
+
+        Returns:
+            bool: Whether the device is on.
+
+        Raises:
+            Exception: If the switch can't be read.
+
+        """
+        return self.switch.is_on()
+
+    @override
+    def turn_off(self) -> None:
+        """Turn the device off.
+
+        Raises:
+            Exception: If the switch can't be written.
+
+        """
+        self.switch.set(on=False)
 
     @override
     def run_enc_command(self, command: str) -> None:
@@ -73,6 +143,8 @@ class Thermostat:
     thermostat never touches it: asked with a new reading of its sensor, it answers whether the device has to be on,
     and who asks does the switching.
     """
+
+    setpoint_class = ThermostatSetpoint
 
     _config: ThermostatConfig
 
@@ -121,6 +193,23 @@ class Thermostat:
 
         """
         self._target = target
+
+    def is_on(self) -> bool:
+        """Tell whether the thermostat has a target."""
+        return self._target != 0
+
+    def turn_on(self, setpoint: ThermostatSetpoint) -> None:
+        """Set the target temperature or humidity.
+
+        Args:
+            setpoint (ThermostatSetpoint): The target.
+
+        """
+        self._target = setpoint.target
+
+    def turn_off(self) -> None:
+        """Set the target to 0."""
+        self._target = 0.0
 
     def is_above_max_temp(self, temperature: float | None) -> bool:
         """Tell whether a heater has gone above its maximum temperature.

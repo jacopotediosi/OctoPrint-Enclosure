@@ -13,16 +13,18 @@ from octoprint_enclosure.actions import Action, ActionError, GcodeAction, Printe
 from octoprint_enclosure.core import MeasurementType, TemperatureUnit
 from octoprint_enclosure.inputs import PullResistor, Reading
 from octoprint_enclosure.outputs import (
+    ColorSetpoint,
     LedstripOutput,
     NeopixelDirectOutput,
     NeopixelIndirectOutput,
     OutputError,
     PwmOutput,
+    PwmSetpoint,
     RegularOutput,
-    RegularSetState,
+    RegularSetpoint,
     ThermostatOutput,
 )
-from octoprint_enclosure.utils import is_number, is_rgb, parse_float, parse_rgb, to_float, to_int
+from octoprint_enclosure.utils import Rgb, is_number, is_rgb, parse_float, parse_rgb, to_float, to_int
 
 if TYPE_CHECKING:
     import logging
@@ -36,8 +38,8 @@ if TYPE_CHECKING:
     from octoprint_enclosure.hardware import GpioBackend
     from octoprint_enclosure.inputs import SensorPoller
     from octoprint_enclosure.output_executor import OutputExecutor
-    from octoprint_enclosure.outputs import ColorOutput, Outputs
-    from octoprint_enclosure.outputs.switch import SwitchOutput
+    from octoprint_enclosure.outputs import Output, Outputs
+    from octoprint_enclosure.outputs.color import ColorOutput
 
 
 _JSON_TYPES: dict[str, Callable[[object], bool]] = {
@@ -340,7 +342,7 @@ class Api(octoprint.plugin.BlueprintPlugin):
 
         payload["gpio_status"] = False
         payload["current_value"] = False
-        payload["duty_cycle"] = 0
+        payload.setdefault("duty_cycle", 0)
         payload["neopixel_color"] = "rgb(0,0,0)"
         payload["ledstrip_color"] = "rgb(0,0,0)"
         payload["temp_ctr_set_value"] = 0
@@ -369,6 +371,15 @@ class Api(octoprint.plugin.BlueprintPlugin):
                 payload[key] = self._converted(payload[key], temperature_unit.from_celsius)
         elif output_type == "temperature_alarm":
             payload["alarm_set_temp"] = self._converted(payload["alarm_set_temp"], temperature_unit.from_celsius)
+            # 0 is the thermostat off, in every unit
+            controlled_settings = self._get_output_settings(to_int(payload["controlled_io"]))
+            if (
+                controlled_settings is not None
+                and controlled_settings["output_type"] == "temp_hum_control"
+                and controlled_settings["temp_ctr_type"] != "dehumidifier"
+                and to_float(payload["target"]) != 0
+            ):
+                payload["target"] = self._converted(payload["target"], temperature_unit.from_celsius)
 
         if output_type == "regular":
             payload["current_value"] = self._output_state_boolean(output_id, RegularOutput)
@@ -401,9 +412,15 @@ class Api(octoprint.plugin.BlueprintPlugin):
     @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:output_id>", methods=["PATCH"])
     @_expects_json(status="bool")
     def set_output(self, output_id: int, *, status: bool) -> Response:
-        if self._get_output_settings(output_id) is not None:
-            state = RegularSetState.ON if status else RegularSetState.OFF
-            self._output_executor.switch_output(output_id, state, wait=True)
+        try:
+            self._outputs.get(output_id, RegularOutput)
+        except OutputError as error:
+            self._logger.debug("Can't switch output %s: %s", output_id, error)
+            return make_response("", 204)
+        if status:
+            self._output_executor.turn_on(output_id, RegularSetpoint(), wait=True)
+        else:
+            self._output_executor.turn_off(output_id, wait=True)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:output_id>/auto-startup", methods=["PATCH"])
@@ -422,7 +439,7 @@ class Api(octoprint.plugin.BlueprintPlugin):
     @_expects_json(duty_cycle="percent")
     def set_pwm(self, output_id: int, *, duty_cycle: float) -> Response:
         if self._get_output_settings(output_id) is not None:
-            self._output_executor.write_pwm(output_id, int(duty_cycle), wait=True)
+            self._output_executor.turn_on(output_id, PwmSetpoint(int(duty_cycle)), wait=True)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/rgb-led/<int:output_id>", methods=["PATCH"])
@@ -430,14 +447,16 @@ class Api(octoprint.plugin.BlueprintPlugin):
     def set_ledstrip_color(self, output_id: int, *, rgb: str) -> Response:
         red, green, blue = parse_rgb(rgb)
         if self._get_output_settings(output_id) is not None:
-            self._output_executor.set_color(output_id, to_int(red), to_int(green), to_int(blue), wait=True)
+            setpoint = ColorSetpoint(Rgb(to_int(red), to_int(green), to_int(blue)))
+            self._output_executor.turn_on(output_id, setpoint, wait=True)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/neopixel/<int:output_id>", methods=["PATCH"])
     @_expects_json(red="byte", green="byte", blue="byte")
     def set_neopixel_color(self, output_id: int, *, red: float, green: float, blue: float) -> Response:
         if self._get_output_settings(output_id) is not None:
-            self._output_executor.set_color(output_id, int(red), int(green), int(blue), wait=True)
+            setpoint = ColorSetpoint(Rgb(int(red), int(green), int(blue)))
+            self._output_executor.turn_on(output_id, setpoint, wait=True)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/update", methods=["POST"])
@@ -493,7 +512,7 @@ class Api(octoprint.plugin.BlueprintPlugin):
             return "ERROR: Unable to read pin"
         return _STATE_LABELS[(not state) if active_low else bool(state)]
 
-    def _output_state_boolean(self, output_id: int, output_class: type[SwitchOutput]) -> bool | str:
+    def _output_state_boolean(self, output_id: int, output_class: type[Output]) -> bool | str:
         try:
             return self._outputs.get(output_id, output_class).is_on()
         except OutputError:
@@ -502,7 +521,7 @@ class Api(octoprint.plugin.BlueprintPlugin):
             self._logger.exception("Error reading output %s", output_id)
             return "ERROR: Unable to read pin"
 
-    def _output_state_human(self, output_id: int, output_class: type[SwitchOutput]) -> str:
+    def _output_state_human(self, output_id: int, output_class: type[Output]) -> str:
         state = self._output_state_boolean(output_id, output_class)
         return state if isinstance(state, str) else _STATE_LABELS[state]
 

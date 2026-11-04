@@ -6,15 +6,7 @@ from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import TYPE_CHECKING, TypeVar
 
-from .outputs import (
-    ColorOutput,
-    Output,
-    OutputError,
-    PwmOutput,
-    RegularOutput,
-    RegularSetState,
-    ThermostatOutput,
-)
+from .outputs import Output, OutputError, Switchable, ThermostatOutput
 
 if TYPE_CHECKING:
     import logging
@@ -23,6 +15,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import Protocol
 
+    from .core import BaseConfig
     from .outputs import Outputs
 
 _T = TypeVar("_T")
@@ -120,89 +113,96 @@ class OutputExecutor:
 
         self._submit(load_outputs, wait=wait)
 
-    def switch_output(self, index_id: int, state: RegularSetState, *, wait: bool = False) -> bool | None:
-        """Switch a regular output.
+    def turn_on(self, index_id: int, setpoint: BaseConfig, *, wait: bool = False) -> bool | None:
+        """Turn an output on.
 
         Args:
             index_id (int): The id of the output.
-            state (RegularSetState): The state to set.
-            wait (bool): Whether to wait for the switch.
+            setpoint (BaseConfig): The setpoint the output is turned on to.
+            wait (bool): Whether to wait for the write, up to the command timeout.
 
         Returns:
-            bool | None: Whether the output is on after the switch, or None without waiting, on a timeout or if it
-                couldn't be switched.
+            bool | None: True once the output is on, or None without waiting, on a timeout or if it couldn't be
+                turned on.
 
         """
 
-        def switch_output() -> bool | None:
+        def turn_on() -> bool | None:
             try:
-                regular_output = self._outputs.get(index_id, RegularOutput)
+                self._get_switchable(index_id, setpoint).turn_on(setpoint)
+            except OutputError as error:
+                self._logger.debug("Can't turn on output %s: %s", index_id, error)
+                return None
+            except Exception:
+                self._logger.exception("Error turning on output %s", index_id)
+                return None
+            else:
+                self._queue_update_ui_outputs()
+                return True
 
-                if state is RegularSetState.TOGGLE:
-                    on = regular_output.toggle()
-                elif state is RegularSetState.ON:
-                    regular_output.turn_on()
-                    on = True
+        return self._submit(turn_on, wait=wait)
+
+    def turn_off(self, index_id: int, *, wait: bool = False) -> bool | None:
+        """Turn an output off.
+
+        Args:
+            index_id (int): The id of the output.
+            wait (bool): Whether to wait for the write, up to the command timeout.
+
+        Returns:
+            bool | None: False once the output is off, or None without waiting, on a timeout or if it couldn't be
+                turned off.
+
+        """
+
+        def turn_off() -> bool | None:
+            try:
+                self._get_switchable(index_id).turn_off()
+            except OutputError as error:
+                self._logger.debug("Can't turn off output %s: %s", index_id, error)
+                return None
+            except Exception:
+                self._logger.exception("Error turning off output %s", index_id)
+                return None
+            else:
+                self._queue_update_ui_outputs()
+                return False
+
+        return self._submit(turn_off, wait=wait)
+
+    def toggle(self, index_id: int, setpoint: BaseConfig, *, wait: bool = False) -> bool | None:
+        """Turn an output off if it is on, and on if it is off.
+
+        Args:
+            index_id (int): The id of the output.
+            setpoint (BaseConfig): The setpoint the output is turned on to.
+            wait (bool): Whether to wait for the toggle, up to the command timeout.
+
+        Returns:
+            bool | None: Whether the output is on after the toggle, or None without waiting, on a timeout or if it
+                couldn't be toggled.
+
+        """
+
+        def toggle() -> bool | None:
+            try:
+                output = self._get_switchable(index_id, setpoint)
+                should_be_on = not output.is_on()
+                if should_be_on:
+                    output.turn_on(setpoint)
                 else:
-                    regular_output.turn_off()
-                    on = False
+                    output.turn_off()
             except OutputError as error:
-                self._logger.debug("Can't write on output %s: %s", index_id, error)
+                self._logger.debug("Can't toggle output %s: %s", index_id, error)
                 return None
             except Exception:
-                self._logger.exception("Error writing on output %s", index_id)
+                self._logger.exception("Error toggling output %s", index_id)
                 return None
             else:
                 self._queue_update_ui_outputs()
-                return on
+                return should_be_on
 
-        return self._submit(switch_output, wait=wait)
-
-    def write_pwm(self, index_id: int, duty_cycle: float, *, wait: bool = False) -> None:
-        """Set the duty cycle of a PWM output.
-
-        Args:
-            index_id (int): The id of the output.
-            duty_cycle (float): The duty cycle, from 0 to 100.
-            wait (bool): Whether to wait for the write, up to the command timeout.
-
-        """
-
-        def write_pwm() -> None:
-            try:
-                self._outputs.get(index_id, PwmOutput).set_duty_cycle(duty_cycle)
-            except OutputError as error:
-                self._logger.debug("Can't write PWM on output %s: %s", index_id, error)
-            except Exception:
-                self._logger.exception("Error writing PWM on output %s", index_id)
-            else:
-                self._queue_update_ui_outputs()
-
-        self._submit(write_pwm, wait=wait)
-
-    def set_color(self, index_id: int, red: int, green: int, blue: int, *, wait: bool = False) -> None:
-        """Set the color of a ColorOutput.
-
-        Args:
-            index_id (int): The id of the output.
-            red (int): The red component, from 0 to 255.
-            green (int): The green component, from 0 to 255.
-            blue (int): The blue component, from 0 to 255.
-            wait (bool): Whether to wait for the write, up to the command timeout.
-
-        """
-
-        def set_color() -> None:
-            try:
-                self._outputs.get(index_id, ColorOutput).set_color(red, green, blue)
-            except OutputError as error:
-                self._logger.debug("Can't set the color of output %s: %s", index_id, error)
-            except Exception:
-                self._logger.exception("Error setting the color of output %s", index_id)
-            else:
-                self._queue_update_ui_outputs()
-
-        self._submit(set_color, wait=wait)
+        return self._submit(toggle, wait=wait)
 
     def switch_thermostat(self, index_id: int, *, on: bool, wait: bool = False) -> None:
         """Turn the device of a thermostat on or off.
@@ -216,11 +216,7 @@ class OutputExecutor:
 
         def switch_thermostat() -> None:
             try:
-                output = self._outputs.get(index_id, ThermostatOutput)
-                if on:
-                    output.turn_on()
-                else:
-                    output.turn_off()
+                self._outputs.get(index_id, ThermostatOutput).switch.set(on=on)
             except OutputError as error:
                 self._logger.debug("Can't write on output %s: %s", index_id, error)
             except Exception:
@@ -276,6 +272,16 @@ class OutputExecutor:
     def update_ui_outputs(self) -> None:
         """Update the outputs in the UI once the commands queued so far are executed."""
         self._submit(self._queue_update_ui_outputs, wait=False)
+
+    def _get_switchable(self, index_id: int, setpoint: BaseConfig | None = None) -> Switchable:
+        output = self._outputs.get(index_id, Output)
+        if not isinstance(output, Switchable):
+            msg = "The output is not turned on and off directly"
+            raise OutputError(msg)
+        if setpoint is not None and not isinstance(setpoint, output.setpoint_class):
+            msg = f"The setpoint must be a {output.setpoint_class.__name__}, not a {type(setpoint).__name__}"
+            raise OutputError(msg)
+        return output
 
     def _queue_update_ui_outputs(self) -> None:
         def update_ui_outputs() -> None:

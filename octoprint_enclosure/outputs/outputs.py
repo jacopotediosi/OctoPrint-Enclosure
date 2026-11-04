@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
+from octoprint_enclosure.core import BaseConfig
+
 from .base import Output, OutputError
 from .config import OutputConfig
 from .registry import OUTPUTS
@@ -17,10 +19,11 @@ if TYPE_CHECKING:
 _OutputT = TypeVar("_OutputT", bound=Output)
 
 
-class _InvalidOutput(Output[OutputConfig]):
+class _InvalidOutput(Output[OutputConfig, BaseConfig]):
     """An output that can't be set up."""
 
     config_class = OutputConfig
+    setpoint_class = BaseConfig
 
     reason: str
     """Why the output can't be set up."""
@@ -35,6 +38,10 @@ class _InvalidOutput(Output[OutputConfig]):
     ) -> None:
         super().__init__(config, gpio, i2c, logger)
         self.reason = reason
+
+    @override
+    def is_on(self) -> bool:
+        raise OutputError(self.reason)
 
     @override
     def turn_off(self) -> None:
@@ -150,11 +157,13 @@ class Outputs:
         """
         output = self._outputs.get(index_id)
 
+        if isinstance(output, _InvalidOutput):
+            raise OutputError(output.reason)
         if isinstance(output, output_class):
             return output
 
-        reason = output.reason if isinstance(output, _InvalidOutput) else "The output is not set up"
-        raise OutputError(reason)
+        msg = "The output is not set up"
+        raise OutputError(msg)
 
     def get_all(self, output_class: type[_OutputT]) -> list[_OutputT]:
         """Get all the outputs having a certain class.

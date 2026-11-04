@@ -412,9 +412,8 @@
             ], placeholder="Select Reaction") %}
                 <span class="help-inline"
                       data-bind="visible: reaction_type() == 'output_control'">
-                    <span class="label label-info">Info:</span> Will control GPIO outputs when a condition is met, for example detect a press of a button. You can
-                    use this to control any previous configured REGULAR OUTPUTS, basically being able to control your lights / fan / printer using
-                    mechanical buttons instead of the octoprint interface.
+                    <span class="label label-info">Info:</span> Will control an output when a condition is met, for example the press of a button: a
+                    regular output turns on or off, a PWM goes to a duty cycle or to 0, LEDs to a color or off, a thermostat to a target or off.
                 </span>
                 <span class="help-inline"
                       data-bind="visible: reaction_type() == 'run_action'">
@@ -428,9 +427,29 @@
                 </span>
             {% endcall %}
             <div data-bind="if: reaction_type() == 'output_control'">
-                {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settings_outputs_regular", "When the event happens, do you want control of which OUTPUT?", placeholder="Select Output") }}
-                <div data-bind="if: $root.isRegularOutput(controlled_io())">
-                    {{ select_control_group("controlled_io_set_state", _("Set Controlled IO State"), [("on", "On"), ("off", "Off"), ("toggle", "Toggle")], "When the event happens, do you want to turn the controlled IO on, off, or toggle it?", placeholder="Select State") }}
+                {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settings_outputs", "When the event happens, do you want control of which OUTPUT?", placeholder="Select Output") }}
+                {{ select_control_group("controlled_io_set_state", _("Set Controlled IO State"), [("on", "On"), ("off", "Off"), ("toggle", "Toggle")], "When the event happens, do you want to turn the controlled IO on, off, or toggle it?", placeholder="Select State") }}
+                <div data-bind="ifnot: controlled_io_set_state() == 'off'">
+                    <div data-bind="if: $root.outputType(controlled_io()) == 'pwm'">
+                        {{ text_control_group("duty_cycle", _("Duty Cycle"), "Duty cycle the PWM is set to when the automation turns it on, between 0 and 100") }}
+                    </div>
+                    <div data-bind="if: ['ledstrip', 'neopixel_indirect', 'neopixel_direct'].indexOf($root.outputType(controlled_io())) >= 0">
+                        <div class="control-group">
+                            <label class="control-label">{{ _("Color") }}</label>
+                            <div class="controls">
+                                <input type="color" class="input-block-level" data-bind="value: color">
+                                <span class="help-inline">Color the LEDs are set to when the automation turns them on</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div data-bind="if: $root.outputType(controlled_io()) == 'temp_hum_control'">
+                        <div data-bind="if: $root.thermostatDeviceType(controlled_io()) == 'dehumidifier'">
+                            {{ text_control_group("target", _("Target"), "Humidity the thermostat is set to when the automation turns it on") }}
+                        </div>
+                        <div data-bind="ifnot: $root.thermostatDeviceType(controlled_io()) == 'dehumidifier'">
+                            {{ temperature_control_group("target", _("Target"), "Temperature the thermostat is set to when the automation turns it on", zero_off=true) }}
+                        </div>
+                    </div>
                 </div>
             </div>
             <div data-bind="if: reaction_type() == 'run_action'">

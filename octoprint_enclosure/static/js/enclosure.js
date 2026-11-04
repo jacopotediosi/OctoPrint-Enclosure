@@ -131,9 +131,11 @@ $(function () {
       }
     };
 
-    self.settings_outputs_regular = ko.pureComputed(function () {
+    self.settings_outputs = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs(), function (item) {
-        return (item.output_type() === "regular" && !item.toggle_timer());
+        var type = item.output_type();
+        if ((type === "regular" || type === "pwm") && item.toggle_timer()) return false;
+        return !(type === "pwm" && self.isPwmLinked(item.index_id()));
       });
     });
 
@@ -202,10 +204,20 @@ $(function () {
       });
     });
 
-    self.isRegularOutput = function (index_id) {
-      return self.settingsViewModel.settings.plugins.enclosure.rpi_outputs().some(function (output) {
-        return output.index_id() == index_id && output.output_type() == "regular";
+    self.settingsOutput = function (index_id) {
+      return ko.utils.arrayFirst(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs(), function (output) {
+        return output.index_id() == index_id;
       });
+    };
+
+    self.outputType = function (index_id) {
+      var output = self.settingsOutput(index_id);
+      return output ? output.output_type() : "";
+    };
+
+    self.thermostatDeviceType = function (index_id) {
+      var output = self.settingsOutput(index_id);
+      return output ? output.temp_ctr_type() : "";
     };
 
     self.isPwmLinked = function (index_id) {
@@ -624,6 +636,9 @@ $(function () {
         reaction_type: ko.observable(""),
         controlled_io: ko.observable(""),
         controlled_io_set_state: ko.observable("on"),
+        duty_cycle: ko.observable(0),
+        color: ko.observable(""),
+        target: ko.observable(0),
         action: ko.observable(""),
         filament_sensor_enabled: ko.observable(true),
         filament_sensor_timeout: ko.observable(120),

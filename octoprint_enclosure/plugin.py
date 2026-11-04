@@ -30,18 +30,21 @@ from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
 from .output_executor import OutputExecutor
 from .outputs import (
+    ColorSetpoint,
     LedstripOutput,
     NeopixelDirectOutput,
     NeopixelIndirectOutput,
     OutputError,
     Outputs,
     PwmOutput,
+    PwmSetpoint,
     RegularOutput,
-    RegularSetState,
+    RegularSetpoint,
     ThermostatDeviceType,
     ThermostatOutput,
 )
 from .utils import (
+    Rgb,
     parse_hhmm,
     parse_rgb,
     seconds_until_next,
@@ -368,48 +371,31 @@ class EnclosurePlugin(
             index_id = to_int(output["index_id"])
 
             if output["output_type"] == "regular":
-                if self._printer.is_printing() or self._printer.is_paused():
-                    on = self._output_executor.switch_output(
-                        index_id,
-                        RegularSetState.ON if first_run else RegularSetState.TOGGLE,
-                        wait=True,
-                    )
-                    time_delay = to_int(output["toggle_timer_on"]) if on else to_int(output["toggle_timer_off"])
-                    self._scheduler.schedule(
-                        f"output:{index_id}:toggle_timer",
-                        time_delay,
-                        functools.partial(self.toggle_output, index_id),
-                    )
-                else:
-                    self._output_executor.switch_output(index_id, RegularSetState.OFF)
-                return
-
-            if output["output_type"] == "pwm":
+                setpoint = RegularSetpoint()
+            elif output["output_type"] == "pwm":
                 try:
-                    pwm_output = self._outputs.get(index_id, PwmOutput)
+                    setpoint = PwmSetpoint(self._outputs.get(index_id, PwmOutput).config.default_duty_cycle)
                 except OutputError as error:
                     self._logger.debug("Can't toggle output %s: %s", index_id, error)
                     return
-
-                current_pwm_value = 0 if first_run else to_int(pwm_output.duty_cycle)
-
-                if current_pwm_value != 0:
-                    time_delay = to_int(output["toggle_timer_off"])
-                    write_value = 0
-                else:
-                    time_delay = to_int(output["toggle_timer_on"])
-                    write_value = to_int(output["default_duty_cycle"])
-
-                if self._printer.is_printing() or self._printer.is_paused():
-                    self._output_executor.write_pwm(index_id, write_value)
-                    self._scheduler.schedule(
-                        f"output:{index_id}:toggle_timer",
-                        time_delay,
-                        functools.partial(self.toggle_output, index_id),
-                    )
-                else:
-                    self._output_executor.write_pwm(index_id, 0)
+            else:
                 return
+
+            if not (self._printer.is_printing() or self._printer.is_paused()):
+                self._output_executor.turn_off(index_id)
+                return
+
+            if first_run:
+                on = self._output_executor.turn_on(index_id, setpoint, wait=True)
+            else:
+                on = self._output_executor.toggle(index_id, setpoint, wait=True)
+            time_delay = to_int(output["toggle_timer_on"]) if on else to_int(output["toggle_timer_off"])
+            self._scheduler.schedule(
+                f"output:{index_id}:toggle_timer",
+                time_delay,
+                functools.partial(self.toggle_output, index_id),
+            )
+            return
 
     def update_ui(self):
         self.update_ui_readings()
@@ -602,17 +588,17 @@ class EnclosurePlugin(
     def schedule_auto_shutdown_outputs(self, rpi_output, shutdown_delay_seconds):
         suffix = "auto_shutdown"
         if rpi_output["output_type"] == "regular":
-            self.add_regular_output_to_queue(shutdown_delay_seconds, rpi_output, RegularSetState.OFF, suffix)
+            self.add_regular_output_to_queue(shutdown_delay_seconds, rpi_output, False, suffix)
         if rpi_output["output_type"] == "ledstrip":
             red, green, blue = parse_rgb(rpi_output["default_ledstrip_color"])
-            self._output_executor.set_color(to_int(rpi_output["index_id"]), to_int(red), to_int(green), to_int(blue))
+            setpoint = ColorSetpoint(Rgb(to_int(red), to_int(green), to_int(blue)))
+            self._output_executor.turn_on(to_int(rpi_output["index_id"]), setpoint)
         if rpi_output["output_type"] == "pwm" and not self.is_pwm_linked(rpi_output["index_id"]):
-            value = 0
-            self.add_pwm_output_to_queue(shutdown_delay_seconds, rpi_output, value, suffix)
+            self.add_pwm_output_to_queue(shutdown_delay_seconds, rpi_output, False, suffix)
         if rpi_output["output_type"] == "pwm" and self.is_pwm_linked(rpi_output["index_id"]):
-            self.schedule_pwm_duty_on_queue(shutdown_delay_seconds, rpi_output, 0, suffix)
+            self.schedule_pwm_duty_on_queue(shutdown_delay_seconds, rpi_output, suffix)
         if rpi_output["output_type"] == "neopixel_indirect" or rpi_output["output_type"] == "neopixel_direct":
-            self.add_neopixel_output_to_queue(rpi_output, shutdown_delay_seconds, 0, 0, 0, suffix)
+            self.add_neopixel_output_to_queue(rpi_output, shutdown_delay_seconds, False, suffix)
         if rpi_output["output_type"] == "temp_hum_control":
             value = 0
             self.add_temperature_output_temperature_queue(shutdown_delay_seconds, rpi_output, value, suffix)
@@ -621,26 +607,23 @@ class EnclosurePlugin(
         for rpi_output in self.rpi_outputs:
             if rpi_output["startup_with_server"]:
                 if rpi_output["output_type"] == "regular":
-                    self._output_executor.switch_output(rpi_output["index_id"], RegularSetState.ON)
+                    self._output_executor.turn_on(rpi_output["index_id"], RegularSetpoint())
                 if rpi_output["output_type"] == "ledstrip":
                     red, green, blue = parse_rgb(rpi_output["default_ledstrip_color"])
-                    self._output_executor.set_color(
-                        to_int(rpi_output["index_id"]),
-                        to_int(red),
-                        to_int(green),
-                        to_int(blue),
-                    )
+                    setpoint = ColorSetpoint(Rgb(to_int(red), to_int(green), to_int(blue)))
+                    self._output_executor.turn_on(to_int(rpi_output["index_id"]), setpoint)
                 if rpi_output["output_type"] == "pwm" and not self.is_pwm_linked(rpi_output["index_id"]):
-                    value = to_int(rpi_output["default_duty_cycle"])
-                    self._output_executor.write_pwm(rpi_output["index_id"], value)
+                    try:
+                        pwm_output = self._outputs.get(to_int(rpi_output["index_id"]), PwmOutput)
+                    except OutputError as error:
+                        self._logger.debug("Can't start output %s: %s", rpi_output["index_id"], error)
+                        continue
+                    setpoint = PwmSetpoint(pwm_output.config.default_duty_cycle)
+                    self._output_executor.turn_on(rpi_output["index_id"], setpoint)
                 if rpi_output["output_type"] == "neopixel_indirect" or rpi_output["output_type"] == "neopixel_direct":
                     red, green, blue = parse_rgb(rpi_output["default_neopixel_color"])
-                    self._output_executor.set_color(
-                        to_int(rpi_output["index_id"]),
-                        to_int(red),
-                        to_int(green),
-                        to_int(blue),
-                    )
+                    setpoint = ColorSetpoint(Rgb(to_int(red), to_int(green), to_int(blue)))
+                    self._output_executor.turn_on(to_int(rpi_output["index_id"]), setpoint)
                 if rpi_output["output_type"] == "temp_hum_control":
                     index_id = to_int(rpi_output["index_id"])
                     self.set_thermostat_target(index_id, rpi_output["temp_ctr_default_value"])
@@ -648,61 +631,66 @@ class EnclosurePlugin(
     def schedule_auto_startup_outputs(self, rpi_output, delay_seconds):
         suffix = "auto_startup"
         if rpi_output["output_type"] == "regular":
-            self.add_regular_output_to_queue(delay_seconds, rpi_output, RegularSetState.ON, suffix)
+            self.add_regular_output_to_queue(delay_seconds, rpi_output, True, suffix)
         if rpi_output["output_type"] == "ledstrip":
             red, green, blue = parse_rgb(rpi_output["default_ledstrip_color"])
-            self._output_executor.set_color(to_int(rpi_output["index_id"]), to_int(red), to_int(green), to_int(blue))
+            setpoint = ColorSetpoint(Rgb(to_int(red), to_int(green), to_int(blue)))
+            self._output_executor.turn_on(to_int(rpi_output["index_id"]), setpoint)
         if rpi_output["output_type"] == "pwm" and not self.is_pwm_linked(rpi_output["index_id"]):
-            value = to_int(rpi_output["default_duty_cycle"])
-            self.add_pwm_output_to_queue(delay_seconds, rpi_output, value, suffix)
+            self.add_pwm_output_to_queue(delay_seconds, rpi_output, True, suffix)
         if rpi_output["output_type"] == "neopixel_indirect" or rpi_output["output_type"] == "neopixel_direct":
-            red, green, blue = parse_rgb(rpi_output["default_neopixel_color"])
-            self.add_neopixel_output_to_queue(rpi_output, delay_seconds, red, green, blue, suffix)
+            self.add_neopixel_output_to_queue(rpi_output, delay_seconds, True, suffix)
         if rpi_output["output_type"] == "temp_hum_control":
             value = rpi_output["temp_ctr_default_value"]
             self.add_temperature_output_temperature_queue(delay_seconds, rpi_output, value, suffix)
 
-    def add_neopixel_output_to_queue(self, rpi_output, delay_seconds, red, green, blue, suffix):
+    def add_neopixel_output_to_queue(self, rpi_output, delay_seconds, on, suffix):
         queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
         self._logger.debug("Scheduling neopixel output id %s for on %s delay_seconds", queue_id, delay_seconds)
-        self._scheduler.schedule(
-            queue_id,
-            delay_seconds,
-            functools.partial(
-                self._output_executor.set_color,
-                to_int(rpi_output["index_id"]),
-                to_int(red),
-                to_int(green),
-                to_int(blue),
-            ),
-        )
+        if on:
+            red, green, blue = parse_rgb(rpi_output["default_neopixel_color"])
+            setpoint = ColorSetpoint(Rgb(to_int(red), to_int(green), to_int(blue)))
+            action = functools.partial(self._output_executor.turn_on, to_int(rpi_output["index_id"]), setpoint)
+        else:
+            action = functools.partial(self._output_executor.turn_off, to_int(rpi_output["index_id"]))
+        self._scheduler.schedule(queue_id, delay_seconds, action)
 
-    def add_pwm_output_to_queue(self, delay_seconds, rpi_output, value, suffix):
+    def add_pwm_output_to_queue(self, delay_seconds, rpi_output, on, suffix):
         queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
         self._logger.debug("Scheduling pwm output id %s for on %s delay_seconds", queue_id, delay_seconds)
-        self._scheduler.schedule(
-            queue_id,
-            delay_seconds,
-            functools.partial(self._output_executor.write_pwm, rpi_output["index_id"], value),
-        )
+        if on:
+            try:
+                pwm_output = self._outputs.get(to_int(rpi_output["index_id"]), PwmOutput)
+            except OutputError as error:
+                self._logger.debug("Can't schedule output %s: %s", rpi_output["index_id"], error)
+                return
+            setpoint = PwmSetpoint(pwm_output.config.default_duty_cycle)
+            action = functools.partial(self._output_executor.turn_on, rpi_output["index_id"], setpoint)
+        else:
+            action = functools.partial(self._output_executor.turn_off, rpi_output["index_id"])
+        self._scheduler.schedule(queue_id, delay_seconds, action)
 
-    def schedule_pwm_duty_on_queue(self, delay_seconds, rpi_output, value, suffix):
+    def schedule_pwm_duty_on_queue(self, delay_seconds, rpi_output, suffix):
         queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
         self._logger.debug("Scheduling pwm linked temp output id %s on %s delay_seconds", queue_id, delay_seconds)
         self._scheduler.schedule(
             queue_id,
             delay_seconds,
-            functools.partial(self._output_executor.write_pwm, rpi_output["index_id"], value),
+            functools.partial(self._output_executor.turn_off, rpi_output["index_id"]),
         )
 
-    def add_regular_output_to_queue(self, delay_seconds, rpi_output, state, suffix):
+    def add_regular_output_to_queue(self, delay_seconds, rpi_output, on, suffix):
         queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
         self._logger.debug("Scheduling regular output id %s on %s delay_seconds", queue_id, delay_seconds)
-        self._scheduler.schedule(
-            queue_id,
-            delay_seconds,
-            functools.partial(self._output_executor.switch_output, rpi_output["index_id"], state),
-        )
+        if on:
+            action = functools.partial(
+                self._output_executor.turn_on,
+                rpi_output["index_id"],
+                RegularSetpoint(),
+            )
+        else:
+            action = functools.partial(self._output_executor.turn_off, rpi_output["index_id"])
+        self._scheduler.schedule(queue_id, delay_seconds, action)
 
     def add_temperature_output_temperature_queue(self, delay_seconds, rpi_output, value, suffix):
         queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"

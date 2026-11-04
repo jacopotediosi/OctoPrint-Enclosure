@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
+
+from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.utils import Rgb
 
 from .base import Output
 from .config import OutputConfig
@@ -16,11 +20,21 @@ if TYPE_CHECKING:
 _ConfigT = TypeVar("_ConfigT", bound=OutputConfig)
 
 
-class ColorOutput(Output[_ConfigT]):
+@dataclass(frozen=True)
+class ColorSetpoint(BaseConfig):
+    """The setpoint an output that shows a color is turned on to."""
+
+    color: Rgb = Rgb(0, 0, 0)
+    """The color, saved as "#rrggbb"."""
+
+
+class ColorOutput(Output[_ConfigT, ColorSetpoint]):
     """An output that shows a color, like a LED strip."""
 
-    _color: tuple[int, int, int] | None
-    """The last color set, as red, green and blue from 0 to 255, or None if no color was set yet."""
+    setpoint_class = ColorSetpoint
+
+    _color: Rgb | None
+    """The last color set, or None if no color was set yet."""
 
     def __init__(self, config: _ConfigT, gpio: GpioBackend, i2c: I2cBackend, logger: logging.Logger) -> None:
         """Set up the output.
@@ -36,24 +50,26 @@ class ColorOutput(Output[_ConfigT]):
         self._color = None
 
     @property
-    def color(self) -> tuple[int, int, int] | None:
-        """The last color set, as red, green and blue from 0 to 255, or None if no color was set yet."""
+    def color(self) -> Rgb | None:
+        """The last color set, or None if no color was set yet."""
         return self._color
 
-    def set_color(self, red: int, green: int, blue: int) -> None:
-        """Set the color of the output.
+    @override
+    def is_on(self) -> bool:
+        """Tell whether a color other than black is set."""
+        return self._color is not None and self._color != Rgb(0, 0, 0)
+
+    def turn_on(self, setpoint: ColorSetpoint) -> None:
+        """Set a color.
 
         Args:
-            red (int): The red component, from 0 to 255.
-            green (int): The green component, from 0 to 255.
-            blue (int): The blue component, from 0 to 255.
+            setpoint (ColorSetpoint): The color.
 
         Raises:
             Exception: If the color can't be set.
 
         """
-        self._write_color(red, green, blue)
-        self._color = (red, green, blue)
+        self._set_color(*setpoint.color)
 
     @override
     def turn_off(self) -> None:
@@ -63,7 +79,11 @@ class ColorOutput(Output[_ConfigT]):
             Exception: If the output can't be written.
 
         """
-        self.set_color(0, 0, 0)
+        self._set_color(0, 0, 0)
+
+    def _set_color(self, red: int, green: int, blue: int) -> None:
+        self._write_color(red, green, blue)
+        self._color = Rgb(red, green, blue)
 
     @abstractmethod
     def _write_color(self, red: int, green: int, blue: int) -> None:

@@ -115,6 +115,8 @@ Response (200):
     "temp_ctr_default_value": number (in the temperature unit of the plugin settings, or humidity for a dehumidifier),
     "default_neopixel_color": string,
     "controlled_io_set_state": string,
+    "color": string ("#rrggbb"), or "" if not set,
+    "target": number (in the temperature unit of the plugin settings, or humidity for a dehumidifier),
     "auto_shutdown": boolean,
     "shell_script": string,
     "label": string,

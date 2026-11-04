@@ -110,6 +110,9 @@ ignore = [
     "TRY003", # raise-vanilla-args
 ]
 
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["octoprint_enclosure.utils.Rgb"]
+
 [tool.ruff.lint.flake8-type-checking]
 runtime-evaluated-base-classes = ["octoprint_enclosure.core.BaseConfig"]
 

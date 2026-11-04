@@ -4,7 +4,7 @@ from dataclasses import MISSING, dataclass, fields
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, NewType, get_type_hints
 
-from octoprint_enclosure.utils import parse_bool, parse_float, parse_hex
+from octoprint_enclosure.utils import Rgb, parse_bool, parse_float, parse_hex, parse_hex_color
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -26,6 +26,7 @@ _PARSERS: dict[Any, Callable[[Any], Any]] = {
     float: parse_float,
     bool: parse_bool,
     HexInt: parse_hex,
+    Rgb: parse_hex_color,
 }
 """How to read a saved value, for each type a field of a configuration can have."""
 

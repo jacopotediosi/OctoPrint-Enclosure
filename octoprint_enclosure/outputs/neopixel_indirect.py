@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from typing_extensions import override
 
 from octoprint_enclosure.core import REQUIRED, HexInt
-from octoprint_enclosure.utils import get_gcode_param, to_int
+from octoprint_enclosure.utils import Rgb, get_gcode_param, to_int
 
-from .color import ColorOutput
+from .color import ColorOutput, ColorSetpoint
 from .config import OutputConfig
 
 BUS = 1
@@ -50,6 +50,6 @@ class NeopixelIndirectOutput(ColorOutput[NeopixelIndirectConfig]):
         index_id = to_int(get_gcode_param(command, "O"))
         red, green, blue = (int(get_gcode_param(command, letter)) for letter in "RGB")
 
-        self.set_color(red, green, blue)
+        self.turn_on(ColorSetpoint(Rgb(red, green, blue)))
 
         return f"Setting NEOPIXEL output {index_id} to red: {red} green: {green} blue: {blue}"

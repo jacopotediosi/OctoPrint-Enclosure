@@ -3,6 +3,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+from typing_extensions import Protocol, runtime_checkable
+
+from octoprint_enclosure.core import BaseConfig
+
 from .config import OutputConfig
 
 if TYPE_CHECKING:
@@ -11,17 +15,42 @@ if TYPE_CHECKING:
     from octoprint_enclosure.hardware import GpioBackend, I2cBackend
 
 _ConfigT = TypeVar("_ConfigT", bound=OutputConfig)
+_SetpointT = TypeVar("_SetpointT", bound=BaseConfig)
 
 
 class OutputError(Exception):
     """Raised when an output can't be used, with the reason as message."""
 
 
-class Output(ABC, Generic[_ConfigT]):
-    """An output, generic over the type of its configuration."""
+@runtime_checkable
+class Switchable(Protocol[_SetpointT]):
+    """What is turned on to a setpoint and off, generic over the type of the setpoint."""
+
+    setpoint_class: type[_SetpointT]
+    """The dataclass of the setpoint, whose fields are named like the keys of the settings of who commands."""
+
+    def is_on(self) -> bool:
+        """Read whether it is on."""
+        ...
+
+    def turn_on(self, setpoint: _SetpointT) -> None:
+        """Turn it on, to a setpoint."""
+        ...
+
+    def turn_off(self) -> None:
+        """Turn it off."""
+        ...
+
+
+class Output(ABC, Generic[_ConfigT, _SetpointT]):
+    """An output, generic over the types of its configuration and of the setpoint it is turned on to."""
 
     config_class: type[_ConfigT]
     """The dataclass of the configuration, whose fields are named like the keys of the settings of the output."""
+
+    setpoint_class: type[_SetpointT]
+    """The dataclass of the setpoint the output is turned on to, whose fields are named like the keys of the settings
+    of who commands it."""
 
     config: _ConfigT
     """The configuration of the output."""
@@ -67,6 +96,18 @@ class Output(ABC, Generic[_ConfigT]):
 
         Raises:
             Exception: If the hardware can't be released.
+
+        """
+
+    @abstractmethod
+    def is_on(self) -> bool:
+        """Read whether the output is on.
+
+        Returns:
+            bool: Whether the output is on.
+
+        Raises:
+            Exception: If the output can't be read.
 
         """
 

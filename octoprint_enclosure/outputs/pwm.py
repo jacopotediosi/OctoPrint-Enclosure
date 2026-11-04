@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED
+from octoprint_enclosure.core import REQUIRED, BaseConfig
 from octoprint_enclosure.utils import clamp, get_gcode_param, to_int
 
 from .base import Output, OutputError
@@ -30,11 +30,42 @@ class PwmConfig(OutputConfig):
     default_duty_cycle: int = 0
     """The duty cycle the PWM starts with, from 0 to 100."""
 
+    def __post_init__(self) -> None:
+        """Check the default duty cycle.
 
-class PwmOutput(Output[PwmConfig]):
+        Raises:
+            ValueError: If the default duty cycle is not between 0 and 100.
+
+        """
+        if not 0 <= self.default_duty_cycle <= 100:
+            msg = f"default_duty_cycle must be between 0 and 100, not {self.default_duty_cycle}"
+            raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class PwmSetpoint(BaseConfig):
+    """The setpoint a PWM output is turned on to."""
+
+    duty_cycle: float = 0
+    """The duty cycle, from 0 to 100."""
+
+    def __post_init__(self) -> None:
+        """Check the duty cycle.
+
+        Raises:
+            ValueError: If the duty cycle is not between 0 and 100.
+
+        """
+        if not 0 <= self.duty_cycle <= 100:
+            msg = f"duty_cycle must be between 0 and 100, not {self.duty_cycle}"
+            raise ValueError(msg)
+
+
+class PwmOutput(Output[PwmConfig, PwmSetpoint]):
     """An output driven by software PWM on a GPIO pin."""
 
     config_class = PwmConfig
+    setpoint_class = PwmSetpoint
 
     _pwm: GpioPwm | None
     """The PWM of the GPIO backend, or None if it isn't started."""
@@ -81,6 +112,24 @@ class PwmOutput(Output[PwmConfig]):
             self._pwm = None
 
     @override
+    def is_on(self) -> bool:
+        """Tell whether the duty cycle of the PWM is above 0."""
+        return self._duty_cycle > 0
+
+    def turn_on(self, setpoint: PwmSetpoint) -> None:
+        """Set the duty cycle of the PWM.
+
+        Args:
+            setpoint (PwmSetpoint): The duty cycle.
+
+        Raises:
+            OutputError: If the PWM isn't started.
+            Exception: If the duty cycle can't be written.
+
+        """
+        self._set_duty_cycle(setpoint.duty_cycle)
+
+    @override
     def turn_off(self) -> None:
         """Set the duty cycle of the PWM to 0.
 
@@ -89,19 +138,9 @@ class PwmOutput(Output[PwmConfig]):
             Exception: If the duty cycle can't be written.
 
         """
-        self.set_duty_cycle(0.0)
+        self._set_duty_cycle(0.0)
 
-    def set_duty_cycle(self, duty_cycle: float) -> None:
-        """Set the duty cycle of the PWM.
-
-        Args:
-            duty_cycle (float): The duty cycle, from 0 to 100.
-
-        Raises:
-            OutputError: If the PWM isn't started.
-            Exception: If the duty cycle can't be written.
-
-        """
+    def _set_duty_cycle(self, duty_cycle: float) -> None:
         if self._pwm is None:
             msg = "The PWM is not started"
             raise OutputError(msg)
@@ -118,6 +157,6 @@ class PwmOutput(Output[PwmConfig]):
         index_id = to_int(get_gcode_param(command, "O"))
         duty_cycle = clamp(to_int(get_gcode_param(command, "S")), 0, 100)
 
-        self.set_duty_cycle(duty_cycle)
+        self.turn_on(PwmSetpoint(duty_cycle))
 
         return f"Setting PWM output {index_id} to value {duty_cycle}"

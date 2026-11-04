@@ -3,7 +3,7 @@ from __future__ import annotations
 import queue
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING
 
 from octoprint.events import Events
@@ -13,6 +13,7 @@ from .automations import (
     FilamentAutomation,
     GpioInputTrigger,
     OutputControlReaction,
+    OutputSetState,
     PwmTemperatureLinkedAutomation,
     RuleAutomation,
     RunActionReaction,
@@ -22,9 +23,10 @@ from .automations import (
 from .inputs import GpioInputError
 from .notifications import NotificationType
 from .outputs import (
+    Output,
     OutputError,
     PwmOutput,
-    RegularOutput,
+    PwmSetpoint,
     Thermostat,
     ThermostatOutput,
     ThermostatStatus,
@@ -543,7 +545,7 @@ class ControlLoop:
                 calculated_duty = automation.get_duty_cycle(temperature)
 
                 # Write the new duty cycle to the output
-                self._output_executor.write_pwm(output_id, calculated_duty)
+                self._output_executor.turn_on(output_id, PwmSetpoint(calculated_duty))
         except Exception:
             self._logger.exception("Error handling temperature linked PWM outputs")
 
@@ -555,7 +557,7 @@ class ControlLoop:
             except OutputError as error:
                 self._logger.debug("Can't reset the duty cycle of output %s: %s", output_id, error)
             else:
-                self._output_executor.write_pwm(output_id, default_duty_cycle)
+                self._output_executor.turn_on(output_id, PwmSetpoint(default_duty_cycle))
 
     def _decide_gpio_input_edge(self, input_id: int, level: int) -> None:
         try:
@@ -665,9 +667,28 @@ class ControlLoop:
 
     def _control_output(self, reaction: OutputControlReaction) -> bool:
         config = reaction.config
+        index_id, state = config.controlled_io, config.controlled_io_set_state
         try:
-            self._outputs.get(config.controlled_io, RegularOutput)
+            output = self._outputs.get(index_id, Output)
         except OutputError:
             return False
-        self._output_executor.switch_output(config.controlled_io, config.controlled_io_set_state)
+        setpoint_class = output.setpoint_class
+        setpoint = setpoint_class(**{field.name: getattr(config, field.name) for field in fields(setpoint_class)})
+
+        if isinstance(output, ThermostatOutput):
+            thermostat = self._thermostats.get(index_id)
+            if thermostat is None:
+                return False
+            if state is OutputSetState.ON or (state is OutputSetState.TOGGLE and not thermostat.is_on()):
+                thermostat.turn_on(setpoint)
+            else:
+                thermostat.turn_off()
+            self._frontend.update_targets(self.get_thermostats())
+            self._decide_thermostats(self._sensor_poller.get_readings(), None)
+        elif state is OutputSetState.ON:
+            self._output_executor.turn_on(index_id, setpoint)
+        elif state is OutputSetState.OFF:
+            self._output_executor.turn_off(index_id)
+        else:
+            self._output_executor.toggle(index_id, setpoint)
         return True
