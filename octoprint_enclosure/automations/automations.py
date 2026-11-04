@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
     from octoprint_enclosure.inputs import Edge
 
+    from .events import AutomationEvent
+
 _AutomationT = TypeVar("_AutomationT", bound=Automation)
 
 
@@ -125,12 +127,11 @@ class Automations:
         """
         return [automation for automation in self._automations.values() if isinstance(automation, automation_class)]
 
-    def get_triggered_by_gpio_input(self, input_id: int, level: int) -> list[Automation]:
-        """Get the automations that a GPIO input starts, when an edge is detected on its pin.
+    def get_triggered(self, event: AutomationEvent) -> list[Automation]:
+        """Get the automations that an event starts.
 
         Args:
-            input_id (int): The id of the input.
-            level (int): The level of the input, read after the edge, 1 if high or 0 if low.
+            event (AutomationEvent): What happened.
 
         Returns:
             list[Automation]: The automations.
@@ -138,8 +139,8 @@ class Automations:
         """
         return [
             automation
-            for automation, trigger in self._get_gpio_input_triggers()
-            if trigger.config.input == input_id and trigger.matches_level(level)
+            for automation in self._automations.values()
+            if automation.trigger is not None and automation.trigger.matches(event)
         ]
 
     def get_gpio_input_edges(self) -> dict[int, set[Edge]]:
@@ -150,8 +151,10 @@ class Automations:
 
         """
         input_edges: dict[int, set[Edge]] = {}
-        for _, trigger in self._get_gpio_input_triggers():
-            input_edges.setdefault(trigger.config.input, set()).add(trigger.config.edge)
+        for automation in self._automations.values():
+            trigger = automation.trigger
+            if isinstance(trigger, GpioInputTrigger):
+                input_edges.setdefault(trigger.config.input, set()).add(trigger.config.edge)
         return input_edges
 
     def _create_automation(
@@ -182,10 +185,3 @@ class Automations:
 
     def _get_automation_logger(self, automation_class: type[Automation], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{automation_class.__name__}.{index_id}")
-
-    def _get_gpio_input_triggers(self) -> list[tuple[Automation, GpioInputTrigger]]:
-        return [
-            (automation, automation.trigger)
-            for automation in self._automations.values()
-            if isinstance(automation.trigger, GpioInputTrigger)
-        ]

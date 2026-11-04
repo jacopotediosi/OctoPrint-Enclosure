@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+from typing_extensions import override
+
+from octoprint_enclosure.automations.events import ReadingsEvent
 from octoprint_enclosure.core import REQUIRED, BaseConfig
 
 from .base import Trigger
+
+if TYPE_CHECKING:
+    from octoprint_enclosure.automations.events import AutomationEvent
 
 
 @dataclass(frozen=True)
@@ -40,16 +47,13 @@ class TemperatureTrigger(Trigger[TemperatureTriggerConfig]):
         super().__init__(config)
         self._above = False
 
-    def matches_temperature(self, temperature: float | None) -> bool:
-        """Check whether a temperature of the sensor starts the automation.
+    @override
+    def matches(self, event: AutomationEvent) -> bool:
+        if not isinstance(event, ReadingsEvent) or event.index_id != self.config.linked_temp_sensor:
+            return False
 
-        Args:
-            temperature (float | None): The temperature, or None if the sensor has none.
-
-        Returns:
-            bool: Whether the temperature starts the automation.
-
-        """
+        reading = event.readings.get(self.config.linked_temp_sensor)
+        temperature = None if reading is None else reading.temperature
         if temperature is None:
             return False
 

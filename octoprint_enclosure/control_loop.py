@@ -10,11 +10,14 @@ from octoprint.events import Events
 
 from .actions import ActionError, GcodeAction, GcodeConfig, PrinterAction
 from .automations import (
+    AutomationEvent,
     FilamentAutomation,
+    GpioEdgeEvent,
     GpioInputTrigger,
     OutputControlReaction,
     OutputSetState,
     PwmTemperatureLinkedAutomation,
+    ReadingsEvent,
     RuleAutomation,
     RunActionReaction,
     TemperatureTrigger,
@@ -62,21 +65,21 @@ _PRINT_JOB_EVENTS = frozenset(
 
 
 ##########
-### Events
+### Messages
 ##########
 
 
-class _Event:
-    """A Control Loop event."""
+class _Message:
+    """A message to the Control Loop thread."""
 
 
 @dataclass(frozen=True)
-class _Stop(_Event):
+class _Stop(_Message):
     """The Control Loop stops."""
 
 
 @dataclass(frozen=True)
-class _NewReading(_Event):
+class _NewReading(_Message):
     """A sensor has a new reading."""
 
     index_id: int
@@ -84,23 +87,12 @@ class _NewReading(_Event):
 
 
 @dataclass(frozen=True)
-class _Tick(_Event):
+class _Tick(_Message):
     """Time to take the decisions again."""
 
 
 @dataclass(frozen=True)
-class _GpioInputEdge(_Event):
-    """A GPIO input changed level."""
-
-    input_id: int
-    """The id of the input."""
-
-    level: int
-    """The level of the input after the edge, 1 if high or 0 if low."""
-
-
-@dataclass(frozen=True)
-class _PrintJobEvent(_Event):
+class _PrintJobEvent(_Message):
     """OctoPrint fired an event of the print job."""
 
     event: str
@@ -108,12 +100,12 @@ class _PrintJobEvent(_Event):
 
 
 @dataclass(frozen=True)
-class _SettingsLoaded(_Event):
+class _SettingsLoaded(_Message):
     """New settings were loaded."""
 
 
 @dataclass(frozen=True)
-class _ThermostatTargetChanged(_Event):
+class _ThermostatTargetChanged(_Message):
     """The target of a thermostat changed."""
 
     index_id: int
@@ -124,7 +116,7 @@ class _ThermostatTargetChanged(_Event):
 
 
 @dataclass(frozen=True)
-class _WaitForTemperature(_Event):
+class _WaitForTemperature(_Message):
     """A print waits for a thermostat to reach its target."""
 
     index_id: int
@@ -132,7 +124,7 @@ class _WaitForTemperature(_Event):
 
 
 @dataclass(frozen=True)
-class _UpdateUiTargets(_Event):
+class _UpdateUiTargets(_Message):
     """The UI asks for the targets of the thermostats."""
 
 
@@ -165,8 +157,8 @@ class ControlLoop:
     _waiting_temperature: set[int]
     """The ids of the thermostats a paused print waits for, until they reach their target."""
 
-    _queue: queue.Queue[_Event]
-    """The events to handle, in order."""
+    _queue: queue.Queue[_Message | AutomationEvent]
+    """The messages and the automation events to handle, in order."""
 
     _thread: threading.Thread
 
@@ -249,7 +241,7 @@ class ControlLoop:
             level (int): The level of the input after the edge, 1 if high or 0 if low.
 
         """
-        self._put(_GpioInputEdge(input_id, level))
+        self._put(GpioEdgeEvent(input_id, level))
 
     def evaluate_octoprint_event(self, event: str) -> None:
         """Take the decisions regarding an event of OctoPrint.
@@ -297,8 +289,8 @@ class ControlLoop:
         """Update the targets of the thermostats in the UI."""
         self._put(_UpdateUiTargets())
 
-    def _put(self, event: _Event) -> None:
-        self._queue.put(event)
+    def _put(self, message: _Message | AutomationEvent) -> None:
+        self._queue.put(message)
 
     def _run(self) -> None:
         try:
@@ -308,40 +300,40 @@ class ControlLoop:
 
         next_tick = time.monotonic() + TICK_INTERVAL_SECONDS
         while True:
-            # Wait for an event, or for the tick if it comes first
+            # Wait for a message, or for the tick if it comes first
             timeout = next_tick - time.monotonic()
             if timeout <= 0:
-                event: _Event = _Tick()
+                message: _Message | AutomationEvent = _Tick()
                 next_tick = time.monotonic() + TICK_INTERVAL_SECONDS
             else:
                 try:
-                    event = self._queue.get(timeout=timeout)
+                    message = self._queue.get(timeout=timeout)
                 except queue.Empty:
                     continue
 
-            # Stop the loop if the event is a stop
-            if isinstance(event, _Stop):
+            # Stop the loop if the message is a stop
+            if isinstance(message, _Stop):
                 return
 
-            # Handle the event
+            # Handle the message
             try:
-                self._handle(event)
+                self._handle(message)
             except Exception:
-                self._logger.exception("Error handling %s", event)
+                self._logger.exception("Error handling %s", message)
 
-    def _handle(self, event: _Event) -> None:
-        if isinstance(event, _Tick):
+    def _handle(self, message: _Message | AutomationEvent) -> None:
+        if isinstance(message, _Tick):
             self._decide_all()
-        elif isinstance(event, _NewReading):
+        elif isinstance(message, _NewReading):
             readings = self._sensor_poller.get_readings()
-            self._decide_thermostats(readings, event.index_id)
-            self._decide_temperature_rules(readings, event.index_id)
-            self._decide_pwm_linked_temperature(readings, event.index_id)
-        elif isinstance(event, _GpioInputEdge):
-            self._decide_gpio_input_edge(event.input_id, event.level)
-        elif isinstance(event, _PrintJobEvent):
-            self._decide_print_job_event(event.event)
-        elif isinstance(event, _SettingsLoaded):
+            self._decide_thermostats(readings, message.index_id)
+            self._decide_temperature_rules(ReadingsEvent(readings, message.index_id))
+            self._decide_pwm_linked_temperature(readings, message.index_id)
+        elif isinstance(message, GpioEdgeEvent):
+            self._decide_gpio_input_edge(message)
+        elif isinstance(message, _PrintJobEvent):
+            self._decide_print_job_event(message.event)
+        elif isinstance(message, _SettingsLoaded):
             self._load_thermostats()
             self._frontend.update_targets(self.get_thermostats())
 
@@ -351,18 +343,18 @@ class ControlLoop:
                 self._start_filament_detection(not_armed)
 
             self._decide_all()
-        elif isinstance(event, _ThermostatTargetChanged):
-            thermostat = self._thermostats.get(event.index_id)
+        elif isinstance(message, _ThermostatTargetChanged):
+            thermostat = self._thermostats.get(message.index_id)
             if thermostat is None:
-                self._logger.debug("Can't set the target of output %s: it isn't a thermostat", event.index_id)
+                self._logger.debug("Can't set the target of output %s: it isn't a thermostat", message.index_id)
             else:
-                thermostat.set_target(event.target)
+                thermostat.set_target(message.target)
                 self._frontend.update_targets(self.get_thermostats())
                 self._decide_thermostats(self._sensor_poller.get_readings(), None)
-        elif isinstance(event, _WaitForTemperature):
-            self._waiting_temperature.add(event.index_id)
+        elif isinstance(message, _WaitForTemperature):
+            self._waiting_temperature.add(message.index_id)
             self._decide_thermostats(self._sensor_poller.get_readings(), None)
-        elif isinstance(event, _UpdateUiTargets):
+        elif isinstance(message, _UpdateUiTargets):
             self._frontend.update_targets(self.get_thermostats())
 
     def _start_deciding(self) -> None:
@@ -405,7 +397,7 @@ class ControlLoop:
                     continue
 
                 # React if the input level matches the trigger
-                if trigger.matches_level(level):
+                if trigger.matches(GpioEdgeEvent(input_id, level)):
                     for reaction in reactions:
                         self._control_output(reaction)
         except Exception:
@@ -420,7 +412,7 @@ class ControlLoop:
     def _decide_thermostats(self, readings: Mapping[int, Reading], sensor_id: int | None) -> None:
         try:
             for index_id, thermostat in self._thermostats.items():
-                # If we received a temperature event, check if it is from the sensor linked to this thermostat
+                # With a new reading, decide only the thermostats linked to its sensor
                 if sensor_id is not None and thermostat.config.linked_temp_sensor != sensor_id:
                     continue
 
@@ -465,22 +457,10 @@ class ControlLoop:
             self._waiting_temperature.clear()
             self._printer.resume_print()
 
-    def _decide_temperature_rules(self, readings: Mapping[int, Reading], sensor_id: int) -> None:
-        for rule in self._automations.get_all(RuleAutomation):
-            # Get the automation trigger
-            trigger = rule.trigger
-
-            # Skip if the trigger is not a temperature one or if it is not linked to the sensor id received
-            if not isinstance(trigger, TemperatureTrigger) or trigger.config.linked_temp_sensor != sensor_id:
-                continue
-
-            # Get the reading of the linked sensor
-            linked_reading = readings.get(trigger.config.linked_temp_sensor)
-            temperature = None if linked_reading is None else linked_reading.temperature
-
-            # React if the automation trigger matches the temperature
-            if trigger.matches_temperature(temperature):
-                self._react_to_temperature(rule, trigger.config.alarm_set_temp)
+    def _decide_temperature_rules(self, event: ReadingsEvent) -> None:
+        for automation in self._automations.get_triggered(event):
+            if isinstance(automation, RuleAutomation) and isinstance(automation.trigger, TemperatureTrigger):
+                self._react_to_temperature(automation, automation.trigger.config.alarm_set_temp)
 
     def _react_to_temperature(self, rule: RuleAutomation, threshold: float) -> None:
         temperature_unit = self._settings.temperature_unit
@@ -513,7 +493,7 @@ class ControlLoop:
 
         try:
             for automation in self._automations.get_all(PwmTemperatureLinkedAutomation):
-                # If we received a temperature event, check if it is from the sensor linked to this automation
+                # With a new reading, decide only the curves linked to its sensor
                 if sensor_id is not None and automation.config.linked_temp_sensor != sensor_id:
                     continue
 
@@ -542,16 +522,16 @@ class ControlLoop:
             else:
                 self._output_executor.turn_on(output_id, PwmSetpoint(default_duty_cycle))
 
-    def _decide_gpio_input_edge(self, input_id: int, level: int) -> None:
+    def _decide_gpio_input_edge(self, event: GpioEdgeEvent) -> None:
         try:
-            input_label = self._gpio_inputs.get(input_id).config.label
+            input_label = self._gpio_inputs.get(event.input_id).config.label
         except GpioInputError:
             input_label = ""
-        for automation in self._automations.get_triggered_by_gpio_input(input_id, level):
+        for automation in self._automations.get_triggered(event):
             if isinstance(automation, RuleAutomation):
-                self._react_to_gpio_edge(automation, input_id, input_label)
+                self._react_to_gpio_edge(automation, event.input_id, input_label)
             elif isinstance(automation, FilamentAutomation):
-                self._detect_filament_end(automation, input_id, input_label)
+                self._detect_filament_end(automation, event.input_id, input_label)
 
     def _react_to_gpio_edge(self, rule: RuleAutomation, input_id: int, input_label: str) -> None:
         for reaction in rule.reactions:

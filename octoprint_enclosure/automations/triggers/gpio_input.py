@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+from typing_extensions import override
+
+from octoprint_enclosure.automations.events import GpioEdgeEvent
 from octoprint_enclosure.core import REQUIRED, BaseConfig
 from octoprint_enclosure.inputs import Edge
 
 from .base import Trigger
+
+if TYPE_CHECKING:
+    from octoprint_enclosure.automations.events import AutomationEvent
 
 
 @dataclass(frozen=True)
@@ -24,14 +31,10 @@ class GpioInputTrigger(Trigger[GpioInputTriggerConfig]):
 
     config_class = GpioInputTriggerConfig
 
-    def matches_level(self, level: int) -> bool:
-        """Check whether a level of the input matches the edge of the trigger.
-
-        Args:
-            level (int): The level of the input, 1 if high or 0 if low.
-
-        Returns:
-            bool: Whether the level matches the edge of the trigger.
-
-        """
-        return level == self.config.edge.level
+    @override
+    def matches(self, event: AutomationEvent) -> bool:
+        return (
+            isinstance(event, GpioEdgeEvent)
+            and event.input_id == self.config.input
+            and event.level == self.config.edge.level
+        )

@@ -9,6 +9,7 @@ from typing_extensions import override
 from octoprint_enclosure.core import REQUIRED, BaseConfig
 
 from .base import Automation
+from .events import GpioEdgeEvent
 from .triggers import GpioInputTrigger
 
 if TYPE_CHECKING:
@@ -90,7 +91,7 @@ class FilamentAutomation(Automation[FilamentConfig]):
             bool: Whether the filament is missing.
 
         """
-        return self.trigger.matches_level(level)
+        return self.trigger.matches(GpioEdgeEvent(self.trigger.config.input, level))
 
     @property
     def is_armed(self) -> bool:

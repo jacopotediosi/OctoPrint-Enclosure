@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from octoprint_enclosure.core import BaseConfig
@@ -7,10 +8,12 @@ from octoprint_enclosure.core import BaseConfig
 if TYPE_CHECKING:
     from typing_extensions import Self
 
+    from octoprint_enclosure.automations.events import AutomationEvent
+
 _ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
 
 
-class Trigger(Generic[_ConfigT]):
+class Trigger(ABC, Generic[_ConfigT]):
     """What starts an automation, generic over the type of its configuration."""
 
     config_class: type[_ConfigT]
@@ -43,3 +46,15 @@ class Trigger(Generic[_ConfigT]):
 
         """
         return cls(cls.config_class.from_settings(settings))
+
+    @abstractmethod
+    def matches(self, event: AutomationEvent) -> bool:
+        """Check whether an event starts the automation.
+
+        Args:
+            event (AutomationEvent): What happened.
+
+        Returns:
+            bool: Whether the event starts the automation.
+
+        """
