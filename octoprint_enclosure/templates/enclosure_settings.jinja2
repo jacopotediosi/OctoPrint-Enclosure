@@ -393,7 +393,24 @@
             {{ select_control_group("trigger_type", _("Trigger"), [
                 ("gpio_input", _("GPIO Input")),
                 ("temperature", _("Temperature")),
+                ("octoprint_event", _("OctoPrint Event")),
             ], placeholder="Select Trigger") }}
+        </div>
+        <div data-bind="if: automation_type() == 'rule' && trigger_type() == 'octoprint_event'">
+            <div class="control-group">
+                <label class="control-label">{{ _("Events") }}</label>
+                <div class="controls">
+                    <select multiple
+                            size="10"
+                            class="input-block-level"
+                            data-bind="selectedOptions: octoprint_events">
+                        {% for event in plugin_enclosure_octoprint_events %}
+                            <option value="{{ event }}">{{ event }}</option>
+                        {% endfor %}
+                    </select>
+                    <span class="help-inline">OctoPrint events that run the automation, for example PrintStarted or PrintDone. Hold Ctrl to select more than one.</span>
+                </div>
+            </div>
         </div>
         <div data-bind="if: automation_type() == 'filament' || (automation_type() == 'rule' && trigger_type() == 'gpio_input')">
             {{ select_control_group("input", _("Input"), "$root.settings_gpio_inputs", "GPIO input that triggers the automation. Configured on the input side of the plugin.", placeholder="Select Input") }}

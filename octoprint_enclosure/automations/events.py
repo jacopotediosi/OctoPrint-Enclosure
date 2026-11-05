@@ -34,3 +34,11 @@ class ReadingsEvent(AutomationEvent):
 
     index_id: int
     """The id of the input of the sensor that has the new reading."""
+
+
+@dataclass(frozen=True)
+class OctoprintEvent(AutomationEvent):
+    """OctoPrint fired an event."""
+
+    name: str
+    """The event, as OctoPrint names it."""

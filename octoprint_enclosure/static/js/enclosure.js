@@ -630,6 +630,7 @@ $(function () {
         linked_temp_sensor: ko.observable(""),
         alarm_set_temp: ko.observable(""),
         repeat_while_above: ko.observable(false),
+        octoprint_events: ko.observableArray([]),
         reactions: ko.observableArray([self.newReaction()]),
         filament_sensor_enabled: ko.observable(true),
         filament_sensor_timeout: ko.observable(120),

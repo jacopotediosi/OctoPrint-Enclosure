@@ -14,6 +14,7 @@ from .automations import (
     FilamentAutomation,
     GpioEdgeEvent,
     GpioInputTrigger,
+    OctoprintEvent,
     OutputControlReaction,
     OutputSetState,
     PwmTemperatureLinkedAutomation,
@@ -36,12 +37,12 @@ from .outputs import (
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
 
     from octoprint.printer import PrinterInterface
 
-    from .actions import Actions
-    from .automations import Automations
+    from .actions import Action, Actions
+    from .automations import Automations, Reaction
     from .core import Frontend, Settings
     from .inputs import GpioInputs, Reading, SensorPoller
     from .notifications import Notifications
@@ -50,19 +51,6 @@ if TYPE_CHECKING:
 
 TICK_INTERVAL_SECONDS = 10
 """The seconds between two ticks, at which the loop takes the decisions again on everything."""
-
-_PRINT_JOB_EVENTS = frozenset(
-    {
-        Events.PRINT_STARTED,
-        Events.PRINT_RESUMED,
-        Events.PRINT_PAUSED,
-        Events.PRINT_DONE,
-        Events.PRINT_CANCELLED,
-        Events.PRINT_FAILED,
-    },
-)
-"""The OctoPrint events of the print job."""
-
 
 ##########
 ### Messages
@@ -89,14 +77,6 @@ class _NewReading(_Message):
 @dataclass(frozen=True)
 class _Tick(_Message):
     """Time to take the decisions again."""
-
-
-@dataclass(frozen=True)
-class _PrintJobEvent(_Message):
-    """OctoPrint fired an event of the print job."""
-
-    event: str
-    """The event, as OctoPrint names it."""
 
 
 @dataclass(frozen=True)
@@ -247,11 +227,10 @@ class ControlLoop:
         """Take the decisions regarding an event of OctoPrint.
 
         Args:
-            event (str): The OctoPrint event.
+            event (str): The event, as OctoPrint names it.
 
         """
-        if event in _PRINT_JOB_EVENTS:
-            self._put(_PrintJobEvent(event))
+        self._put(OctoprintEvent(event))
 
     def evaluate_settings(self) -> None:
         """Take the decisions again after new settings were loaded."""
@@ -331,8 +310,8 @@ class ControlLoop:
             self._decide_pwm_linked_temperature(readings, message.index_id)
         elif isinstance(message, GpioEdgeEvent):
             self._decide_gpio_input_edge(message)
-        elif isinstance(message, _PrintJobEvent):
-            self._decide_print_job_event(message.event)
+        elif isinstance(message, OctoprintEvent):
+            self._decide_octoprint_event(message)
         elif isinstance(message, _SettingsLoaded):
             self._load_thermostats()
             self._frontend.update_targets(self.get_thermostats())
@@ -465,26 +444,38 @@ class ControlLoop:
     def _react_to_temperature(self, rule: RuleAutomation, threshold: float) -> None:
         temperature_unit = self._settings.temperature_unit
         cause = f"enclosure temperature exceed {temperature_unit.from_celsius(threshold):g} {temperature_unit.symbol}"
+
+        def notify(reaction: Reaction, action: Action | None) -> None:
+            if isinstance(reaction, OutputControlReaction) or isinstance(action, GcodeAction):
+                self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
+            elif isinstance(action, PrinterAction):
+                self._notifications.send(
+                    NotificationType.PRINTER_ACTION,
+                    f"Printer action: {action.config.printer_action.value} caused by {cause}",
+                )
+
+        self._react(rule, notify)
+
+    def _react(self, rule: RuleAutomation, notify: Callable[[Reaction, Action | None], None] | None) -> None:
         for reaction in rule.reactions:
             try:
                 if isinstance(reaction, OutputControlReaction):
-                    if self._control_output(reaction):
-                        self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
+                    if self._control_output(reaction) and notify is not None:
+                        notify(reaction, None)
                 elif isinstance(reaction, RunActionReaction):
                     try:
                         action = self._actions.run(reaction.config.action)
                     except ActionError as error:
                         self._logger.debug("Can't run action %s: %s", reaction.config.action, error)
-                        continue
-                    if isinstance(action, GcodeAction):
-                        self._notifications.send(NotificationType.TEMPERATURE_ACTION, f"Temperature action: {cause}")
-                    elif isinstance(action, PrinterAction):
-                        self._notifications.send(
-                            NotificationType.PRINTER_ACTION,
-                            f"Printer action: {action.config.printer_action.value} caused by {cause}",
-                        )
+                    else:
+                        if notify is not None:
+                            notify(reaction, action)
             except Exception:
-                self._logger.exception("Error handling an automation on the temperature above %s", threshold)
+                self._logger.exception(
+                    "Error handling the reaction %s of the rule on %s",
+                    reaction.config,
+                    rule.trigger.config,
+                )
 
     def _decide_pwm_linked_temperature(self, readings: Mapping[int, Reading], sensor_id: int | None) -> None:
         # The curve drives the PWM only while a print job is on, paused included
@@ -529,39 +520,31 @@ class ControlLoop:
             input_label = ""
         for automation in self._automations.get_triggered(event):
             if isinstance(automation, RuleAutomation):
-                self._react_to_gpio_edge(automation, event.input_id, input_label)
+                self._react_to_gpio_edge(automation, input_label)
             elif isinstance(automation, FilamentAutomation):
                 self._detect_filament_end(automation, event.input_id, input_label)
 
-    def _react_to_gpio_edge(self, rule: RuleAutomation, input_id: int, input_label: str) -> None:
-        for reaction in rule.reactions:
-            try:
-                if isinstance(reaction, OutputControlReaction):
-                    config = reaction.config
-                    if self._control_output(reaction):
-                        self._notifications.send(
-                            NotificationType.GPIO_ACTION,
-                            f"GPIO control action caused by input {input_label}. "
-                            f"Setting GPIO{config.controlled_io} to: {config.controlled_io_set_state.value}",
-                        )
-                elif isinstance(reaction, RunActionReaction):
-                    try:
-                        action = self._actions.run(reaction.config.action)
-                    except ActionError as error:
-                        self._logger.debug("Can't run action %s: %s", reaction.config.action, error)
-                        continue
-                    if isinstance(action, GcodeAction):
-                        self._notifications.send(
-                            NotificationType.GPIO_ACTION,
-                            f"GPIO control action caused by input {input_label}. Sending GCODE command",
-                        )
-                    elif isinstance(action, PrinterAction):
-                        self._notifications.send(
-                            NotificationType.PRINTER_ACTION,
-                            f"Printer action: {action.config.printer_action.value} caused by input: {input_label}",
-                        )
-            except Exception:
-                self._logger.exception("Error handling an automation of input %s", input_id)
+    def _react_to_gpio_edge(self, rule: RuleAutomation, input_label: str) -> None:
+        def notify(reaction: Reaction, action: Action | None) -> None:
+            if isinstance(reaction, OutputControlReaction):
+                config = reaction.config
+                self._notifications.send(
+                    NotificationType.GPIO_ACTION,
+                    f"GPIO control action caused by input {input_label}. "
+                    f"Setting GPIO{config.controlled_io} to: {config.controlled_io_set_state.value}",
+                )
+            elif isinstance(action, GcodeAction):
+                self._notifications.send(
+                    NotificationType.GPIO_ACTION,
+                    f"GPIO control action caused by input {input_label}. Sending GCODE command",
+                )
+            elif isinstance(action, PrinterAction):
+                self._notifications.send(
+                    NotificationType.PRINTER_ACTION,
+                    f"Printer action: {action.config.printer_action.value} caused by input: {input_label}",
+                )
+
+        self._react(rule, notify)
 
     def _detect_filament_end(self, automation: FilamentAutomation, input_id: int, input_label: str) -> None:
         try:
@@ -576,21 +559,25 @@ class ControlLoop:
         except Exception:
             self._logger.exception("Error handling filament detection of input %s", input_id)
 
-    def _decide_print_job_event(self, event: str) -> None:
-        if event == Events.PRINT_STARTED:
+    def _decide_octoprint_event(self, event: OctoprintEvent) -> None:
+        if event.name == Events.PRINT_STARTED:
             self._print_job_running = True
             self._start_filament_detection(self._automations.get_all(FilamentAutomation))
-        elif event == Events.PRINT_RESUMED:
+        elif event.name == Events.PRINT_RESUMED:
             self._waiting_temperature.clear()
             self._start_filament_detection(self._automations.get_all(FilamentAutomation))
-        elif event == Events.PRINT_PAUSED:
+        elif event.name == Events.PRINT_PAUSED:
             self._decide_waiting_print()
-        elif event in (Events.PRINT_DONE, Events.PRINT_CANCELLED, Events.PRINT_FAILED):
+        elif event.name in (Events.PRINT_DONE, Events.PRINT_CANCELLED, Events.PRINT_FAILED):
             self._print_job_running = False
             self._waiting_temperature.clear()
             for automation in self._automations.get_all(FilamentAutomation):
                 automation.disarm()
             self._reset_pwm_linked_temperature()
+
+        for automation in self._automations.get_triggered(event):
+            if isinstance(automation, RuleAutomation):
+                self._react(automation, None)
 
     def _start_filament_detection(self, automations: Iterable[FilamentAutomation]) -> None:
         try:

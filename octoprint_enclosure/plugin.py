@@ -8,7 +8,7 @@ from pathlib import Path
 import octoprint.plugin
 import octoprint.util
 import smbus2
-from octoprint.events import Events
+from octoprint.events import Events, all_events
 from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
 
 from .actions import Actions
@@ -796,6 +796,7 @@ class EnclosurePlugin(
             "development_mode": self.development_mode,
             "gpio_import_error": str(gpio_import_error) if gpio_import_error is not None else None,
             "gpio_numbering_is_board": gpio_import_error is None and self._gpio.getmode() == self._gpio.BOARD,
+            "octoprint_events": sorted(all_events()),
         }
 
     def get_template_configs(self):

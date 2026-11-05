@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .gpio_input import GpioInputTrigger
+from .octoprint_event import OctoprintEventTrigger
 from .temperature import TemperatureTrigger
 
 if TYPE_CHECKING:
@@ -11,5 +12,6 @@ if TYPE_CHECKING:
 TRIGGERS: dict[str, type[Trigger]] = {
     "gpio_input": GpioInputTrigger,
     "temperature": TemperatureTrigger,
+    "octoprint_event": OctoprintEventTrigger,
 }
 """The supported types of automation triggers, by identifier."""

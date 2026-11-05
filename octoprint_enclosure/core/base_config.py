@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import MISSING, dataclass, fields
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, NewType, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, FrozenSet, NewType, get_type_hints
 
 from octoprint_enclosure.utils import Rgb, parse_bool, parse_float, parse_hex, parse_hex_color
 
@@ -20,6 +20,18 @@ class _Required:
 REQUIRED: Any = _Required()
 """The default of a field whose key must be set."""
 
+
+def _parse_str_set(value: Any) -> frozenset[str]:  # noqa: ANN401 - value is purposely untyped
+    """Read a saved list of strings, with at least one, as a set."""
+    if not isinstance(value, (list, tuple, set, frozenset)) or not all(isinstance(item, str) for item in value):
+        msg = f"not a list of strings: {value!r}"
+        raise ValueError(msg)
+    if not value:
+        msg = "the list is empty"
+        raise ValueError(msg)
+    return frozenset(value)
+
+
 _PARSERS: dict[Any, Callable[[Any], Any]] = {
     str: str,
     int: int,
@@ -27,6 +39,7 @@ _PARSERS: dict[Any, Callable[[Any], Any]] = {
     bool: parse_bool,
     HexInt: parse_hex,
     Rgb: parse_hex_color,
+    FrozenSet[str]: _parse_str_set,
 }
 """How to read a saved value, for each type a field of a configuration can have."""
 
