@@ -3,7 +3,7 @@ from .color_utils import Rgb, is_rgb, parse_hex_color, parse_rgb
 from .crc_utils import crc16_modbus
 from .gcode_utils import get_gcode_param
 from .number_utils import clamp, is_number, parse_float, parse_hex, to_float, to_int
-from .time_utils import parse_hhmm, seconds_until_next, seconds_until_today_at
+from .time_utils import parse_hhmm, seconds_until_next
 
 __all__ = [
     "Rgb",
@@ -19,7 +19,6 @@ __all__ = [
     "parse_hhmm",
     "parse_rgb",
     "seconds_until_next",
-    "seconds_until_today_at",
     "to_float",
     "to_int",
 ]

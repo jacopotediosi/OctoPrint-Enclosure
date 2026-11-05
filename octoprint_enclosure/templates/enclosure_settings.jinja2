@@ -172,25 +172,6 @@
                 {{ text_control_group("toggle_timer_off", _("Off Time"), "Time in seconds that the GPIO will remain when OFF") }}
             </div>
         </div>
-        <div data-bind="ifnot: output_type() == '' || ((output_type() == 'regular' || output_type() == 'pwm') && toggle_timer())">
-            <div data-bind="ifnot: output_type() == 'pwm' && $root.isPwmLinked(index_id())">
-                {{ checkbox_control_group("startup_with_server", _("Start with server"), "Choose if output should turn on automatically when octoprint starts") }}
-                {{ checkbox_control_group("auto_startup", _("Auto Startup"), "Choose if output should turn on automatically when print starts") }}
-            </div>
-            <div data-bind="if: $data.auto_startup">
-                {{ text_control_group("startup_time", _("Startup Delay / Hour"), "Time delay in seconds to turn on GPIO when print starts OR exact time that the event should happen, note that events will only be scheduled after a print starts, time should be formatted as HH:MM on a 24 hours format, don't forget to check timezone of your Raspberry Pi.") }}
-            </div>
-            {{ checkbox_control_group("auto_shutdown", _("Auto Shutdown"), "Choose if output should turn off automatically when print finishes") }}
-            <div data-bind="if: $data.auto_shutdown">
-                {{ checkbox_control_group("shutdown_on_failed", _("Shutdown on Failed or Canceled"), "Choose if output should turn off automatically when print is canceled or fails") }}
-                {% call text_control_group("shutdown_time", _("Shutdown Delay / Hour"), "Time delay in seconds to turn off GPIO when print starts OR exact time that the event should happen, note that events will only be scheduled after a print starts, time should be formatted as HH:MM on a 24 hours format, don't forget to check timezone of your raspberry pi.") %}
-                    <span class="label label-important">Attention</span>
-                    <span> Hour schedule does not work with PWM outputs driven by a
-                        <b>PWM Linked to Temperature</b> automation</span>
-                {% endcall %}
-            </div>
-            {{ checkbox_control_group("shutdown_on_error", _("Auto Shutdown on Serial Connection Error"), "Choose if output should turn off automatically when an error or disconnect was detected. Shutdown Delay will be ignored in this case") }}
-        </div>
         <div data-bind="if: output_type() == 'regular' || output_type() == 'temp_hum_control'">
             {{ checkbox_control_group("active_low", _("Active Low"), "Active low means that the GPIO will turn on when receive a low signal (ground) from Raspberry PI") }}
             {{ checkbox_control_group("gpio_i2c_enabled", _("GPIO over I2C"), "Allows multiple devices to be connected to the same GPIO pins") }}
@@ -222,13 +203,11 @@
         </div>
         <div data-bind="if: output_type() == 'temp_hum_control'">
             {{ select_control_group("temp_ctr_type", _("Device Type"), [("heater", _("Heater")), ("cooler", _("Cooler")), ("dehumidifier", _("Dehumidifier"))], placeholder="Select Device Type") }}
-            <div data-bind="if: auto_startup() || startup_with_server()">
-                <div data-bind="if: temp_ctr_type() == 'dehumidifier'">
-                    {{ text_control_group("temp_ctr_default_value", _("Default Value"), "Default humidity the thermostat will be set to when the print starts or the server starts.") }}
-                </div>
-                <div data-bind="ifnot: temp_ctr_type() == 'dehumidifier'">
-                    {{ temperature_control_group("temp_ctr_default_value", _("Default Value"), "Default temperature the thermostat will be set to when the print starts or the server starts.", zero_off=true) }}
-                </div>
+            <div data-bind="if: temp_ctr_type() == 'dehumidifier'">
+                {{ text_control_group("temp_ctr_default_value", _("Default Value"), "Default humidity the thermostat will be set to when the print starts or the server starts.") }}
+            </div>
+            <div data-bind="ifnot: temp_ctr_type() == 'dehumidifier'">
+                {{ temperature_control_group("temp_ctr_default_value", _("Default Value"), "Default temperature the thermostat will be set to when the print starts or the server starts.", zero_off=true) }}
             </div>
             <div data-bind="if: temp_ctr_type() == 'dehumidifier'">
                 {{ text_control_group("temp_ctr_deadband", _("Value Deadband"), "Allowable drift of the thermostat below its target. Set it to zero to disable.") }}

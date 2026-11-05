@@ -90,7 +90,6 @@ Response (200):
 {
     "linked_temp_sensor": string,
     "ledstrip_gpio_dat": string,
-    "startup_time": number,
     "temp_ctr_deadband": number (in the temperature unit of the plugin settings, or humidity for a dehumidifier),
     "neopixel_brightness": number,
     "gpio_pin": number,
@@ -107,17 +106,12 @@ Response (200):
     "temp_ctr_set_value": number,
     "temp_ctr_default_value": number (in the temperature unit of the plugin settings, or humidity for a dehumidifier),
     "default_neopixel_color": string,
-    "auto_shutdown": boolean,
     "label": string,
     "default_ledstrip_color": string,
     "toggle_timer_off": number,
     "ledstrip_gpio_clk": string,
-    "auto_startup": boolean,
-    "shutdown_time": number,
     "temp_ctr_type": string,
     "current_value": boolean,
-    "shutdown_on_failed": boolean,
-    "shutdown_on_error": boolean,
     "ledstrip_color": string,
     "neopixel_count": number,
     "neopixel_dma": number,
@@ -127,7 +121,6 @@ Response (200):
     "toggle_timer": boolean,
     "gpio_status": boolean,
     "pwm_frequency": number,
-    "startup_with_server": boolean,
     "active_low": boolean,
     "temp_ctr_max_temp": number (in the temperature unit of the plugin settings),
     "output_type": string,
@@ -142,46 +135,6 @@ Error Responses:
 ## Switch an output
 
 Endpoint: **PATCH** `/outputs/<id>`
-
-*Note: id needs to be int (index_id)*
-
-Body (Content-Type: `application/json`):
-```
-{
-    "status": boolean
-}
-```
-
-Response (204): No-Content
-
-Error Responses:
-- 415 - Content-Type is not application/json
-- 400 - malformed JSON
-- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
-
-## Enable the auto-startup of an output
-
-Endpoint: **PATCH** `/outputs/<id>/auto-startup`
-
-*Note: id needs to be int (index_id)*
-
-Body (Content-Type: `application/json`):
-```
-{
-    "status": boolean
-}
-```
-
-Response (204): No-Content
-
-Error Responses:
-- 415 - Content-Type is not application/json
-- 400 - malformed JSON
-- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
-
-## Enable the auto-shutdown of an output
-
-Endpoint: **PATCH** `/outputs/<id>/auto-shutdown`
 
 *Note: id needs to be int (index_id)*
 

@@ -71,7 +71,7 @@ class Scheduler:
 
         Args:
             job_id (str): The id of the job, to cancel it or replace it. By convention it is what the job belongs
-                to, the id of that and the purpose of the job, like "output:5:auto_shutdown", so that the jobs of
+                to, the id of that and the purpose of the job, like "automation:5:delay", so that the jobs of
                 different things never share an id, and a thing has one job for each purpose.
             delay_seconds (float): How long to wait before running the action.
             action (Callable[[], object]): What to run.

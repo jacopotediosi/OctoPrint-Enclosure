@@ -226,6 +226,17 @@ $(function () {
       });
     };
 
+    self.isTurnedOffAtPrintEnd = function (index_id) {
+      return self.automations().some(function (automation) {
+        return automation.automation_type() == "rule" && automation.enabled() && automation.trigger_type() == "octoprint_event"
+          && automation.octoprint_events().indexOf("PrintDone") >= 0
+          && automation.reactions().some(function (reaction) {
+            return reaction.reaction_type() == "output_control" && reaction.controlled_io() == index_id
+              && (reaction.controlled_io_set_state() == "off" || (reaction.controlled_io_set_state() == "on" && parseFloat(reaction.target()) == 0));
+          });
+      });
+    };
+
     self.automationsOn = function (index_id) {
       return ko.utils.arrayFilter(self.automations(), function (automation) {
         if (automation.automation_type() == "pwm_temperature_linked") {
@@ -305,8 +316,6 @@ $(function () {
           }).pop();
           if (linked_output) {
             linked_output.gpio_status(output['status'])
-            linked_output.auto_shutdown(output['auto_shutdown'])
-            linked_output.auto_startup(output['auto_startup'])
           }
         })
       }
@@ -318,8 +327,6 @@ $(function () {
           }).pop();
           if (linked_output) {
             linked_output.gpio_status(output['status'])
-            linked_output.auto_shutdown(output['auto_shutdown'])
-            linked_output.auto_startup(output['auto_startup'])
           }
         })
       }
@@ -331,8 +338,6 @@ $(function () {
           }).pop();
           if (linked_output) {
             linked_output.duty_cycle(output['pwm_value'])
-            linked_output.auto_shutdown(output['auto_shutdown'])
-            linked_output.auto_startup(output['auto_startup'])
           }
         })
       }
@@ -344,8 +349,6 @@ $(function () {
           }).pop();
           if (linked_output) {
             linked_output.neopixel_color(output['color'])
-            linked_output.auto_shutdown(output['auto_shutdown'])
-            linked_output.auto_startup(output['auto_startup'])
           }
         })
       }
@@ -357,8 +360,6 @@ $(function () {
           }).pop();
           if (linked_output) {
             linked_output.ledstrip_color(output['color'])
-            linked_output.auto_shutdown(output['auto_shutdown'])
-            linked_output.auto_startup(output['auto_startup'])
           }
         })
       }
@@ -571,12 +572,6 @@ $(function () {
         toggle_timer: ko.observable(false),
         toggle_timer_on: ko.observable(0),
         toggle_timer_off: ko.observable(0),
-        startup_with_server: ko.observable(false),
-        auto_startup: ko.observable(false),
-        startup_time: ko.observable(0),
-        auto_shutdown: ko.observable(false),
-        shutdown_on_failed: ko.observable(false),
-        shutdown_time: ko.observable(0),
         linked_temp_sensor: ko.observable(""),
         temp_ctr_type: ko.observable(""),
         temp_ctr_deadband: ko.observable(0),
@@ -599,8 +594,7 @@ $(function () {
         gpio_i2c_register: ko.observable(1),
         gpio_i2c_data_on: ko.observable(1),
         gpio_i2c_data_off: ko.observable(0),
-        gpio_i2c_register_status: ko.observable(1),
-        shutdown_on_error:ko.observable(false),
+        gpio_i2c_register_status: ko.observable(1)
       });
 
     };
@@ -741,14 +735,6 @@ $(function () {
 
     self.handlePrinterAction = function (item, form) {
       OctoPrint.post(self.buildPluginUrl("printer/" + item.index_id()));
-    };
-
-    self.switchAutoStartUp = function (item) {
-      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id() + "/auto-startup"), {status: !item.auto_startup()});
-    };
-
-    self.switchAutoShutdown = function (item) {
-      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id() + "/auto-shutdown"), {status: !item.auto_shutdown()});
     };
 
     self.switchAutomation = function (item) {

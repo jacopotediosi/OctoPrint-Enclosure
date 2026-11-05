@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.utils import to_float, to_int
+from octoprint_enclosure.utils import is_rgb, parse_hhmm, parse_rgb, to_float, to_int
 
 from .measurement import TemperatureUnit
 
@@ -249,8 +249,170 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                     automation[key] = rpi_output.pop(key)
             automations.append(automation)
 
+        # Up to version 10, each sensor had its own unit (via `use_fahrenheit`), and the plugin stored temperatures in
+        # that unit. From version 11 onwards, the plugin uses a single, centralized `temperature_unit` setting, which
+        # determines how temperatures are converted for the frontend, while on the backend, they are always handled
+        # exclusively in Celsius.
+        fahrenheit_sensor_ids = set()
+        celsius_sensor_ids = set()
+        for rpi_input in rpi_inputs:
+            use_fahrenheit = bool(rpi_input.pop("use_fahrenheit", False))
+            if rpi_input.get("input_type") != "temperature_sensor":
+                continue
+            if use_fahrenheit:
+                fahrenheit_sensor_ids.add(to_int(rpi_input.get("index_id")))
+            else:
+                celsius_sensor_ids.add(to_int(rpi_input.get("index_id")))
+        new_unit_should_be_fahrenheit = len(fahrenheit_sensor_ids) > len(celsius_sensor_ids)
+        settings.set(
+            ["temperature_unit"],
+            (TemperatureUnit.FAHRENHEIT if new_unit_should_be_fahrenheit else TemperatureUnit.CELSIUS).value,
+        )
+        fahrenheit = TemperatureUnit.FAHRENHEIT
+        for rpi_output in rpi_outputs:
+            is_temperature_thermostat = (
+                rpi_output.get("output_type") == "temp_hum_control"
+                and rpi_output.get("temp_ctr_type") != "dehumidifier"
+            )
+            if (
+                not is_temperature_thermostat
+                or to_int(rpi_output.get("linked_temp_sensor")) not in fahrenheit_sensor_ids
+            ):
+                continue
+            if to_float(rpi_output.get("temp_ctr_default_value")) != 0:
+                rpi_output["temp_ctr_default_value"] = fahrenheit.to_celsius(
+                    to_float(rpi_output.get("temp_ctr_default_value")),
+                )
+            rpi_output["temp_ctr_deadband"] = fahrenheit.to_celsius_interval(
+                to_float(rpi_output.get("temp_ctr_deadband")),
+            )
+            if to_float(rpi_output.get("temp_ctr_max_temp")) > 0:
+                rpi_output["temp_ctr_max_temp"] = fahrenheit.to_celsius(to_float(rpi_output.get("temp_ctr_max_temp")))
+        for automation in automations:
+            if to_int(automation.get("linked_temp_sensor")) not in fahrenheit_sensor_ids:
+                continue
+            if automation.get("automation_type") == "pwm_temperature_linked":
+                for key in ("temperature_a", "temperature_b"):
+                    automation[key] = fahrenheit.to_celsius(to_float(automation.get(key)))
+            elif automation.get("trigger_type") == "temperature" and to_float(automation.get("alarm_set_temp")) != 0:
+                automation["alarm_set_temp"] = fahrenheit.to_celsius(to_float(automation.get("alarm_set_temp")))
+
+        # Up to version 10, the outputs had the keys "auto_startup", "startup_with_server", "auto_shutdown",
+        # "shutdown_on_failed" and "shutdown_on_error", that turned the output on and off by themselves in some
+        # situations. Now each of them becomes an automation rule on the OctoPrint events with a reaction on the output.
+        # "auto_startup" and "auto_shutdown" become a rule for every output, enabled or disabled as the key was;
+        # "startup_with_server", "shutdown_on_failed" and "shutdown_on_error" become a rule only if the key was on. The
+        # rules on PWM, LED strip, NeoPixel and thermostat outputs take the setpoint from the default of the output:
+        # without one, and for a PWM driven by a curve, the rule is not created.
+        def add_rule(rpi_output, events, state, *, enabled, time=0, printing=None, setpoint=None):
+            nonlocal next_automation_id
+
+            # startup_time and shutdown_time held seconds, or a time of day as HH:MM
+            time_of_day = parse_hhmm(str(time))
+            delay = 0 if time_of_day is not None else max(to_float(time), 0)
+            at = time_of_day.strftime("%H:%M") if time_of_day is not None else ""
+
+            conditions = []
+            if printing is not None and (delay > 0 or at):
+                conditions.append({"condition_type": "print_job", "printing": printing})
+
+            label_suffixes = {
+                ("PrintStarted",): "at print start",
+                ("PrintDone",): "at print end",
+                ("PrintDone", "PrintCancelled", "PrintFailed"): "at print end",
+                ("PrintCancelled", "PrintFailed"): "on print failure",
+                ("Error", "Disconnected"): "on printer error",
+                ("Startup",): "at server start",
+            }
+
+            automations.append(
+                {
+                    "index_id": next_automation_id,
+                    "label": f"Turn {state} {rpi_output.get('label')} {label_suffixes.get(tuple(events), '')}".strip(),
+                    "automation_type": "rule",
+                    "enabled": enabled,
+                    "trigger_type": "octoprint_event",
+                    "octoprint_events": events,
+                    "delay": delay,
+                    "at": at,
+                    "conditions": conditions,
+                    "reactions": [
+                        {
+                            "reaction_type": "output_control",
+                            "controlled_io": rpi_output.get("index_id"),
+                            "controlled_io_set_state": state,
+                            **(setpoint or {}),
+                        },
+                    ],
+                },
+            )
+            next_automation_id += 1
+
+        pwm_temperature_linked_ids = {
+            to_int(automation.get("output"))
+            for automation in automations
+            if automation.get("automation_type") == "pwm_temperature_linked"
+        }
+
+        for rpi_output in rpi_outputs:
+            output_type = rpi_output.get("output_type")
+
+            on_setpoint: dict | None = {}
+            if output_type == "pwm":
+                duty_cycle = to_float(rpi_output.get("default_duty_cycle"))
+                on_setpoint = {"duty_cycle": duty_cycle} if duty_cycle > 0 else None
+            elif output_type in ("ledstrip", "neopixel_direct", "neopixel_indirect"):
+                color_key = "default_ledstrip_color" if output_type == "ledstrip" else "default_neopixel_color"
+                color = str(rpi_output.get(color_key, ""))
+                red, green, blue = (to_int(part) for part in parse_rgb(color)) if is_rgb(color) else (0, 0, 0)
+                on_setpoint = {"color": f"#{red:02x}{green:02x}{blue:02x}"} if (red, green, blue) != (0, 0, 0) else None
+            elif output_type == "temp_hum_control":
+                target = to_float(rpi_output.get("temp_ctr_default_value"))
+                on_setpoint = {"target": target} if target != 0 else None
+            if to_int(rpi_output.get("index_id")) in pwm_temperature_linked_ids:
+                on_setpoint = None
+
+            if on_setpoint is not None:
+                add_rule(
+                    rpi_output,
+                    ["PrintStarted"],
+                    "on",
+                    enabled=bool(rpi_output.get("auto_startup")),
+                    time=rpi_output.get("startup_time", 0),
+                    printing=True,
+                    setpoint=on_setpoint,
+                )
+
+            end_events = ["PrintDone"]
+            if rpi_output.get("shutdown_on_failed") and output_type != "temp_hum_control":
+                end_events += ["PrintCancelled", "PrintFailed"]
+
+            add_rule(
+                rpi_output,
+                end_events,
+                "off",
+                enabled=bool(rpi_output.get("auto_shutdown")),
+                time=rpi_output.get("shutdown_time", 0),
+                printing=False,
+            )
+
+            if rpi_output.get("shutdown_on_failed") and output_type == "temp_hum_control":
+                add_rule(
+                    rpi_output,
+                    ["PrintCancelled", "PrintFailed"],
+                    "off",
+                    enabled=bool(rpi_output.get("auto_shutdown")),
+                )
+
+            if rpi_output.get("shutdown_on_error"):
+                add_rule(rpi_output, ["Error", "Disconnected"], "off", enabled=True)
+
+            if rpi_output.get("startup_with_server") and on_setpoint is not None:
+                add_rule(rpi_output, ["Startup"], "on", enabled=True, setpoint=on_setpoint)
+
         # Up to version 10, every output held the keys of every type of item. The outputs that remain lose the keys of
-        # actions, alarms and PWM curves; the actions and the automations keep only the keys of their type.
+        # actions, alarms, PWM curves and automatic fields; the actions and the automations keep only the keys of their
+        # type.
         moved_keys = (
             "gcode",
             "shell_script",
@@ -262,6 +424,13 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "duty_a",
             "temperature_b",
             "duty_b",
+            "auto_startup",
+            "startup_time",
+            "auto_shutdown",
+            "shutdown_time",
+            "shutdown_on_failed",
+            "shutdown_on_error",
+            "startup_with_server",
         )
         for rpi_output in rpi_outputs:
             for key in moved_keys:
@@ -290,6 +459,10 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "alarm_set_temp",
             "repeat_while_above",
             "reactions",
+            "octoprint_events",
+            "delay",
+            "at",
+            "conditions",
             "enabled",
             "filament_sensor_timeout",
             "output",
@@ -356,54 +529,6 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             for reaction in automation["reactions"]:
                 for key, value in reaction_defaults.items():
                     reaction.setdefault(key, value)
-
-        # Up to version 10, each sensor had its own unit (via `use_fahrenheit`), and the plugin stored temperatures in
-        # that unit. From version 11 onwards, the plugin uses a single, centralized `temperature_unit` setting, which
-        # determines how temperatures are converted for the frontend, while on the backend, they are always handled
-        # exclusively in Celsius.
-        fahrenheit_sensor_ids = set()
-        celsius_sensor_ids = set()
-        for rpi_input in rpi_inputs:
-            use_fahrenheit = bool(rpi_input.pop("use_fahrenheit", False))
-            if rpi_input.get("input_type") != "temperature_sensor":
-                continue
-            if use_fahrenheit:
-                fahrenheit_sensor_ids.add(to_int(rpi_input.get("index_id")))
-            else:
-                celsius_sensor_ids.add(to_int(rpi_input.get("index_id")))
-        new_unit_should_be_fahrenheit = len(fahrenheit_sensor_ids) > len(celsius_sensor_ids)
-        settings.set(
-            ["temperature_unit"],
-            (TemperatureUnit.FAHRENHEIT if new_unit_should_be_fahrenheit else TemperatureUnit.CELSIUS).value,
-        )
-        fahrenheit = TemperatureUnit.FAHRENHEIT
-        for rpi_output in rpi_outputs:
-            is_temperature_thermostat = (
-                rpi_output.get("output_type") == "temp_hum_control"
-                and rpi_output.get("temp_ctr_type") != "dehumidifier"
-            )
-            if (
-                not is_temperature_thermostat
-                or to_int(rpi_output.get("linked_temp_sensor")) not in fahrenheit_sensor_ids
-            ):
-                continue
-            if to_float(rpi_output.get("temp_ctr_default_value")) != 0:
-                rpi_output["temp_ctr_default_value"] = fahrenheit.to_celsius(
-                    to_float(rpi_output.get("temp_ctr_default_value")),
-                )
-            rpi_output["temp_ctr_deadband"] = fahrenheit.to_celsius_interval(
-                to_float(rpi_output.get("temp_ctr_deadband")),
-            )
-            if to_float(rpi_output.get("temp_ctr_max_temp")) > 0:
-                rpi_output["temp_ctr_max_temp"] = fahrenheit.to_celsius(to_float(rpi_output.get("temp_ctr_max_temp")))
-        for automation in automations:
-            if to_int(automation.get("linked_temp_sensor")) not in fahrenheit_sensor_ids:
-                continue
-            if automation.get("automation_type") == "pwm_temperature_linked":
-                for key in ("temperature_a", "temperature_b"):
-                    automation[key] = fahrenheit.to_celsius(to_float(automation.get(key)))
-            elif automation.get("trigger_type") == "temperature" and to_float(automation.get("alarm_set_temp")) != 0:
-                automation["alarm_set_temp"] = fahrenheit.to_celsius(to_float(automation.get("alarm_set_temp")))
 
         # Up to version 10, the global neopixel_dma key stored the DMA channel of all the NeoPixels connected directly
         # to the Raspberry Pi. From version 11, each output has its own neopixel_dma key with the same value.

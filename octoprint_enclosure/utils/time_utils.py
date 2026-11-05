@@ -27,12 +27,6 @@ def parse_hhmm(value: str) -> time | None:
         return None
 
 
-def seconds_until_today_at(time_of_day: time) -> float:
-    """Seconds until a time of day today, or 0 if it has already passed."""
-    now = datetime.now()
-    return max((datetime.combine(now.date(), time_of_day) - now).total_seconds(), 0.0)
-
-
 def seconds_until_next(time_of_day: time) -> float:
     """Seconds until the next occurrence of a time of day, today or tomorrow."""
     now = datetime.now()

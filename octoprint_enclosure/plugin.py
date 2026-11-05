@@ -17,7 +17,6 @@ from .automations import (
     Automation,
     AutomationError,
     Automations,
-    PwmTemperatureLinkedAutomation,
     RuleAutomation,
     TemperatureTrigger,
 )
@@ -31,7 +30,6 @@ from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
 from .output_executor import OutputExecutor
 from .outputs import (
-    ColorSetpoint,
     LedstripOutput,
     NeopixelDirectOutput,
     NeopixelIndirectOutput,
@@ -44,15 +42,7 @@ from .outputs import (
     ThermostatDeviceType,
     ThermostatOutput,
 )
-from .utils import (
-    Rgb,
-    parse_hhmm,
-    parse_rgb,
-    seconds_until_next,
-    seconds_until_today_at,
-    to_float,
-    to_int,
-)
+from .utils import to_int
 
 
 class EnclosurePlugin(
@@ -174,8 +164,6 @@ class EnclosurePlugin(
         self._api = Api(
             self._plugin_context,
             update_ui=self.update_ui,
-            set_auto_startup_enabled=self.set_auto_startup_enabled,
-            set_auto_shutdown_enabled=self.set_auto_shutdown_enabled,
             set_automation_enabled=self.set_automation_enabled,
         )
 
@@ -208,7 +196,6 @@ class EnclosurePlugin(
 
         self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
         self._sensors.setup_pins()
-        self.start_outpus_with_server()
 
         self._sensor_poller.start()
         self._control_loop.start()
@@ -304,12 +291,6 @@ class EnclosurePlugin(
                 dummy.is_cooler_on = thermostat.is_on
             elif thermostat.config.temp_ctr_type is ThermostatDeviceType.DEHUMIDIFIER:
                 dummy.is_dehumidifier_on = thermostat.is_on
-
-    def is_pwm_linked(self, index_id):
-        return any(
-            automation.config.output == to_int(index_id)
-            for automation in self._automations.get_all(PwmTemperatureLinkedAutomation)
-        )
 
     def check_enclosure_temp(self):
         """Read every sensor now, then take the decisions on the readings."""
@@ -429,43 +410,26 @@ class EnclosurePlugin(
             thermostat_status = []
             for output in self.rpi_outputs:
                 index = to_int(output["index_id"])
-                startup = output["auto_startup"]
-                shutdown = output["auto_shutdown"]
 
                 if output["output_type"] == "regular":
                     val = self.output_state_boolean(index, RegularOutput) is True
-                    regular_status.append(
-                        {"index_id": index, "status": val, "auto_startup": startup, "auto_shutdown": shutdown},
-                    )
+                    regular_status.append({"index_id": index, "status": val})
                 if output["output_type"] == "temp_hum_control":
                     val = self.output_state_boolean(index, ThermostatOutput) is True
-                    thermostat_status.append(
-                        {"index_id": index, "status": val, "auto_startup": startup, "auto_shutdown": shutdown},
-                    )
+                    thermostat_status.append({"index_id": index, "status": val})
                 if output["output_type"] == "neopixel_indirect" or output["output_type"] == "neopixel_direct":
                     neopixel_class = (
                         NeopixelDirectOutput if output["output_type"] == "neopixel_direct" else NeopixelIndirectOutput
                     )
                     val = self.output_color(index, neopixel_class)
-                    neopixel_status.append(
-                        {"index_id": index, "color": val, "auto_startup": startup, "auto_shutdown": shutdown},
-                    )
+                    neopixel_status.append({"index_id": index, "color": val})
                 if output["output_type"] == "ledstrip":
                     val = self.output_color(index, LedstripOutput)
-                    ledstrip_status.append(
-                        {"index_id": index, "color": val, "auto_startup": startup, "auto_shutdown": shutdown},
-                    )
+                    ledstrip_status.append({"index_id": index, "color": val})
                 if output["output_type"] == "pwm":
                     with contextlib.suppress(OutputError):
                         val = to_int(self._outputs.get(index, PwmOutput).duty_cycle)
-                        pwm_status.append(
-                            {
-                                "index_id": index,
-                                "pwm_value": val,
-                                "auto_startup": startup,
-                                "auto_shutdown": shutdown,
-                            },
-                        )
+                        pwm_status.append({"index_id": index, "pwm_value": val})
             self._frontend.update_outputs(
                 regular=regular_status,
                 pwm=pwm_status,
@@ -479,34 +443,11 @@ class EnclosurePlugin(
     def handle_gpio_input(self, input_id, level):
         self._control_loop.evaluate_gpio_input_edge(input_id, level)
 
-    def set_thermostat_target(self, index_id, target):
-        self._control_loop.set_thermostat_target(index_id, to_float(target))
-
     def handle_temperature_command(self, index_id, temperature, wait):
-        self.set_thermostat_target(index_id, temperature)
+        self._control_loop.set_thermostat_target(index_id, temperature)
         if wait and self._printer.is_printing():
             self._printer.pause_print()
             self._control_loop.wait_for_temperature(index_id)
-
-    def set_auto_startup_enabled(self, index_id, enabled):
-        if not enabled:
-            self._scheduler.cancel(f"output:{index_id}:auto_startup")
-        for output in self.rpi_outputs:
-            if index_id == to_int(output["index_id"]):
-                output["auto_startup"] = enabled
-                self._logger.info("Setting auto startup for output %s to : %s", str(index_id), enabled)
-        self._enclosure_settings.rpi_outputs = self.rpi_outputs
-        self.update_ui_outputs()
-
-    def set_auto_shutdown_enabled(self, index_id, enabled):
-        if not enabled:
-            self._scheduler.cancel(f"output:{index_id}:auto_shutdown")
-        for output in self.rpi_outputs:
-            if index_id == to_int(output["index_id"]):
-                output["auto_shutdown"] = enabled
-                self._logger.info("Setting auto shutdown for output %s to : %s", str(index_id), enabled)
-        self._enclosure_settings.rpi_outputs = self.rpi_outputs
-        self.update_ui_outputs()
 
     def set_automation_enabled(self, index_id, enabled):
         if not self._enclosure_settings.set_automation_enabled(index_id, enabled=enabled):
@@ -527,39 +468,11 @@ class EnclosurePlugin(
         if event == Events.PRINT_STARTED:
             self._scheduler.cancel_with_prefix("output:")
             for rpi_output in self.rpi_outputs:
-                if rpi_output["auto_startup"]:
-                    startup_time = rpi_output["startup_time"]
-                    startup_time_of_day = parse_hhmm(str(startup_time))
-                    delay_seconds = (
-                        to_float(startup_time)
-                        if startup_time_of_day is None
-                        else seconds_until_today_at(startup_time_of_day)
-                    )
-                    self.schedule_auto_startup_outputs(rpi_output, delay_seconds)
                 if rpi_output["toggle_timer"] and rpi_output["output_type"] in ("regular", "pwm"):
                     self.toggle_output(rpi_output["index_id"], True)
-                shutdown_time_of_day = parse_hhmm(str(rpi_output["shutdown_time"]))
-                if shutdown_time_of_day is not None:
-                    shutdown_delay_seconds = seconds_until_next(shutdown_time_of_day)
-                    self.schedule_auto_shutdown_outputs(rpi_output, shutdown_delay_seconds)
-
-        elif event == Events.PRINT_DONE:
-            for rpi_output in self.rpi_outputs:
-                shutdown_time = rpi_output["shutdown_time"]
-                if rpi_output["auto_shutdown"] and parse_hhmm(str(shutdown_time)) is None:
-                    delay_seconds = to_float(shutdown_time)
-                    self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
 
         elif event in (Events.PRINT_CANCELLED, Events.PRINT_FAILED):
             self._scheduler.cancel_with_prefix("output:")
-            for rpi_output in self.rpi_outputs:
-                if rpi_output["shutdown_on_failed"]:
-                    shutdown_time = rpi_output["shutdown_time"]
-                    if rpi_output["auto_shutdown"] and parse_hhmm(str(shutdown_time)) is None:
-                        delay_seconds = to_float(shutdown_time)
-                        self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
-                        if rpi_output["output_type"] == "temp_hum_control":
-                            self.set_thermostat_target(to_int(rpi_output["index_id"]), 0)
 
         if event == Events.PRINT_DONE:
             file_name = Path(payload["path"]).name
@@ -568,142 +481,6 @@ class EnclosurePlugin(
                 NotificationType.PRINT_FINISH,
                 f"Print job finished: {file_name} printed in {elapsed_time}",
             )
-
-        if event in (Events.ERROR, Events.DISCONNECTED) or (
-            event == Events.PRINTER_STATE_CHANGED and "error" in payload["state_string"].lower()
-        ):
-            self._logger.info("Detected %s, shutting down outputs with shutdown_on_error", event)
-            for rpi_output in self.rpi_outputs:
-                if rpi_output["shutdown_on_error"]:
-                    self._logger.debug("Schedule shutdown for: %s", rpi_output["index_id"])
-                    self.schedule_auto_shutdown_outputs(rpi_output, 0)
-
-    def schedule_auto_shutdown_outputs(self, rpi_output, shutdown_delay_seconds):
-        suffix = "auto_shutdown"
-        if rpi_output["output_type"] == "regular":
-            self.add_regular_output_to_queue(shutdown_delay_seconds, rpi_output, False, suffix)
-        if rpi_output["output_type"] == "ledstrip":
-            red, green, blue = parse_rgb(rpi_output["default_ledstrip_color"])
-            setpoint = ColorSetpoint(Rgb(to_int(red), to_int(green), to_int(blue)))
-            self._output_executor.turn_on(to_int(rpi_output["index_id"]), setpoint)
-        if rpi_output["output_type"] == "pwm" and not self.is_pwm_linked(rpi_output["index_id"]):
-            self.add_pwm_output_to_queue(shutdown_delay_seconds, rpi_output, False, suffix)
-        if rpi_output["output_type"] == "pwm" and self.is_pwm_linked(rpi_output["index_id"]):
-            self.schedule_pwm_duty_on_queue(shutdown_delay_seconds, rpi_output, suffix)
-        if rpi_output["output_type"] == "neopixel_indirect" or rpi_output["output_type"] == "neopixel_direct":
-            self.add_neopixel_output_to_queue(rpi_output, shutdown_delay_seconds, False, suffix)
-        if rpi_output["output_type"] == "temp_hum_control":
-            value = 0
-            self.add_temperature_output_temperature_queue(shutdown_delay_seconds, rpi_output, value, suffix)
-
-    def start_outpus_with_server(self):
-        for rpi_output in self.rpi_outputs:
-            if rpi_output["startup_with_server"]:
-                if rpi_output["output_type"] == "regular":
-                    self._output_executor.turn_on(rpi_output["index_id"], RegularSetpoint())
-                if rpi_output["output_type"] == "ledstrip":
-                    red, green, blue = parse_rgb(rpi_output["default_ledstrip_color"])
-                    setpoint = ColorSetpoint(Rgb(to_int(red), to_int(green), to_int(blue)))
-                    self._output_executor.turn_on(to_int(rpi_output["index_id"]), setpoint)
-                if rpi_output["output_type"] == "pwm" and not self.is_pwm_linked(rpi_output["index_id"]):
-                    try:
-                        pwm_output = self._outputs.get(to_int(rpi_output["index_id"]), PwmOutput)
-                    except OutputError as error:
-                        self._logger.debug("Can't start output %s: %s", rpi_output["index_id"], error)
-                        continue
-                    setpoint = PwmSetpoint(pwm_output.config.default_duty_cycle)
-                    self._output_executor.turn_on(rpi_output["index_id"], setpoint)
-                if rpi_output["output_type"] == "neopixel_indirect" or rpi_output["output_type"] == "neopixel_direct":
-                    red, green, blue = parse_rgb(rpi_output["default_neopixel_color"])
-                    setpoint = ColorSetpoint(Rgb(to_int(red), to_int(green), to_int(blue)))
-                    self._output_executor.turn_on(to_int(rpi_output["index_id"]), setpoint)
-                if rpi_output["output_type"] == "temp_hum_control":
-                    index_id = to_int(rpi_output["index_id"])
-                    self.set_thermostat_target(index_id, rpi_output["temp_ctr_default_value"])
-
-    def schedule_auto_startup_outputs(self, rpi_output, delay_seconds):
-        suffix = "auto_startup"
-        if rpi_output["output_type"] == "regular":
-            self.add_regular_output_to_queue(delay_seconds, rpi_output, True, suffix)
-        if rpi_output["output_type"] == "ledstrip":
-            red, green, blue = parse_rgb(rpi_output["default_ledstrip_color"])
-            setpoint = ColorSetpoint(Rgb(to_int(red), to_int(green), to_int(blue)))
-            self._output_executor.turn_on(to_int(rpi_output["index_id"]), setpoint)
-        if rpi_output["output_type"] == "pwm" and not self.is_pwm_linked(rpi_output["index_id"]):
-            self.add_pwm_output_to_queue(delay_seconds, rpi_output, True, suffix)
-        if rpi_output["output_type"] == "neopixel_indirect" or rpi_output["output_type"] == "neopixel_direct":
-            self.add_neopixel_output_to_queue(rpi_output, delay_seconds, True, suffix)
-        if rpi_output["output_type"] == "temp_hum_control":
-            value = rpi_output["temp_ctr_default_value"]
-            self.add_temperature_output_temperature_queue(delay_seconds, rpi_output, value, suffix)
-
-    def add_neopixel_output_to_queue(self, rpi_output, delay_seconds, on, suffix):
-        queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
-        self._logger.debug("Scheduling neopixel output id %s for on %s delay_seconds", queue_id, delay_seconds)
-        if on:
-            red, green, blue = parse_rgb(rpi_output["default_neopixel_color"])
-            setpoint = ColorSetpoint(Rgb(to_int(red), to_int(green), to_int(blue)))
-            action = functools.partial(self._output_executor.turn_on, to_int(rpi_output["index_id"]), setpoint)
-        else:
-            action = functools.partial(self._output_executor.turn_off, to_int(rpi_output["index_id"]))
-        self._scheduler.schedule(queue_id, delay_seconds, action)
-
-    def add_pwm_output_to_queue(self, delay_seconds, rpi_output, on, suffix):
-        queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
-        self._logger.debug("Scheduling pwm output id %s for on %s delay_seconds", queue_id, delay_seconds)
-        if on:
-            try:
-                pwm_output = self._outputs.get(to_int(rpi_output["index_id"]), PwmOutput)
-            except OutputError as error:
-                self._logger.debug("Can't schedule output %s: %s", rpi_output["index_id"], error)
-                return
-            setpoint = PwmSetpoint(pwm_output.config.default_duty_cycle)
-            action = functools.partial(self._output_executor.turn_on, rpi_output["index_id"], setpoint)
-        else:
-            action = functools.partial(self._output_executor.turn_off, rpi_output["index_id"])
-        self._scheduler.schedule(queue_id, delay_seconds, action)
-
-    def schedule_pwm_duty_on_queue(self, delay_seconds, rpi_output, suffix):
-        queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
-        self._logger.debug("Scheduling pwm linked temp output id %s on %s delay_seconds", queue_id, delay_seconds)
-        self._scheduler.schedule(
-            queue_id,
-            delay_seconds,
-            functools.partial(self._output_executor.turn_off, rpi_output["index_id"]),
-        )
-
-    def add_regular_output_to_queue(self, delay_seconds, rpi_output, on, suffix):
-        queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
-        self._logger.debug("Scheduling regular output id %s on %s delay_seconds", queue_id, delay_seconds)
-        if on:
-            action = functools.partial(
-                self._output_executor.turn_on,
-                rpi_output["index_id"],
-                RegularSetpoint(),
-            )
-        else:
-            action = functools.partial(self._output_executor.turn_off, rpi_output["index_id"])
-        self._scheduler.schedule(queue_id, delay_seconds, action)
-
-    def add_temperature_output_temperature_queue(self, delay_seconds, rpi_output, value, suffix):
-        queue_id = f"output:{to_int(rpi_output['index_id'])}:{suffix}"
-        self._logger.debug("Scheduling thermostat id %s on %s delay_seconds", queue_id, delay_seconds)
-        self._scheduler.schedule(
-            queue_id,
-            delay_seconds,
-            functools.partial(self.write_temperature_to_output, to_int(rpi_output["index_id"]), value),
-        )
-
-    def write_temperature_to_output(self, rpi_output_index, value):
-        try:
-            rpi_output = [r_out for r_out in self.rpi_outputs if to_int(r_out["index_id"]) == rpi_output_index].pop()
-
-            if rpi_output["output_type"] == "temp_hum_control":
-                self.set_thermostat_target(rpi_output_index, value)
-                self._logger.debug("Setting temperature to output index: %s value %s", rpi_output["index_id"], value)
-
-        except Exception:
-            self._logger.exception("Error setting temperature on output %s", rpi_output_index)
 
     # ~~ SettingsPlugin mixin
     def on_settings_save(self, data):

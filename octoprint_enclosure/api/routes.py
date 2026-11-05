@@ -114,14 +114,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
     _update_ui: Callable[[], None]
     """The function refreshing the UI."""
 
-    _set_auto_startup_enabled: Callable[[int, bool], None]
-    """The function enabling or disabling the auto startup of an output, with the id of the output and whether to
-    enable it."""
-
-    _set_auto_shutdown_enabled: Callable[[int, bool], None]
-    """The function enabling or disabling the auto shutdown of an output, with the id of the output and whether to
-    enable it."""
-
     _set_automation_enabled: Callable[[int, bool], bool]
     """The function enabling or disabling an automation, with the id of the automation and whether to enable it,
     that returns whether an automation has that id."""
@@ -131,8 +123,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
         plugin_context: PluginContext,
         *,
         update_ui: Callable[[], None],
-        set_auto_startup_enabled: Callable[[int, bool], None],
-        set_auto_shutdown_enabled: Callable[[int, bool], None],
         set_automation_enabled: Callable[[int, bool], bool],
     ) -> None:
         """Set up the API.
@@ -140,10 +130,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
         Args:
             plugin_context (PluginContext): The plugin context.
             update_ui (Callable[[], None]): The function refreshing the UI.
-            set_auto_startup_enabled (Callable[[int, bool], None]): The function enabling or disabling the auto
-                startup of an output, with the id of the output and whether to enable it.
-            set_auto_shutdown_enabled (Callable[[int, bool], None]): The function enabling or disabling the auto
-                shutdown of an output, with the id of the output and whether to enable it.
             set_automation_enabled (Callable[[int, bool], bool]): The function enabling or disabling an automation,
                 with the id of the automation and whether to enable it, that returns whether an automation has that
                 id.
@@ -161,8 +147,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
         self._logger = plugin_context.logger.getChild("Api")
 
         self._update_ui = update_ui
-        self._set_auto_startup_enabled = set_auto_startup_enabled
-        self._set_auto_shutdown_enabled = set_auto_shutdown_enabled
         self._set_automation_enabled = set_automation_enabled
 
     ##########
@@ -319,18 +303,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
             self._output_executor.turn_on(output_id, RegularSetpoint(), wait=True)
         else:
             self._output_executor.turn_off(output_id, wait=True)
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:output_id>/auto-startup", methods=["PATCH"])
-    @_expects_json(status="bool")
-    def set_auto_startup(self, output_id: int, *, status: bool) -> Response:
-        self._set_auto_startup_enabled(output_id, status)
-        return make_response("", 204)
-
-    @octoprint.plugin.BlueprintPlugin.route("/outputs/<int:output_id>/auto-shutdown", methods=["PATCH"])
-    @_expects_json(status="bool")
-    def set_auto_shutdown(self, output_id: int, *, status: bool) -> Response:
-        self._set_auto_shutdown_enabled(output_id, status)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/pwm/<int:output_id>", methods=["PATCH"])

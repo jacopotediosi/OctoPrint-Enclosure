@@ -157,25 +157,11 @@
                       data-bind="text: gpio_status() ? 'on' : 'off', css: {'badge-success': gpio_status(), 'badge-important': !gpio_status()}"></span>
             </h4>
         </div>
-        <div data-bind="if: !(output_type() == 'pwm' && $root.isPwmLinked(index_id())) && !((output_type() == 'regular' || output_type() == 'pwm') && toggle_timer())">
-            <h5 data-bind="if: $root.isUser()">
-                <span>Auto Startup</span>
-                <a href="#"
-                   data-bind="click: $root.switchAutoStartUp, css: {'fa-toggle-on': auto_startup(), 'fa-toggle-off': !auto_startup()}, attr: {title: auto_startup() ? 'Disable Auto Startup' : 'Enable Auto Startup'}"
-                   class="fa enclosure-link"></a>
-            </h5>
-            <h5 data-bind="if: $root.isUser()">
-                <span>Auto Shutdown</span>
-                <a href="#"
-                   data-bind="click: $root.switchAutoShutdown, css: {'fa-toggle-on': auto_shutdown(), 'fa-toggle-off': !auto_shutdown()}, attr: {title: auto_shutdown() ? 'Disable Auto Shutdown' : 'Enable Auto Shutdown'}"
-                   class="fa enclosure-link"></a>
-            </h5>
-            <span data-bind="visible: output_type() == 'temp_hum_control' && temp_ctr_type() == 'heater' && !auto_shutdown()">
-                <span class="label label-important">Warning:</span>
-                <span> Consider making
-                    <b>heater</b> auto shutdown when print finish for safety reasons.</span>
-            </span>
-        </div>
+        <span data-bind="visible: output_type() == 'temp_hum_control' && temp_ctr_type() == 'heater' && !$root.isTurnedOffAtPrintEnd(index_id())">
+            <span class="label label-important">Warning:</span>
+            <span> Nothing turns this
+                <b>heater</b> off when the print ends: add an automation on PrintDone that turns it off, for safety.</span>
+        </span>
         <h5 data-bind="visible: (output_type() == 'regular' || output_type() == 'pwm') && toggle_timer()">
             <span>Time Toggle</span>
             <span class="badge">active</span>
