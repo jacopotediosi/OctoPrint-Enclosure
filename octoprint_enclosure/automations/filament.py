@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig
+from octoprint_enclosure.core import REQUIRED
 
-from .base import Automation
+from .base import Automation, AutomationConfig
 from .events import GpioEdgeEvent
 from .triggers import GpioInputTrigger
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class FilamentConfig(BaseConfig):
+class FilamentConfig(AutomationConfig):
     """The configuration of an automation that changes the filament when a sensor detects its end."""
 
     filament_sensor_enabled: bool = REQUIRED

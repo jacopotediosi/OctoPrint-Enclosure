@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeVar
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig
+from octoprint_enclosure.core import BaseConfig
 
-from .base import Automation, AutomationError
+from .base import Automation, AutomationConfig, AutomationError
 from .registry import AUTOMATIONS
 from .triggers import GpioInputTrigger
 
@@ -18,17 +17,6 @@ if TYPE_CHECKING:
     from .events import AutomationEvent
 
 _AutomationT = TypeVar("_AutomationT", bound=Automation)
-
-
-@dataclass(frozen=True)
-class AutomationConfig(BaseConfig):
-    """The configuration shared by all the automations."""
-
-    index_id: int = REQUIRED
-    """The id of the automation."""
-
-    automation_type: str = ""
-    """The type of the automation."""
 
 
 class _InvalidAutomation(Automation[BaseConfig]):

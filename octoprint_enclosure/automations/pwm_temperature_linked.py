@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig
+from octoprint_enclosure.core import REQUIRED
 from octoprint_enclosure.utils import clamp
 
-from .base import Automation
+from .base import Automation, AutomationConfig
 
 
 @dataclass(frozen=True)
-class PwmTemperatureLinkedConfig(BaseConfig):
+class PwmTemperatureLinkedConfig(AutomationConfig):
     """The configuration of an automation that sets a PWM duty cycle from the reading of a linked temperature sensor.
 
     Between the first and the second temperature, the duty cycle changes linearly from the first to the second one.

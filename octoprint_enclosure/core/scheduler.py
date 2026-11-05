@@ -92,10 +92,16 @@ class Scheduler:
             if self._jobs.pop(job_id, None) is not None:
                 self._condition.notify()
 
-    def cancel_all(self) -> None:
-        """Cancel every job still waiting."""
+    def cancel_with_prefix(self, prefix: str) -> None:
+        """Cancel every job still waiting whose id starts with a prefix.
+
+        Args:
+            prefix (str): The start of the ids of the jobs to cancel.
+
+        """
         with self._condition:
-            self._jobs.clear()
+            for job_id in [job_id for job_id in self._jobs if job_id.startswith(prefix)]:
+                del self._jobs[job_id]
             self._condition.notify()
 
     def stop(self) -> None:

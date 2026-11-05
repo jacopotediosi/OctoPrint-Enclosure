@@ -10,6 +10,7 @@ from octoprint.events import Events
 
 from .actions import ActionError, GcodeAction, GcodeConfig, PrinterAction
 from .automations import (
+    AutomationError,
     AutomationEvent,
     FilamentAutomation,
     GpioEdgeEvent,
@@ -43,7 +44,7 @@ if TYPE_CHECKING:
 
     from .actions import Action, Actions
     from .automations import Automations, Reaction
-    from .core import Frontend, Settings
+    from .core import Frontend, Scheduler, Settings
     from .inputs import GpioInputs, Reading, SensorPoller
     from .notifications import Notifications
     from .output_executor import OutputExecutor
@@ -108,6 +109,17 @@ class _UpdateUiTargets(_Message):
     """The UI asks for the targets of the thermostats."""
 
 
+@dataclass(frozen=True)
+class _RunRule(_Message):
+    """The delay of a rule is over."""
+
+    rule: RuleAutomation
+    """The rule as it was when its delay started."""
+
+    notify: Callable[[Reaction, Action | None], None] | None
+    """How the rule notifies each reaction done, or None if it doesn't notify."""
+
+
 class ControlLoop:
     """Takes the decisions of the plugin on a thread of its own: what the outputs do, and when the automations act.
 
@@ -122,6 +134,7 @@ class ControlLoop:
     _actions: Actions
     _automations: Automations
     _output_executor: OutputExecutor
+    _scheduler: Scheduler
     _notifications: Notifications
     _printer: PrinterInterface
     _frontend: Frontend
@@ -150,6 +163,7 @@ class ControlLoop:
         actions: Actions,
         automations: Automations,
         output_executor: OutputExecutor,
+        scheduler: Scheduler,
         notifications: Notifications,
         printer: PrinterInterface,
         frontend: Frontend,
@@ -165,6 +179,7 @@ class ControlLoop:
             actions (Actions): The actions.
             automations (Automations): The automations.
             output_executor (OutputExecutor): The executor of the commands to the outputs.
+            scheduler (Scheduler): The scheduler.
             notifications (Notifications): The notifications.
             printer (PrinterInterface): The OctoPrint printer interface.
             frontend (Frontend): The frontend handler.
@@ -178,6 +193,7 @@ class ControlLoop:
         self._actions = actions
         self._automations = automations
         self._output_executor = output_executor
+        self._scheduler = scheduler
         self._notifications = notifications
         self._printer = printer
         self._frontend = frontend
@@ -335,6 +351,17 @@ class ControlLoop:
             self._decide_thermostats(self._sensor_poller.get_readings(), None)
         elif isinstance(message, _UpdateUiTargets):
             self._frontend.update_targets(self.get_thermostats())
+        elif isinstance(message, _RunRule):
+            index_id = message.rule.config.index_id
+            try:
+                rule = self._automations.get(index_id, RuleAutomation)
+            except AutomationError as error:
+                self._logger.debug("Can't run automation %s after its delay: %s", index_id, error)
+            else:
+                if rule is message.rule:
+                    self._run_rule(rule, message.notify)
+                else:
+                    self._logger.debug("Can't run automation %s after its delay: its settings changed", index_id)
 
     def _start_deciding(self) -> None:
         self._load_thermostats()
@@ -361,8 +388,9 @@ class ControlLoop:
                 trigger = rule.trigger
                 reactions = [reaction for reaction in rule.reactions if isinstance(reaction, OutputControlReaction)]
 
-                # Skip automation rules which don't react to gpio inputs by controlling an output
-                if not isinstance(trigger, GpioInputTrigger) or not reactions:
+                # Skip automation rules which don't react to gpio inputs by controlling an output, and the delayed
+                # ones, that act some time after an edge, not on the level
+                if not isinstance(trigger, GpioInputTrigger) or not reactions or rule.config.delay or rule.config.at:
                     continue
 
                 # Get the trigger input id
@@ -375,8 +403,10 @@ class ControlLoop:
                     self._logger.debug("Can't read GPIO input %s: %s", input_id, error)
                     continue
 
-                # React if the input level matches the trigger
-                if trigger.matches(GpioEdgeEvent(input_id, level)):
+                # React if the input level matches the trigger and the conditions of the rule are satisfied
+                if trigger.matches(GpioEdgeEvent(input_id, level)) and rule.conditions_satisfied(
+                    printing=self._print_job_running,
+                ):
                     for reaction in reactions:
                         self._control_output(reaction)
         except Exception:
@@ -457,6 +487,21 @@ class ControlLoop:
         self._react(rule, notify)
 
     def _react(self, rule: RuleAutomation, notify: Callable[[Reaction, Action | None], None] | None) -> None:
+        delay_seconds = rule.config.delay_seconds()
+        if delay_seconds > 0:
+            self._scheduler.schedule(
+                f"automation:{rule.config.index_id}:delay",
+                delay_seconds,
+                lambda: self._put(_RunRule(rule, notify)),
+            )
+        else:
+            self._run_rule(rule, notify)
+
+    def _run_rule(self, rule: RuleAutomation, notify: Callable[[Reaction, Action | None], None] | None) -> None:
+        if not rule.conditions_satisfied(printing=self._print_job_running):
+            self._logger.debug("The conditions of automation %s aren't satisfied", rule.config.index_id)
+            return
+
         for reaction in rule.reactions:
             try:
                 if isinstance(reaction, OutputControlReaction):

@@ -422,6 +422,56 @@
             {{ checkbox_control_group("repeat_while_above", _("Repeat while above"), "Run the automation at every reading above the set temperature, instead of only when the temperature goes above it the first time.") }}
         </div>
         <div data-bind="if: automation_type() == 'rule'">
+            {{ select_control_group("$root.ruleTiming($data)", _("Run"), [
+                ("now", _("Right away")),
+                ("delay", _("After a delay")),
+                ("at", _("At a time of day")),
+            ], "When to run the reactions, once the trigger fires.") }}
+            <div data-bind="if: $root.ruleTiming($data)() == 'delay'">
+                {{ text_control_group("delay", _("Delay"), "Seconds to wait after the trigger before running the reactions.") }}
+            </div>
+            <div data-bind="if: $root.ruleTiming($data)() == 'at'">
+                {{ text_control_group("at", _("At"), "Time of day, as HH:MM: the reactions run the next time it comes after the trigger.") }}
+            </div>
+            <div data-bind="foreach: conditions">
+                {% call select_control_group("condition_type", _("Condition"), [
+                    ("print_job", _("Print Job")),
+                ], placeholder="Select Condition") %}
+                    <span class="help-inline"
+                          data-bind="visible: condition_type() == 'print_job'">
+                        <span class="label label-info">Info:</span> The reactions run only while a print job is running, or only while none is. Checked when
+                        the reactions run, after the delay too.
+                    </span>
+                {% endcall %}
+                <div data-bind="if: condition_type() == 'print_job'">
+                    <div class="control-group">
+                        <label class="control-label">{{ _("Print Job") }}</label>
+                        <div class="controls">
+                            <select data-bind="options: $root.printingOptions, optionsText: 'label', optionsValue: 'value', value: printing">
+                            </select>
+                            <span class="help-inline">Printing means a print job is running.</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <div class="controls">
+                        <a title="Remove Condition"
+                           class="btn btn-small btn-danger"
+                           data-bind="click: function() { $root.removeCondition($parent, $data) }">
+                            <i class="icon-trash"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="control-group">
+                <div class="controls">
+                    <button type="button"
+                            class="btn btn-small"
+                            data-bind="click: function() { $root.addCondition($data) }">Add Condition...</button>
+                </div>
+            </div>
+        </div>
+        <div data-bind="if: automation_type() == 'rule'">
             <div data-bind="foreach: reactions">
                 {% call select_control_group("reaction_type", _("Reaction"), [
                     ("output_control", _("Output Control")),

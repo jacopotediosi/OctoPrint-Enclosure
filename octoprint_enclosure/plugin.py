@@ -129,6 +129,7 @@ class EnclosurePlugin(
             self._actions,
             self._automations,
             self._output_executor,
+            self._scheduler,
             self._notifications,
             self._printer,
             self._frontend,
@@ -532,7 +533,7 @@ class EnclosurePlugin(
         self._control_loop.evaluate_octoprint_event(event)
 
         if event == Events.PRINT_STARTED:
-            self._scheduler.cancel_all()
+            self._scheduler.cancel_with_prefix("output:")
             for rpi_output in self.rpi_outputs:
                 if rpi_output["auto_startup"]:
                     startup_time = rpi_output["startup_time"]
@@ -558,7 +559,7 @@ class EnclosurePlugin(
                     self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
 
         elif event in (Events.PRINT_CANCELLED, Events.PRINT_FAILED):
-            self._scheduler.cancel_all()
+            self._scheduler.cancel_with_prefix("output:")
             for rpi_output in self.rpi_outputs:
                 if rpi_output["shutdown_on_failed"]:
                     shutdown_time = rpi_output["shutdown_time"]

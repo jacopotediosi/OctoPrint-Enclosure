@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.core import REQUIRED, BaseConfig
 
 if TYPE_CHECKING:
     import logging
@@ -16,6 +17,17 @@ _ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
 
 class AutomationError(Exception):
     """Raised when an automation can't be used, with the reason as message."""
+
+
+@dataclass(frozen=True)
+class AutomationConfig(BaseConfig):
+    """The configuration shared by all the automations."""
+
+    index_id: int = REQUIRED
+    """The id of the automation."""
+
+    automation_type: str = ""
+    """The type of the automation."""
 
 
 class Automation(Generic[_ConfigT]):

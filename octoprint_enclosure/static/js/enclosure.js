@@ -631,6 +631,9 @@ $(function () {
         alarm_set_temp: ko.observable(""),
         repeat_while_above: ko.observable(false),
         octoprint_events: ko.observableArray([]),
+        delay: ko.observable(0),
+        at: ko.observable(""),
+        conditions: ko.observableArray([]),
         reactions: ko.observableArray([self.newReaction()]),
         filament_sensor_enabled: ko.observable(true),
         filament_sensor_timeout: ko.observable(120),
@@ -644,6 +647,45 @@ $(function () {
 
     self.removeAutomation = function (data) {
       self.settingsViewModel.settings.plugins.enclosure.automations.remove(data);
+    };
+
+    self.ruleTimings = new WeakMap();
+
+    self.ruleTiming = function (rule) {
+      var timing = self.ruleTimings.get(rule);
+      if (!timing) {
+        timing = ko.observable(rule.at() !== "" ? "at" : parseFloat(rule.delay()) > 0 ? "delay" : "now");
+        timing.subscribe(function (value) {
+          if (value !== "delay") {
+            rule.delay(0);
+          }
+          if (value !== "at") {
+            rule.at("");
+          }
+        });
+        self.ruleTimings.set(rule, timing);
+      }
+      return timing;
+    };
+
+    self.printingOptions = [
+      {value: true, label: "Printing"},
+      {value: false, label: "Not printing"}
+    ];
+
+    self.newCondition = function () {
+      return {
+        condition_type: ko.observable(""),
+        printing: ko.observable(true)
+      };
+    };
+
+    self.addCondition = function (automation) {
+      automation.conditions.push(self.newCondition());
+    };
+
+    self.removeCondition = function (automation, condition) {
+      automation.conditions.remove(condition);
     };
 
     self.newReaction = function () {
