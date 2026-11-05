@@ -38,7 +38,7 @@ from .outputs import (
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Callable, Mapping
 
     from octoprint.printer import PrinterInterface
 
@@ -332,10 +332,9 @@ class ControlLoop:
             self._load_thermostats()
             self._frontend.update_targets(self.get_thermostats())
 
-            # While printing every filament automation has to watch: start the ones that don't yet
+            # While printing every filament automation has to watch, the new ones too
             if self._printer.is_printing():
-                not_armed = [a for a in self._automations.get_all(FilamentAutomation) if not a.is_armed]
-                self._start_filament_detection(not_armed)
+                self._start_filament_detection()
 
             self._decide_all()
         elif isinstance(message, _ThermostatTargetChanged):
@@ -388,7 +387,7 @@ class ControlLoop:
                 trigger = rule.trigger
                 reactions = [reaction for reaction in rule.reactions if isinstance(reaction, OutputControlReaction)]
 
-                # Skip automation rules which don't react to gpio inputs by controlling an output, and the delayed
+                # Skip the automation rules which don't react to gpio inputs by controlling an output, and the delayed
                 # ones, that act some time after an edge, not on the level
                 if not isinstance(trigger, GpioInputTrigger) or not reactions or rule.config.delay or rule.config.at:
                     continue
@@ -498,6 +497,10 @@ class ControlLoop:
             self._run_rule(rule, notify)
 
     def _run_rule(self, rule: RuleAutomation, notify: Callable[[Reaction, Action | None], None] | None) -> None:
+        if not rule.enabled:
+            self._logger.debug("Automation %s is disabled", rule.config.index_id)
+            return
+
         if not rule.conditions_satisfied(printing=self._print_job_running):
             self._logger.debug("The conditions of automation %s aren't satisfied", rule.config.index_id)
             return
@@ -607,26 +610,26 @@ class ControlLoop:
     def _decide_octoprint_event(self, event: OctoprintEvent) -> None:
         if event.name == Events.PRINT_STARTED:
             self._print_job_running = True
-            self._start_filament_detection(self._automations.get_all(FilamentAutomation))
+            self._start_filament_detection()
         elif event.name == Events.PRINT_RESUMED:
             self._waiting_temperature.clear()
-            self._start_filament_detection(self._automations.get_all(FilamentAutomation))
+            self._start_filament_detection()
         elif event.name == Events.PRINT_PAUSED:
             self._decide_waiting_print()
         elif event.name in (Events.PRINT_DONE, Events.PRINT_CANCELLED, Events.PRINT_FAILED):
             self._print_job_running = False
             self._waiting_temperature.clear()
-            for automation in self._automations.get_all(FilamentAutomation):
-                automation.disarm()
+            self._stop_filament_detection()
             self._reset_pwm_linked_temperature()
 
         for automation in self._automations.get_triggered(event):
             if isinstance(automation, RuleAutomation):
                 self._react(automation, None)
 
-    def _start_filament_detection(self, automations: Iterable[FilamentAutomation]) -> None:
+    def _start_filament_detection(self) -> None:
         try:
-            for automation in automations:
+            # The disabled sensors too: they follow the print like the others, and detect as soon as they are enabled
+            for automation in self._automations.get_all(FilamentAutomation, include_disabled=True):
                 automation.disarm()
 
                 input_id = automation.trigger.config.input
@@ -637,13 +640,17 @@ class ControlLoop:
                     self._logger.debug("Can't read GPIO input %s: %s", input_id, error)
                     continue
 
-                if automation.is_filament_missing(level):
+                if automation.enabled and automation.is_filament_missing(level):
                     self._printer.pause_print()
                     self._logger.info("Started printing with no filament.")
                 else:
                     automation.arm()
         except Exception:
             self._logger.exception("Error starting filament detection")
+
+    def _stop_filament_detection(self) -> None:
+        for automation in self._automations.get_all(FilamentAutomation, include_disabled=True):
+            automation.disarm()
 
     def _control_output(self, reaction: OutputControlReaction) -> bool:
         config = reaction.config

@@ -22,9 +22,6 @@ if TYPE_CHECKING:
 class FilamentConfig(AutomationConfig):
     """The configuration of an automation that changes the filament when a sensor detects its end."""
 
-    filament_sensor_enabled: bool = REQUIRED
-    """Whether the end of the filament is detected."""
-
     filament_sensor_timeout: int = REQUIRED
     """The seconds after an end of the filament during which another end is ignored."""
 
@@ -36,9 +33,6 @@ class FilamentAutomation(Automation[FilamentConfig]):
 
     _trigger: GpioInputTrigger
     """The GPIO input of the sensor, with the edge that means that the filament is missing."""
-
-    enabled: bool
-    """Whether the filament detection is enabled."""
 
     _armed: bool
     """Whether the automation is actually watching for the end of the filament."""
@@ -58,7 +52,6 @@ class FilamentAutomation(Automation[FilamentConfig]):
         """
         super().__init__(config, logger)
         self._trigger = trigger
-        self.enabled = config.filament_sensor_enabled
         self._armed = False
         self._last_detection_time = 0
 

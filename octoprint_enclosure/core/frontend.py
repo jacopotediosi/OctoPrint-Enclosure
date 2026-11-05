@@ -79,9 +79,9 @@ class Frontend:
             },
         )
 
-    def update_filament_sensors(self, filament_sensors: list[dict]) -> None:
-        """Update whether each filament sensor is enabled."""
-        self._send({"filament_sensor_status": filament_sensors})
+    def update_automations(self, automations: list[dict]) -> None:
+        """Update whether each automation is enabled."""
+        self._send({"automation_status": automations})
 
     def show_message(self, message: str, message_type: Literal["success", "error"]) -> None:
         """Show a popup message."""

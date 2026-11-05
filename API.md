@@ -219,16 +219,16 @@ Error Responses:
 - 400 - malformed JSON
 - 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
 
-## Enable the filament sensor of an input
+## Enable or disable an automation
 
-Endpoint: **PATCH** `/filament/<id>`
+Endpoint: **PATCH** `/automations/<id>`
 
-*Note: id needs to be int (index_id)*
+*Note: id needs to be int (index_id) of an automation*
 
 Body (Content-Type: `application/json`):
 ```
 {
-    "status": boolean
+    "enabled": boolean
 }
 ```
 
@@ -238,6 +238,7 @@ Error Responses:
 - 415 - Content-Type is not application/json
 - 400 - malformed JSON
 - 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
+- 404 - no automation has the specified id
 
 ## Set the duty cycle of a PWM output
 

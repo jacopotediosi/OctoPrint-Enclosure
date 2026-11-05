@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from octoprint_enclosure.core import REQUIRED, BaseConfig
@@ -11,8 +11,6 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     from .triggers.base import Trigger
-
-_ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
 
 
 class AutomationError(Exception):
@@ -29,6 +27,15 @@ class AutomationConfig(BaseConfig):
     automation_type: str = ""
     """The type of the automation."""
 
+    label: str = field(default="", compare=False)
+    """The label of the automation."""
+
+    enabled: bool = field(default=True, compare=False)
+    """Whether the automation is enabled."""
+
+
+_ConfigT = TypeVar("_ConfigT", bound=AutomationConfig)
+
 
 class Automation(Generic[_ConfigT]):
     """An automation, generic over the type of its configuration."""
@@ -38,6 +45,9 @@ class Automation(Generic[_ConfigT]):
 
     config: _ConfigT
     """The configuration of the automation."""
+
+    enabled: bool
+    """Whether the automation is enabled."""
 
     _logger: logging.Logger
 
@@ -50,6 +60,7 @@ class Automation(Generic[_ConfigT]):
 
         """
         self.config = config
+        self.enabled = config.enabled
         self._logger = logger
 
     @property

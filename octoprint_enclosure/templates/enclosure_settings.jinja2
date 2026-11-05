@@ -389,6 +389,7 @@
             </span>
         {% endcall %}
         {{ text_control_group("label", _("Label"), "Name of Automation") }}
+        {{ checkbox_control_group("enabled", _("Enabled"), "A disabled automation does nothing.") }}
         <div data-bind="if: automation_type() == 'rule'">
             {{ select_control_group("trigger_type", _("Trigger"), [
                 ("gpio_input", _("GPIO Input")),
@@ -536,7 +537,6 @@
             </div>
         </div>
         <div data-bind="if: automation_type() == 'filament'">
-            {{ checkbox_control_group("filament_sensor_enabled", _("Enable"), "Enable and disable filament sensors") }}
             {{ text_control_group("filament_sensor_timeout", _("Filament detection timeout"), "Time in seconds that filament sensor will be inactive after sensing end of filament. This is to avoid sending multiple commands to the printer.") }}
         </div>
         <div data-bind="if: automation_type() == 'pwm_temperature_linked'">

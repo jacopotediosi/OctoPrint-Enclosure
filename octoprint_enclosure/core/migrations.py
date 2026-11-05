@@ -174,9 +174,10 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             if action_type == "printer_control" and printer_action == "filament":
                 # A filament sensor is an automation of its own type, not a rule
                 automation["automation_type"] = "filament"
-                for key in ("filament_sensor_enabled", "filament_sensor_timeout"):
-                    if key in moved:
-                        automation[key] = moved[key]
+                if "filament_sensor_enabled" in moved:
+                    automation["enabled"] = moved["filament_sensor_enabled"]
+                if "filament_sensor_timeout" in moved:
+                    automation["filament_sensor_timeout"] = moved["filament_sensor_timeout"]
             elif action_type == "printer_control" and printer_action == "stop_temp_hum_control":
                 reactions = [
                     {"reaction_type": "output_control", "controlled_io": index_id, "controlled_io_set_state": "off"}
@@ -289,7 +290,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "alarm_set_temp",
             "repeat_while_above",
             "reactions",
-            "filament_sensor_enabled",
+            "enabled",
             "filament_sensor_timeout",
             "output",
             "temperature_a",
@@ -331,7 +332,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "delay": 0,
             "at": "",
             "conditions": [],
-            "filament_sensor_enabled": True,
+            "enabled": True,
             "filament_sensor_timeout": 120,
             "output": "",
             "temperature_a": 0,

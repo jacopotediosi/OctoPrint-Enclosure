@@ -14,9 +14,10 @@ from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
 from .actions import Actions
 from .api import Api
 from .automations import (
+    Automation,
     AutomationError,
     Automations,
-    FilamentAutomation,
+    PwmTemperatureLinkedAutomation,
     RuleAutomation,
     TemperatureTrigger,
 )
@@ -175,7 +176,7 @@ class EnclosurePlugin(
             update_ui=self.update_ui,
             set_auto_startup_enabled=self.set_auto_startup_enabled,
             set_auto_shutdown_enabled=self.set_auto_shutdown_enabled,
-            set_filament_sensor_enabled=self.set_filament_sensor_enabled,
+            set_automation_enabled=self.set_automation_enabled,
         )
 
     def output_state_boolean(self, index_id, output_class):
@@ -304,16 +305,11 @@ class EnclosurePlugin(
             elif thermostat.config.temp_ctr_type is ThermostatDeviceType.DEHUMIDIFIER:
                 dummy.is_dehumidifier_on = thermostat.is_on
 
-    def get_pwm_temperature_linked_settings(self, output_id=None):
-        return [
-            item
-            for item in self.automations
-            if item["automation_type"] == "pwm_temperature_linked"
-            and (output_id is None or to_int(item["output"]) == output_id)
-        ]
-
     def is_pwm_linked(self, index_id):
-        return bool(self.get_pwm_temperature_linked_settings(to_int(index_id)))
+        return any(
+            automation.config.output == to_int(index_id)
+            for automation in self._automations.get_all(PwmTemperatureLinkedAutomation)
+        )
 
     def check_enclosure_temp(self):
         """Read every sensor now, then take the decisions on the readings."""
@@ -400,25 +396,23 @@ class EnclosurePlugin(
 
     def update_ui(self):
         self.update_ui_readings()
-        self.update_ui_filament_sensors()
+        self.update_ui_automations()
         self.update_ui_outputs()
         self.update_ui_targets()
 
     def update_ui_readings(self):
         self._frontend.update_readings(self._sensor_poller.get_readings())
 
-    def update_ui_filament_sensors(self):
+    def update_ui_automations(self):
         try:
-            sensor_status = []
-            for automation_settings in self.automations:
-                if automation_settings["automation_type"] == "filament":
-                    index = to_int(automation_settings["index_id"])
-                    with contextlib.suppress(AutomationError):
-                        value = self._automations.get(index, FilamentAutomation).enabled
-                        sensor_status.append({"index_id": index, "filament_sensor_enabled": value})
-            self._frontend.update_filament_sensors(sensor_status)
+            self._frontend.update_automations(
+                [
+                    {"index_id": automation.config.index_id, "enabled": automation.enabled}
+                    for automation in self._automations.get_all(Automation, include_disabled=True)
+                ],
+            )
         except Exception:
-            self._logger.exception("Error sending input status to the UI")
+            self._logger.exception("Error sending the automations to the UI")
 
     def update_ui_targets(self):
         self._control_loop.update_ui_targets()
@@ -514,19 +508,17 @@ class EnclosurePlugin(
         self._enclosure_settings.rpi_outputs = self.rpi_outputs
         self.update_ui_outputs()
 
-    def set_filament_sensor_enabled(self, input_id, enabled):
-        for automation_settings in self.automations:
-            if (
-                automation_settings["automation_type"] == "filament"
-                and to_int(automation_settings["input"]) == input_id
-            ):
-                automation_settings["filament_sensor_enabled"] = enabled
-                with contextlib.suppress(AutomationError):
-                    index_id = to_int(automation_settings["index_id"])
-                    self._automations.get(index_id, FilamentAutomation).enabled = bool(enabled)
-                self._logger.info("Setting filament sensor for input %s to : %s", str(input_id), enabled)
-        self._enclosure_settings.automations = self.automations
-        self.update_ui_filament_sensors()
+    def set_automation_enabled(self, index_id, enabled):
+        if not self._enclosure_settings.set_automation_enabled(index_id, enabled=enabled):
+            return False
+
+        self.automations = self._enclosure_settings.automations
+        with contextlib.suppress(AutomationError):
+            self._automations.get(index_id, Automation).enabled = enabled
+        self._logger.info("Setting automation %s enabled to %s", index_id, enabled)
+        self._control_loop.evaluate()
+        self.update_ui_automations()
+        return True
 
     # ~~ EventPlugin mixin
     def on_event(self, event, payload):

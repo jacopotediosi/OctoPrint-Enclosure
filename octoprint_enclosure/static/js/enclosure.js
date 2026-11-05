@@ -221,8 +221,19 @@ $(function () {
     };
 
     self.isPwmLinked = function (index_id) {
-      return self.settingsViewModel.settings.plugins.enclosure.automations().some(function (automation) {
-        return automation.automation_type() == "pwm_temperature_linked" && automation.output() == index_id;
+      return self.automationsOn(index_id).some(function (automation) {
+        return automation.automation_type() == "pwm_temperature_linked" && automation.enabled();
+      });
+    };
+
+    self.automationsOn = function (index_id) {
+      return ko.utils.arrayFilter(self.automations(), function (automation) {
+        if (automation.automation_type() == "pwm_temperature_linked") {
+          return automation.output() == index_id;
+        }
+        return automation.automation_type() == "rule" && automation.reactions().some(function (reaction) {
+          return reaction.reaction_type() == "output_control" && reaction.controlled_io() == index_id;
+        });
       });
     };
 
@@ -352,13 +363,13 @@ $(function () {
         })
       }
 
-      if (data.hasOwnProperty("filament_sensor_status")) {
-        data.filament_sensor_status.forEach(function (filament_sensor) {
-          var linked_filament_sensor = ko.utils.arrayFilter(self.automations(), function (item) {
-            return (filament_sensor['index_id'] == item.index_id());
+      if (data.hasOwnProperty("automation_status")) {
+        data.automation_status.forEach(function (automation) {
+          var linked_automation = ko.utils.arrayFilter(self.automations(), function (item) {
+            return (automation['index_id'] == item.index_id());
           }).pop();
-          if (linked_filament_sensor) {
-            linked_filament_sensor.filament_sensor_enabled(filament_sensor['filament_sensor_enabled'])
+          if (linked_automation) {
+            linked_automation.enabled(automation['enabled'])
           }
         })
       }
@@ -623,6 +634,7 @@ $(function () {
       self.settingsViewModel.settings.plugins.enclosure.automations.push({
         index_id: ko.observable(nextIndex),
         label: ko.observable("Automation " + nextIndex),
+        enabled: ko.observable(true),
         automation_type: ko.observable(""),
         trigger_type: ko.observable(""),
         input: ko.observable(""),
@@ -635,7 +647,6 @@ $(function () {
         at: ko.observable(""),
         conditions: ko.observableArray([]),
         reactions: ko.observableArray([self.newReaction()]),
-        filament_sensor_enabled: ko.observable(true),
         filament_sensor_timeout: ko.observable(120),
         output: ko.observable(""),
         temperature_a: ko.observable(0),
@@ -740,8 +751,8 @@ $(function () {
       OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id() + "/auto-shutdown"), {status: !item.auto_shutdown()});
     };
 
-    self.switchFilamentSensor = function (item) {
-      OctoPrint.patchJson(self.buildPluginUrl("filament/" + item.input()), {status: !item.filament_sensor_enabled()});
+    self.switchAutomation = function (item) {
+      OctoPrint.patchJson(self.buildPluginUrl("automations/" + item.index_id()), {enabled: !item.enabled()});
     };
 
     self.handlePWM = function (item) {

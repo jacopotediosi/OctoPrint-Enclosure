@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, TypeVar
 
-from octoprint_enclosure.core import BaseConfig
-
 from .base import Automation, AutomationConfig, AutomationError
 from .registry import AUTOMATIONS
 from .triggers import GpioInputTrigger
@@ -19,16 +17,16 @@ if TYPE_CHECKING:
 _AutomationT = TypeVar("_AutomationT", bound=Automation)
 
 
-class _InvalidAutomation(Automation[BaseConfig]):
+class _InvalidAutomation(Automation[AutomationConfig]):
     """An automation that can't be set up."""
 
-    config_class = BaseConfig
+    config_class = AutomationConfig
 
     reason: str
     """Why the automation can't be set up."""
 
-    def __init__(self, reason: str, logger: logging.Logger) -> None:
-        super().__init__(BaseConfig(), logger)
+    def __init__(self, config: AutomationConfig, reason: str, logger: logging.Logger) -> None:
+        super().__init__(config, logger)
         self.reason = reason
 
 
@@ -71,11 +69,11 @@ class Automations:
             automation_class = AUTOMATIONS.get(automation_config.automation_type)
             if automation_class is None:
                 automation: Automation = self._create_invalid_automation(
-                    automation_config.index_id,
+                    automation_config,
                     f"Unsupported automation type: {automation_config.automation_type!r}",
                 )
             else:
-                automation = self._create_automation(automation_class, automation_config.index_id, automation_settings)
+                automation = self._create_automation(automation_class, automation_config, automation_settings)
 
             automations[automation_config.index_id] = automation
 
@@ -103,17 +101,22 @@ class Automations:
         reason = automation.reason if isinstance(automation, _InvalidAutomation) else "The automation is not set up"
         raise AutomationError(reason)
 
-    def get_all(self, automation_class: type[_AutomationT]) -> list[_AutomationT]:
+    def get_all(self, automation_class: type[_AutomationT], *, include_disabled: bool = False) -> list[_AutomationT]:
         """Get all the automations having a certain class.
 
         Args:
             automation_class (type[_AutomationT]): The class the automations must be an instance of.
+            include_disabled (bool): Whether to include the disabled automations too, which do nothing.
 
         Returns:
             list[_AutomationT]: The automations.
 
         """
-        return [automation for automation in self._automations.values() if isinstance(automation, automation_class)]
+        return [
+            automation
+            for automation in self._automations.values()
+            if isinstance(automation, automation_class) and (include_disabled or automation.enabled)
+        ]
 
     def get_triggered(self, event: AutomationEvent) -> list[Automation]:
         """Get the automations that an event starts.
@@ -128,7 +131,7 @@ class Automations:
         return [
             automation
             for automation in self._automations.values()
-            if automation.trigger is not None and automation.trigger.matches(event)
+            if automation.enabled and automation.trigger is not None and automation.trigger.matches(event)
         ]
 
     def get_gpio_input_edges(self) -> dict[int, set[Edge]]:
@@ -148,28 +151,31 @@ class Automations:
     def _create_automation(
         self,
         automation_class: type[_AutomationT],
-        index_id: int,
+        automation_config: AutomationConfig,
         automation_settings: dict,
     ) -> _AutomationT | _InvalidAutomation:
+        index_id = automation_config.index_id
         try:
             automation = automation_class.from_settings(
                 automation_settings,
                 self._get_automation_logger(automation_class, index_id),
             )
         except ValueError as error:
-            return self._create_invalid_automation(index_id, f"Invalid settings: {error}")
+            return self._create_invalid_automation(automation_config, f"Invalid settings: {error}")
 
         # An automation whose settings didn't change is kept, with its state
         old_automation = self._automations.get(index_id)
         if isinstance(old_automation, automation_class) and old_automation.has_same_config(automation):
+            old_automation.config = automation.config
+            old_automation.enabled = automation.enabled
             return old_automation
 
         return automation
 
-    def _create_invalid_automation(self, index_id: int, reason: str) -> _InvalidAutomation:
-        logger = self._get_automation_logger(_InvalidAutomation, index_id)
+    def _create_invalid_automation(self, automation_config: AutomationConfig, reason: str) -> _InvalidAutomation:
+        logger = self._get_automation_logger(_InvalidAutomation, automation_config.index_id)
         logger.warning("%s", reason)
-        return _InvalidAutomation(reason, logger)
+        return _InvalidAutomation(automation_config, reason, logger)
 
     def _get_automation_logger(self, automation_class: type[Automation], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{automation_class.__name__}.{index_id}")

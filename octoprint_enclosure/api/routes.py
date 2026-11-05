@@ -122,9 +122,9 @@ class Api(octoprint.plugin.BlueprintPlugin):
     """The function enabling or disabling the auto shutdown of an output, with the id of the output and whether to
     enable it."""
 
-    _set_filament_sensor_enabled: Callable[[int, bool], None]
-    """The function enabling or disabling the filament sensors of a GPIO input, with the id of the input and whether
-    to enable them."""
+    _set_automation_enabled: Callable[[int, bool], bool]
+    """The function enabling or disabling an automation, with the id of the automation and whether to enable it,
+    that returns whether an automation has that id."""
 
     def __init__(
         self,
@@ -133,7 +133,7 @@ class Api(octoprint.plugin.BlueprintPlugin):
         update_ui: Callable[[], None],
         set_auto_startup_enabled: Callable[[int, bool], None],
         set_auto_shutdown_enabled: Callable[[int, bool], None],
-        set_filament_sensor_enabled: Callable[[int, bool], None],
+        set_automation_enabled: Callable[[int, bool], bool],
     ) -> None:
         """Set up the API.
 
@@ -144,8 +144,9 @@ class Api(octoprint.plugin.BlueprintPlugin):
                 startup of an output, with the id of the output and whether to enable it.
             set_auto_shutdown_enabled (Callable[[int, bool], None]): The function enabling or disabling the auto
                 shutdown of an output, with the id of the output and whether to enable it.
-            set_filament_sensor_enabled (Callable[[int, bool], None]): The function enabling or disabling the
-                filament sensors of a GPIO input, with the id of the input and whether to enable them.
+            set_automation_enabled (Callable[[int, bool], bool]): The function enabling or disabling an automation,
+                with the id of the automation and whether to enable it, that returns whether an automation has that
+                id.
 
         """
         self._identifier = plugin_context.identifier
@@ -162,7 +163,7 @@ class Api(octoprint.plugin.BlueprintPlugin):
         self._update_ui = update_ui
         self._set_auto_startup_enabled = set_auto_startup_enabled
         self._set_auto_shutdown_enabled = set_auto_shutdown_enabled
-        self._set_filament_sensor_enabled = set_filament_sensor_enabled
+        self._set_automation_enabled = set_automation_enabled
 
     ##########
     ### Routes
@@ -220,10 +221,11 @@ class Api(octoprint.plugin.BlueprintPlugin):
         self._control_loop.set_thermostat_target(output_id, target)
         return make_response("", 204)
 
-    @octoprint.plugin.BlueprintPlugin.route("/filament/<int:input_id>", methods=["PATCH"])
-    @_expects_json(status="bool")
-    def set_filament_sensor(self, input_id: int, *, status: bool) -> Response:
-        self._set_filament_sensor_enabled(input_id, status)
+    @octoprint.plugin.BlueprintPlugin.route("/automations/<int:automation_id>", methods=["PATCH"])
+    @_expects_json(enabled="bool")
+    def set_automation(self, automation_id: int, *, enabled: bool) -> Response:
+        if not self._set_automation_enabled(automation_id, enabled):
+            return make_response("", 404)
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/outputs", methods=["GET"])

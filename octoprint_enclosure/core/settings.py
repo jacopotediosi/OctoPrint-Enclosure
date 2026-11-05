@@ -3,6 +3,8 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING
 
+from octoprint_enclosure.utils import to_int
+
 from .measurement import TemperatureUnit
 
 if TYPE_CHECKING:
@@ -21,6 +23,11 @@ class Settings:
         """
         self._settings = settings
         self.write_lock = threading.RLock()
+
+    def save(self) -> None:
+        """Write the settings changed so far to disk."""
+        with self.write_lock:
+            self._settings.save()
 
     ##########
     ### Inputs
@@ -72,6 +79,27 @@ class Settings:
     def automations(self, value: list[dict]) -> None:
         with self.write_lock:
             self._settings.set(["automations"], value)
+
+    def set_automation_enabled(self, index_id: int, *, enabled: bool) -> bool:
+        """Enable or disable an automation, and write it to disk.
+
+        Args:
+            index_id (int): The id of the automation.
+            enabled (bool): Whether the automation is enabled.
+
+        Returns:
+            bool: Whether an automation has that id.
+
+        """
+        with self.write_lock:
+            automations = self.automations
+            automation = next((item for item in automations if to_int(item.get("index_id")) == index_id), None)
+            if automation is None:
+                return False
+            automation["enabled"] = enabled
+            self.automations = automations
+            self.save()
+        return True
 
     ##########
     ### Temperatures
