@@ -5,6 +5,7 @@ from .filament import FilamentAutomation
 from .pwm_temperature_linked import PwmTemperatureLinkedAutomation
 from .reactions import OutputControlReaction, OutputSetState, Reaction, RunActionReaction
 from .rule import RuleAutomation
+from .toggle_timer import ToggleTimerAutomation
 from .triggers import GpioInputTrigger, TemperatureTrigger
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "RuleAutomation",
     "RunActionReaction",
     "TemperatureTrigger",
+    "ToggleTimerAutomation",
 ]

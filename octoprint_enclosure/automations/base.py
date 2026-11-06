@@ -5,11 +5,15 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 from octoprint_enclosure.core import REQUIRED, BaseConfig
 
+from .conditions import conditions_from_settings
+
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Sequence
 
     from typing_extensions import Self
 
+    from .conditions import Condition
     from .triggers.base import Trigger
 
 
@@ -52,18 +56,23 @@ class Automation(Generic[_ConfigT]):
     enabled: bool
     """Whether the automation is enabled."""
 
+    conditions: list[Condition]
+    """What must be true for the automation to act."""
+
     _logger: logging.Logger
 
-    def __init__(self, config: _ConfigT, logger: logging.Logger) -> None:
+    def __init__(self, config: _ConfigT, logger: logging.Logger, conditions: Sequence[Condition] = ()) -> None:
         """Set up the automation.
 
         Args:
             config (_ConfigT): The configuration of the automation.
             logger (logging.Logger): The logger to write to.
+            conditions (Sequence[Condition]): What must be true for the automation to act.
 
         """
         self.config = config
         self.enabled = config.enabled
+        self.conditions = list(conditions)
         self._logger = logger
 
     @property
@@ -78,10 +87,30 @@ class Automation(Generic[_ConfigT]):
             other (Automation): The other automation.
 
         Returns:
-            bool: Whether the other automation is of the same type and has the same configuration.
+            bool: Whether the other automation is of the same type and has the same configuration and conditions.
 
         """
-        return type(other) is type(self) and other.config == self.config
+        return (
+            type(other) is type(self)
+            and other.config == self.config
+            and len(other.conditions) == len(self.conditions)
+            and all(
+                type(other_condition) is type(condition) and other_condition.config == condition.config
+                for condition, other_condition in zip(self.conditions, other.conditions)
+            )
+        )
+
+    def conditions_satisfied(self, *, printing: bool) -> bool:
+        """Check whether every condition of the automation is satisfied.
+
+        Args:
+            printing (bool): Whether a print job is running.
+
+        Returns:
+            bool: Whether every condition is satisfied.
+
+        """
+        return all(condition.is_satisfied(printing=printing) for condition in self.conditions)
 
     @classmethod
     def from_settings(cls, settings: dict, logger: logging.Logger) -> Self:
@@ -98,4 +127,4 @@ class Automation(Generic[_ConfigT]):
             ValueError: If the settings are not valid.
 
         """
-        return cls(cls.config_class.from_settings(settings), logger)
+        return cls(cls.config_class.from_settings(settings), logger, conditions_from_settings(settings))

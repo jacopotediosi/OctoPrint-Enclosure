@@ -170,10 +170,6 @@
             <span> Nothing turns this
                 <b>heater</b> off when the print ends: add an automation on PrintDone that turns it off, for safety.</span>
         </span>
-        <h5 data-bind="visible: (output_type() == 'regular' || output_type() == 'pwm') && toggle_timer()">
-            <span>Time Toggle</span>
-            <span class="badge">active</span>
-        </h5>
     </div>
 </div>
 <div data-bind="foreach: $root.tab_actions()">

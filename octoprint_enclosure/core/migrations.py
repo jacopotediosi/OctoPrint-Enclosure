@@ -232,8 +232,9 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             alarm["reactions"] = [reaction]
             automations.append(alarm)
 
-        # A PWM with pwm_temperature_linked on stored the line of its duty cycle. The line moves to a new
-        # "pwm_temperature_linked" automation, with a new id and the label of the output, that drives the PWM in output.
+        # A PWM with pwm_temperature_linked on stored the line of its duty cycle, followed during a print. The line
+        # moves to a new "pwm_temperature_linked" automation, with a new id, the label of the output and a print_job
+        # condition, that drives the PWM in output.
         for rpi_output in rpi_outputs:
             if rpi_output.get("output_type") != "pwm" or not rpi_output.get("pwm_temperature_linked"):
                 continue
@@ -242,12 +243,34 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                 "index_id": next_automation_id,
                 "label": rpi_output.get("label"),
                 "automation_type": "pwm_temperature_linked",
+                "conditions": [{"condition_type": "print_job", "printing": True}],
                 "output": rpi_output.get("index_id"),
             }
             next_automation_id += 1
             for key in ("linked_temp_sensor", "temperature_a", "duty_a", "temperature_b", "duty_b"):
                 if key in rpi_output:
                     automation[key] = rpi_output.pop(key)
+            automations.append(automation)
+
+        # An output with toggle_timer on was turned on and off in turn during a print, for toggle_timer_on
+        # and toggle_timer_off seconds. The cycle moves to a new "toggle_timer" automation, with a new id,
+        # a print_job condition and shown in the tab in place of the "Time Toggle" badge.
+        for rpi_output in rpi_outputs:
+            if rpi_output.get("output_type") not in ("regular", "pwm") or not rpi_output.get("toggle_timer"):
+                continue
+            automation = {
+                "index_id": next_automation_id,
+                "label": f"Toggle {rpi_output.get('label')} while printing",
+                "automation_type": "toggle_timer",
+                "show_in_tab": True,
+                "conditions": [{"condition_type": "print_job", "printing": True}],
+                "output": rpi_output.get("index_id"),
+                "toggle_timer_on": rpi_output.get("toggle_timer_on", 0),
+                "toggle_timer_off": rpi_output.get("toggle_timer_off", 0),
+            }
+            if rpi_output.get("output_type") == "pwm":
+                automation["duty_cycle"] = to_float(rpi_output.get("default_duty_cycle"))
+            next_automation_id += 1
             automations.append(automation)
 
         # Up to version 10, each sensor had its own unit (via `use_fahrenheit`), and the plugin stored temperatures in
@@ -422,8 +445,8 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                 add_rule(rpi_output, ["Startup"], "on", enabled=True, setpoint=on_setpoint)
 
         # Up to version 10, every output held the keys of every type of item. The outputs that remain lose the keys of
-        # actions, alarms, PWM curves and automatic fields; the actions and the automations keep only the keys of their
-        # type.
+        # actions, alarms, PWM curves, automatic fields and toggle timers; the actions and the automations keep only the
+        # keys of their type.
         moved_keys = (
             "gcode",
             "shell_script",
@@ -442,6 +465,9 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "shutdown_on_failed",
             "shutdown_on_error",
             "startup_with_server",
+            "toggle_timer",
+            "toggle_timer_on",
+            "toggle_timer_off",
         )
         for rpi_output in rpi_outputs:
             for key in moved_keys:
@@ -482,6 +508,11 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "duty_a",
             "temperature_b",
             "duty_b",
+            "toggle_timer_on",
+            "toggle_timer_off",
+            "duty_cycle",
+            "color",
+            "target",
         }
         for automation in automations:
             for key in set(automation) - automation_keys:
@@ -493,6 +524,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "temp_hum_control": ("temp_ctr_deadband", "temp_ctr_max_temp"),
             "filament": ("filament_sensor_timeout",),
             "pwm_temperature_linked": ("temperature_a", "duty_a", "temperature_b", "duty_b"),
+            "toggle_timer": ("toggle_timer_on", "toggle_timer_off"),
         }
         for item_settings in [*rpi_outputs, *automations]:
             item_type = item_settings.get("output_type") or item_settings.get("automation_type")
@@ -525,6 +557,11 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "duty_a": 0,
             "temperature_b": 0,
             "duty_b": 0,
+            "toggle_timer_on": 0,
+            "toggle_timer_off": 0,
+            "duty_cycle": 0,
+            "color": "",
+            "target": 0,
         }
         reaction_defaults = {
             "reaction_type": "output_control",

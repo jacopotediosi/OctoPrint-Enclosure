@@ -12,7 +12,7 @@ _ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
 
 
 class Condition(ABC, Generic[_ConfigT]):
-    """What must be true for an automation to run its reactions, generic over the type of its configuration."""
+    """What must be true for an automation to act, generic over the type of its configuration."""
 
     config_class: type[_ConfigT]
     """The dataclass of the configuration, whose fields are named like the keys of the settings of the condition."""

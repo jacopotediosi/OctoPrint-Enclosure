@@ -237,7 +237,7 @@ $(function () {
 
     self.controlledOutputs = function (automation) {
       var outputs = [];
-      if (automation.automation_type() == "pwm_temperature_linked") {
+      if (automation.automation_type() == "pwm_temperature_linked" || automation.automation_type() == "toggle_timer") {
         outputs = [automation.output()];
       } else if (automation.automation_type() == "rule") {
         outputs = automation.reactions().filter(function (reaction) {
@@ -581,9 +581,6 @@ $(function () {
         gpio_pin: ko.observable(0),
         hide_btn_ui: ko.observable(false),
         active_low: ko.observable(true),
-        toggle_timer: ko.observable(false),
-        toggle_timer_on: ko.observable(0),
-        toggle_timer_off: ko.observable(0),
         linked_temp_sensor: ko.observable(""),
         temp_ctr_type: ko.observable(""),
         temp_ctr_deadband: ko.observable(0),
@@ -656,6 +653,11 @@ $(function () {
         reactions: ko.observableArray([self.newReaction()]),
         filament_sensor_timeout: ko.observable(120),
         output: ko.observable(""),
+        toggle_timer_on: ko.observable(0),
+        toggle_timer_off: ko.observable(0),
+        duty_cycle: ko.observable(0),
+        color: ko.observable(""),
+        target: ko.observable(0),
         temperature_a: ko.observable(0),
         duty_a: ko.observable(0),
         temperature_b: ko.observable(0),

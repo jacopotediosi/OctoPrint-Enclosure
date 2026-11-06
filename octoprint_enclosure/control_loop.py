@@ -23,12 +23,14 @@ from .automations import (
     RuleAutomation,
     RunActionReaction,
     TemperatureTrigger,
+    ToggleTimerAutomation,
 )
 from .inputs import GpioInputError
 from .notifications import NotificationType
 from .outputs import (
     Output,
     OutputError,
+    OutputSetpointConfig,
     PwmOutput,
     PwmSetpoint,
     Thermostat,
@@ -118,6 +120,17 @@ class _RunRule(_Message):
 
     notify: Callable[[Reaction, Action | None], None] | None
     """How the rule notifies each reaction done, or None if it doesn't notify."""
+
+
+@dataclass(frozen=True)
+class _ToggleOutput(_Message):
+    """The on/off time of an output controlled by a toggle timer automation is over."""
+
+    automation: ToggleTimerAutomation
+    """The toggle timer automation as it was when the time started."""
+
+    turn_on: bool
+    """Whether to turn the output on now, or off."""
 
 
 class ControlLoop:
@@ -318,7 +331,7 @@ class ControlLoop:
 
     def _handle(self, message: _Message | AutomationEvent) -> None:
         if isinstance(message, _Tick):
-            self._decide_all()
+            self._decide_continuous()
         elif isinstance(message, _NewReading):
             readings = self._sensor_poller.get_readings()
             self._decide_thermostats(readings, message.index_id)
@@ -336,7 +349,7 @@ class ControlLoop:
             if self._printer.is_printing():
                 self._start_filament_detection()
 
-            self._decide_all()
+            self._decide_continuous()
         elif isinstance(message, _ThermostatTargetChanged):
             thermostat = self._thermostats.get(message.index_id)
             if thermostat is None:
@@ -361,11 +374,28 @@ class ControlLoop:
                     self._run_rule(rule, message.notify)
                 else:
                     self._logger.debug("Can't run automation %s after its delay: its settings changed", index_id)
+        elif isinstance(message, _ToggleOutput):
+            index_id = message.automation.config.index_id
+            try:
+                automation = self._automations.get(index_id, ToggleTimerAutomation)
+            except AutomationError as error:
+                self._logger.debug("Can't toggle the output of automation %s: %s", index_id, error)
+            else:
+                if automation is not message.automation:
+                    self._logger.debug("Can't toggle the output of automation %s: its settings changed", index_id)
+                elif not automation.enabled:
+                    self._logger.debug("Automation %s is disabled", index_id)
+                    automation.stop()
+                elif not automation.conditions_satisfied(printing=self._print_job_running):
+                    self._stop_toggle_timer(automation)
+                else:
+                    self._toggle_output(automation, turn_on=message.turn_on)
 
     def _start_deciding(self) -> None:
         self._load_thermostats()
         self._print_job_running = bool(self._printer.is_printing() or self._printer.is_paused())
         self._decide_gpio_input_levels()
+        self._decide_continuous()
 
     def _load_thermostats(self) -> None:
         thermostats: dict[int, Thermostat] = {}
@@ -407,15 +437,17 @@ class ControlLoop:
                     printing=self._print_job_running,
                 ):
                     for reaction in reactions:
-                        self._control_output(reaction)
+                        config = reaction.config
+                        self._control_output(config.controlled_io, config.controlled_io_set_state, config)
         except Exception:
             self._logger.exception("Error applying the levels of the GPIO inputs")
 
-    def _decide_all(self) -> None:
+    def _decide_continuous(self) -> None:
         readings = self._sensor_poller.get_readings()
 
         self._decide_thermostats(readings, None)
         self._decide_pwm_linked_temperature(readings, None)
+        self._decide_toggle_timers()
 
     def _decide_thermostats(self, readings: Mapping[int, Reading], sensor_id: int | None) -> None:
         try:
@@ -508,7 +540,9 @@ class ControlLoop:
         for reaction in rule.reactions:
             try:
                 if isinstance(reaction, OutputControlReaction):
-                    if self._control_output(reaction) and notify is not None:
+                    config = reaction.config
+                    controlled = self._control_output(config.controlled_io, config.controlled_io_set_state, config)
+                    if controlled and notify is not None:
                         notify(reaction, None)
                 elif isinstance(reaction, RunActionReaction):
                     try:
@@ -526,14 +560,20 @@ class ControlLoop:
                 )
 
     def _decide_pwm_linked_temperature(self, readings: Mapping[int, Reading], sensor_id: int | None) -> None:
-        # The curve drives the PWM only while a print job is on, paused included
-        if not self._print_job_running:
-            return
-
         try:
             for automation in self._automations.get_all(PwmTemperatureLinkedAutomation):
-                # With a new reading, decide only the curves linked to its sensor
-                if sensor_id is not None and automation.config.linked_temp_sensor != sensor_id:
+                # A curve drives the PWM only while its conditions are satisfied
+                if not automation.conditions_satisfied(printing=self._print_job_running):
+                    if automation.is_running:
+                        self._reset_pwm_linked_temperature(automation)
+                    continue
+
+                # With a new reading, decide only the curves linked to its sensor, and the ones that start now
+                if (
+                    sensor_id is not None
+                    and automation.config.linked_temp_sensor != sensor_id
+                    and automation.is_running
+                ):
                     continue
 
                 # Get the automation output
@@ -548,18 +588,19 @@ class ControlLoop:
 
                 # Write the new duty cycle to the output
                 self._output_executor.turn_on(output_id, PwmSetpoint(calculated_duty))
+                automation.start()
         except Exception:
             self._logger.exception("Error handling temperature linked PWM outputs")
 
-    def _reset_pwm_linked_temperature(self) -> None:
-        automations = self._automations.get_all(PwmTemperatureLinkedAutomation)
-        for output_id in dict.fromkeys(automation.config.output for automation in automations):
-            try:
-                default_duty_cycle = self._outputs.get(output_id, PwmOutput).config.default_duty_cycle
-            except OutputError as error:
-                self._logger.debug("Can't reset the duty cycle of output %s: %s", output_id, error)
-            else:
-                self._output_executor.turn_on(output_id, PwmSetpoint(default_duty_cycle))
+    def _reset_pwm_linked_temperature(self, automation: PwmTemperatureLinkedAutomation) -> None:
+        output_id = automation.config.output
+        try:
+            default_duty_cycle = self._outputs.get(output_id, PwmOutput).config.default_duty_cycle
+        except OutputError as error:
+            self._logger.debug("Can't reset the duty cycle of output %s: %s", output_id, error)
+        else:
+            self._output_executor.turn_on(output_id, PwmSetpoint(default_duty_cycle))
+        automation.stop()
 
     def _decide_gpio_input_edge(self, event: GpioEdgeEvent) -> None:
         try:
@@ -620,7 +661,17 @@ class ControlLoop:
             self._print_job_running = False
             self._waiting_temperature.clear()
             self._stop_filament_detection()
-            self._reset_pwm_linked_temperature()
+
+        # The automation conditions depend on the print job: decide the continuous automations again when it changes
+        if event.name in (
+            Events.PRINT_STARTED,
+            Events.PRINT_RESUMED,
+            Events.PRINT_PAUSED,
+            Events.PRINT_DONE,
+            Events.PRINT_CANCELLED,
+            Events.PRINT_FAILED,
+        ):
+            self._decide_continuous()
 
         for automation in self._automations.get_triggered(event):
             if isinstance(automation, RuleAutomation):
@@ -652,15 +703,48 @@ class ControlLoop:
         for automation in self._automations.get_all(FilamentAutomation, include_disabled=True):
             automation.disarm()
 
-    def _control_output(self, reaction: OutputControlReaction) -> bool:
-        config = reaction.config
-        index_id, state = config.controlled_io, config.controlled_io_set_state
+    def _decide_toggle_timers(self) -> None:
+        try:
+            for automation in self._automations.get_all(ToggleTimerAutomation):
+                satisfied = automation.conditions_satisfied(printing=self._print_job_running)
+                if satisfied and not automation.is_running:
+                    self._toggle_output(automation, turn_on=True)
+                elif automation.is_running and not satisfied:
+                    self._stop_toggle_timer(automation)
+        except Exception:
+            self._logger.exception("Error handling the toggle timers")
+
+    def _toggle_output(self, automation: ToggleTimerAutomation, *, turn_on: bool) -> None:
+        config = automation.config
+        index_id = config.index_id
+        state = OutputSetState.ON if turn_on else OutputSetState.OFF
+        if not self._control_output(config.output, state, config):
+            self._logger.debug("Can't toggle output %s of automation %s: it isn't set up", config.output, index_id)
+            automation.stop()
+            return
+
+        automation.start()
+        self._scheduler.schedule(
+            f"automation:{index_id}:toggle",
+            config.toggle_timer_on if turn_on else config.toggle_timer_off,
+            lambda: self._put(_ToggleOutput(automation, turn_on=not turn_on)),
+        )
+
+    def _stop_toggle_timer(self, automation: ToggleTimerAutomation) -> None:
+        index_id = automation.config.index_id
+        self._scheduler.cancel(f"automation:{index_id}:toggle")
+        self._control_output(automation.config.output, OutputSetState.OFF, automation.config)
+        automation.stop()
+
+    def _control_output(self, index_id: int, state: OutputSetState, setpoint_config: OutputSetpointConfig) -> bool:
         try:
             output = self._outputs.get(index_id, Output)
         except OutputError:
             return False
         setpoint_class = output.setpoint_class
-        setpoint = setpoint_class(**{field.name: getattr(config, field.name) for field in fields(setpoint_class)})
+        setpoint = setpoint_class(
+            **{field.name: getattr(setpoint_config, field.name) for field in fields(setpoint_class)},
+        )
 
         if isinstance(output, ThermostatOutput):
             thermostat = self._thermostats.get(index_id)

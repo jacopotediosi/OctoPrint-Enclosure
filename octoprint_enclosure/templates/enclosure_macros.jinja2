@@ -69,3 +69,25 @@
         </div>
     {% endif %}
 {% endmacro %}
+{% macro setpoint_control_groups(output_binding) %}
+    <div data-bind="if: $root.outputType({{ output_binding }}()) == 'pwm'">
+        {{ text_control_group("duty_cycle", _("Duty Cycle"), "Duty cycle the PWM is set to when the automation turns it on, between 0 and 100") }}
+    </div>
+    <div data-bind="if: ['ledstrip', 'neopixel_indirect', 'neopixel_direct'].indexOf($root.outputType({{ output_binding }}())) >= 0">
+        <div class="control-group">
+            <label class="control-label">{{ _("Color") }}</label>
+            <div class="controls">
+                <input type="color" class="input-block-level" data-bind="value: color">
+                <span class="help-inline">Color the LEDs are set to when the automation turns them on</span>
+            </div>
+        </div>
+    </div>
+    <div data-bind="if: $root.outputType({{ output_binding }}()) == 'temp_hum_control'">
+        <div data-bind="if: $root.thermostatDeviceType({{ output_binding }}()) == 'dehumidifier'">
+            {{ text_control_group("target", _("Target"), "Humidity the thermostat is set to when the automation turns it on") }}
+        </div>
+        <div data-bind="ifnot: $root.thermostatDeviceType({{ output_binding }}()) == 'dehumidifier'">
+            {{ temperature_control_group("target", _("Target"), "Temperature the thermostat is set to when the automation turns it on", zero_off=true) }}
+        </div>
+    </div>
+{% endmacro %}

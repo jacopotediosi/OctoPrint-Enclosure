@@ -1,4 +1,4 @@
-{% from "enclosure_macros.jinja2" import checkbox_control_group, gpio_alert, select_control_group, temperature_control_group, text_control_group %}
+{% from "enclosure_macros.jinja2" import checkbox_control_group, gpio_alert, select_control_group, setpoint_control_groups, temperature_control_group, text_control_group %}
 {{ gpio_alert(plugin_enclosure_development_mode, plugin_enclosure_gpio_import_error, plugin_enclosure_gpio_numbering_is_board) }}
 <h4>{{ _("Raspberry Pi Inputs") }}</h4>
 <p>
@@ -164,13 +164,6 @@
         </div>
         <div data-bind="ifnot: output_type() == '' || output_type() == 'ledstrip' || output_type() == 'neopixel_indirect' || (output_type() == 'regular' && gpio_i2c_enabled())">
             {{ text_control_group("gpio_pin", _("GPIO"), "GPIO that is controlled") }}
-        </div>
-        <div data-bind="if: output_type() == 'regular' || (output_type() == 'pwm' && !$root.isPwmLinked(index_id()))">
-            {{ checkbox_control_group("toggle_timer", _("Timer Toggle"), "Toggle output every amount of seconds. It will start when the print starts and stop when print is complete. For PWM pins it will use the default PWM value when ON.") }}
-            <div data-bind="if: toggle_timer()">
-                {{ text_control_group("toggle_timer_on", _("On Time"), "Time in seconds that the GPIO will remain ON") }}
-                {{ text_control_group("toggle_timer_off", _("Off Time"), "Time in seconds that the GPIO will remain when OFF") }}
-            </div>
         </div>
         <div data-bind="if: output_type() == 'regular' || output_type() == 'temp_hum_control'">
             {{ checkbox_control_group("active_low", _("Active Low"), "Active low means that the GPIO will turn on when receive a low signal (ground) from Raspberry PI") }}
@@ -349,6 +342,7 @@
             ("rule", _("Rule (Trigger-Reaction)")),
             ("filament", _("Filament Sensor")),
             ("pwm_temperature_linked", _("PWM Linked to Temperature")),
+            ("toggle_timer", _("Toggle Timer")),
         ], placeholder="Select Automation Type") %}
             <span class="help-inline" data-bind="visible: automation_type() == 'rule'">
                 <span class="label label-info">Info:</span> Does something when its trigger happens, for example controls an output when a button connected to a
@@ -363,8 +357,12 @@
             <span class="help-inline"
                   data-bind="visible: automation_type() == 'pwm_temperature_linked'">
                 <span class="label label-info">Info:</span> Sets the duty cycle of a PWM output from the temperature read by a sensor, interpolated between the
-                point from duty A, temperature A -> duty B, temperature B. It starts when a print starts, and the output goes back to the default
-                duty cycle when the print is complete.
+                point from duty A, temperature A -> duty B, temperature B, while its conditions are satisfied: for example only during a print,
+                with the output back to the default duty cycle when the print is complete.
+            </span>
+            <span class="help-inline"
+                  data-bind="visible: automation_type() == 'toggle_timer'">
+                <span class="label label-info">Info:</span> Turns an output on and off in turn, on for the on time and off for the off time.
             </span>
         {% endcall %}
         {{ text_control_group("label", _("Label"), "Name of Automation") }}
@@ -414,14 +412,29 @@
             <div data-bind="if: $root.ruleTiming($data)() == 'at'">
                 {{ text_control_group("at", _("At"), "Time of day, as HH:MM: the reactions run the next time it comes after the trigger.") }}
             </div>
+        </div>
+        <div data-bind="if: automation_type() == 'toggle_timer'">
+            {{ select_control_group("output", _("Controlled IO"), "$root.settingsViewModel.settings.plugins.enclosure.rpi_outputs", "Output to turn on and off in turn.", placeholder="Select Output") }}
+            {{ text_control_group("toggle_timer_on", _("On Time"), "Seconds the output stays on") }}
+            {{ text_control_group("toggle_timer_off", _("Off Time"), "Seconds the output stays off") }}
+            {{ setpoint_control_groups("output") }}
+        </div>
+        <div data-bind="if: automation_type() == 'pwm_temperature_linked'">
+            {{ select_control_group("output", _("Controlled IO"), "$root.settings_outputs_pwm", "PWM output whose duty cycle follows the temperature. Configured on the output side of the plugin.", placeholder="Select Output") }}
+            {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_temperature_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", placeholder="Select Sensor") }}
+            {{ text_control_group("duty_a", _("Duty A")) }}
+            {{ temperature_control_group("temperature_a", _("Temperature A")) }}
+            {{ text_control_group("duty_b", _("Duty B")) }}
+            {{ temperature_control_group("temperature_b", _("Temperature B")) }}
+        </div>
+        <div data-bind="if: automation_type() != '' && automation_type() != 'filament'">
             <div data-bind="foreach: conditions">
                 {% call select_control_group("condition_type", _("Condition"), [
                     ("print_job", _("Print Job")),
                 ], placeholder="Select Condition") %}
                     <span class="help-inline"
                           data-bind="visible: condition_type() == 'print_job'">
-                        <span class="label label-info">Info:</span> The reactions run only while a print job is running, or only while none is. Checked when
-                        the reactions run, after the delay too.
+                        <span class="label label-info">Info:</span> The automation acts only while a print job is running, or only while none is.
                     </span>
                 {% endcall %}
                 <div data-bind="if: condition_type() == 'print_job'">
@@ -472,28 +485,7 @@
                 <div data-bind="if: reaction_type() == 'output_control'">
                     {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settingsViewModel.settings.plugins.enclosure.rpi_outputs","When the event happens, do you want control of which OUTPUT?", placeholder="Select Output") }}
                     {{ select_control_group("controlled_io_set_state", _("Set Controlled IO State"), [("on", "On"), ("off", "Off"), ("toggle", "Toggle")], "When the event happens, do you want to turn the controlled IO on, off, or toggle it?", placeholder="Select State") }}
-                    <div data-bind="ifnot: controlled_io_set_state() == 'off'">
-                        <div data-bind="if: $root.outputType(controlled_io()) == 'pwm'">
-                            {{ text_control_group("duty_cycle", _("Duty Cycle"), "Duty cycle the PWM is set to when the automation turns it on, between 0 and 100") }}
-                        </div>
-                        <div data-bind="if: ['ledstrip', 'neopixel_indirect', 'neopixel_direct'].indexOf($root.outputType(controlled_io())) >= 0">
-                            <div class="control-group">
-                                <label class="control-label">{{ _("Color") }}</label>
-                                <div class="controls">
-                                    <input type="color" class="input-block-level" data-bind="value: color">
-                                    <span class="help-inline">Color the LEDs are set to when the automation turns them on</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div data-bind="if: $root.outputType(controlled_io()) == 'temp_hum_control'">
-                            <div data-bind="if: $root.thermostatDeviceType(controlled_io()) == 'dehumidifier'">
-                                {{ text_control_group("target", _("Target"), "Humidity the thermostat is set to when the automation turns it on") }}
-                            </div>
-                            <div data-bind="ifnot: $root.thermostatDeviceType(controlled_io()) == 'dehumidifier'">
-                                {{ temperature_control_group("target", _("Target"), "Temperature the thermostat is set to when the automation turns it on", zero_off=true) }}
-                            </div>
-                        </div>
-                    </div>
+                    <div data-bind="ifnot: controlled_io_set_state() == 'off'">{{ setpoint_control_groups("controlled_io") }}</div>
                 </div>
                 <div data-bind="if: reaction_type() == 'run_action'">
                     {{ select_control_group("action", _("Action"), "$root.settingsViewModel.settings.plugins.enclosure.actions", "Action to run when the event happens. Configured on the actions side of the plugin.", placeholder="Select Action") }}
@@ -518,14 +510,6 @@
         </div>
         <div data-bind="if: automation_type() == 'filament'">
             {{ text_control_group("filament_sensor_timeout", _("Filament detection timeout"), "Time in seconds that filament sensor will be inactive after sensing end of filament. This is to avoid sending multiple commands to the printer.") }}
-        </div>
-        <div data-bind="if: automation_type() == 'pwm_temperature_linked'">
-            {{ select_control_group("output", _("Controlled IO"), "$root.settings_outputs_pwm", "PWM output whose duty cycle follows the temperature. Configured on the output side of the plugin.", placeholder="Select Output") }}
-            {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_temperature_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", placeholder="Select Sensor") }}
-            {{ text_control_group("duty_a", _("Duty A")) }}
-            {{ temperature_control_group("temperature_a", _("Temperature A")) }}
-            {{ text_control_group("duty_b", _("Duty B")) }}
-            {{ temperature_control_group("temperature_b", _("Temperature B")) }}
         </div>
         <div class="control-group">
             <a title="Delete Automation"

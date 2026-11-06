@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from octoprint_enclosure.core import REQUIRED
 from octoprint_enclosure.utils import clamp
 
 from .base import Automation, AutomationConfig
+
+if TYPE_CHECKING:
+    import logging
+    from collections.abc import Sequence
+
+    from .conditions import Condition
 
 
 @dataclass(frozen=True)
@@ -38,6 +45,39 @@ class PwmTemperatureLinkedAutomation(Automation[PwmTemperatureLinkedConfig]):
     """An automation that sets the duty cycle of a PWM output from the reading of a linked temperature sensor."""
 
     config_class = PwmTemperatureLinkedConfig
+
+    _running: bool
+    """Whether the curve is driving its output."""
+
+    def __init__(
+        self,
+        config: PwmTemperatureLinkedConfig,
+        logger: logging.Logger,
+        conditions: Sequence[Condition] = (),
+    ) -> None:
+        """Set up the PWM curve automation.
+
+        Args:
+            config (PwmTemperatureLinkedConfig): The configuration of the automation.
+            logger (logging.Logger): The logger to write to.
+            conditions (Sequence[Condition]): What must be true for the automation to act.
+
+        """
+        super().__init__(config, logger, conditions)
+        self._running = False
+
+    @property
+    def is_running(self) -> bool:
+        """Whether the curve is driving its output."""
+        return self._running
+
+    def start(self) -> None:
+        """Start driving the output."""
+        self._running = True
+
+    def stop(self) -> None:
+        """Stop driving the output."""
+        self._running = False
 
     def get_duty_cycle(self, temperature: float | None) -> float:
         """Work out the duty cycle of the output for a temperature.

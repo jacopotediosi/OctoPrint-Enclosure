@@ -1,5 +1,4 @@
 import contextlib
-import functools
 import logging
 import sys
 from datetime import timedelta
@@ -36,9 +35,7 @@ from .outputs import (
     OutputError,
     Outputs,
     PwmOutput,
-    PwmSetpoint,
     RegularOutput,
-    RegularSetpoint,
     ThermostatDeviceType,
     ThermostatOutput,
 )
@@ -344,37 +341,6 @@ class EnclosurePlugin(
             self.failing_sensors.remove(sensor.index_id)
             self._logger.info("Sensor %s has started working again", sensor.label)
 
-    def toggle_output(self, output_index, first_run=False):
-        for output in [item for item in self.rpi_outputs if item["index_id"] == output_index]:
-            index_id = to_int(output["index_id"])
-
-            if output["output_type"] == "regular":
-                setpoint = RegularSetpoint()
-            elif output["output_type"] == "pwm":
-                try:
-                    setpoint = PwmSetpoint(self._outputs.get(index_id, PwmOutput).config.default_duty_cycle)
-                except OutputError as error:
-                    self._logger.debug("Can't toggle output %s: %s", index_id, error)
-                    return
-            else:
-                return
-
-            if not (self._printer.is_printing() or self._printer.is_paused()):
-                self._output_executor.turn_off(index_id)
-                return
-
-            if first_run:
-                on = self._output_executor.turn_on(index_id, setpoint, wait=True)
-            else:
-                on = self._output_executor.toggle(index_id, setpoint, wait=True)
-            time_delay = to_int(output["toggle_timer_on"]) if on else to_int(output["toggle_timer_off"])
-            self._scheduler.schedule(
-                f"output:{index_id}:toggle_timer",
-                time_delay,
-                functools.partial(self.toggle_output, index_id),
-            )
-            return
-
     def update_ui(self):
         self.update_ui_readings()
         self.update_ui_automations()
@@ -464,15 +430,6 @@ class EnclosurePlugin(
     # ~~ EventPlugin mixin
     def on_event(self, event, payload):
         self._control_loop.evaluate_octoprint_event(event)
-
-        if event == Events.PRINT_STARTED:
-            self._scheduler.cancel_with_prefix("output:")
-            for rpi_output in self.rpi_outputs:
-                if rpi_output["toggle_timer"] and rpi_output["output_type"] in ("regular", "pwm"):
-                    self.toggle_output(rpi_output["index_id"], True)
-
-        elif event in (Events.PRINT_CANCELLED, Events.PRINT_FAILED):
-            self._scheduler.cancel_with_prefix("output:")
 
         if event == Events.PRINT_DONE:
             file_name = Path(payload["path"]).name

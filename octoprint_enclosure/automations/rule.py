@@ -8,7 +8,7 @@ from typing_extensions import override
 from octoprint_enclosure.utils import parse_hhmm, seconds_until_next
 
 from .base import Automation, AutomationConfig
-from .conditions import CONDITIONS
+from .conditions import conditions_from_settings
 from .reactions import REACTIONS
 from .triggers import TRIGGERS
 
@@ -72,9 +72,6 @@ class RuleAutomation(Automation[RuleConfig]):
     _trigger: Trigger
     """What starts the rule."""
 
-    conditions: list[Condition]
-    """What must be true when the reactions run."""
-
     reactions: list[Reaction]
     """What the rule does, in order."""
 
@@ -96,9 +93,8 @@ class RuleAutomation(Automation[RuleConfig]):
             logger (logging.Logger): The logger to write to.
 
         """
-        super().__init__(config, logger)
+        super().__init__(config, logger, conditions)
         self._trigger = trigger
-        self.conditions = conditions
         self.reactions = reactions
 
     @property
@@ -114,29 +110,12 @@ class RuleAutomation(Automation[RuleConfig]):
             and super().has_same_config(other)
             and type(other.trigger) is type(self.trigger)
             and other.trigger.config == self.trigger.config
-            and len(other.conditions) == len(self.conditions)
-            and all(
-                type(other_condition) is type(condition) and other_condition.config == condition.config
-                for condition, other_condition in zip(self.conditions, other.conditions)
-            )
             and len(other.reactions) == len(self.reactions)
             and all(
                 type(other_reaction) is type(reaction) and other_reaction.config == reaction.config
                 for reaction, other_reaction in zip(self.reactions, other.reactions)
             )
         )
-
-    def conditions_satisfied(self, *, printing: bool) -> bool:
-        """Check whether every condition of the rule is satisfied.
-
-        Args:
-            printing (bool): Whether a print job is running.
-
-        Returns:
-            bool: Whether every condition is satisfied.
-
-        """
-        return all(condition.is_satisfied(printing=printing) for condition in self.conditions)
 
     @classmethod
     @override
@@ -147,20 +126,6 @@ class RuleAutomation(Automation[RuleConfig]):
         if trigger_class is None:
             msg = f"Unsupported trigger type: {config.trigger_type!r}"
             raise ValueError(msg)
-
-        conditions_settings = settings.get("conditions", [])
-        if not isinstance(conditions_settings, list) or not all(isinstance(item, dict) for item in conditions_settings):
-            msg = "conditions is not a list of conditions"
-            raise ValueError(msg)
-
-        conditions = []
-        for condition_settings in conditions_settings:
-            condition_type = condition_settings.get("condition_type", "")
-            condition_class = CONDITIONS.get(condition_type)
-            if condition_class is None:
-                msg = f"Unsupported condition type: {condition_type!r}"
-                raise ValueError(msg)
-            conditions.append(condition_class.from_settings(condition_settings))
 
         reactions_settings = settings.get("reactions")
         if (
@@ -180,4 +145,4 @@ class RuleAutomation(Automation[RuleConfig]):
                 raise ValueError(msg)
             reactions.append(reaction_class.from_settings(reaction_settings))
 
-        return cls(config, trigger_class.from_settings(settings), conditions, reactions, logger)
+        return cls(config, trigger_class.from_settings(settings), conditions_from_settings(settings), reactions, logger)
