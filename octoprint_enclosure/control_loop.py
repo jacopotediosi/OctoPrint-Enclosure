@@ -31,7 +31,6 @@ from .outputs import (
     Output,
     OutputError,
     OutputSetpointConfig,
-    PwmOutput,
     PwmSetpoint,
     Thermostat,
     ThermostatOutput,
@@ -565,7 +564,7 @@ class ControlLoop:
                 # A curve drives the PWM only while its conditions are satisfied
                 if not automation.conditions_satisfied(printing=self._print_job_running):
                     if automation.is_running:
-                        self._reset_pwm_linked_temperature(automation)
+                        self._stop_pwm_linked_temperature(automation)
                     continue
 
                 # With a new reading, decide only the curves linked to its sensor, and the ones that start now
@@ -592,14 +591,8 @@ class ControlLoop:
         except Exception:
             self._logger.exception("Error handling temperature linked PWM outputs")
 
-    def _reset_pwm_linked_temperature(self, automation: PwmTemperatureLinkedAutomation) -> None:
-        output_id = automation.config.output
-        try:
-            default_duty_cycle = self._outputs.get(output_id, PwmOutput).config.default_duty_cycle
-        except OutputError as error:
-            self._logger.debug("Can't reset the duty cycle of output %s: %s", output_id, error)
-        else:
-            self._output_executor.turn_on(output_id, PwmSetpoint(default_duty_cycle))
+    def _stop_pwm_linked_temperature(self, automation: PwmTemperatureLinkedAutomation) -> None:
+        self._output_executor.turn_off(automation.config.output)
         automation.stop()
 
     def _decide_gpio_input_edge(self, event: GpioEdgeEvent) -> None:

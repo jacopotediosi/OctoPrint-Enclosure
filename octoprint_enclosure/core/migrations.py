@@ -382,10 +382,10 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
         for rpi_output in rpi_outputs:
             output_type = rpi_output.get("output_type")
 
+            default_duty_cycle = to_float(rpi_output.get("default_duty_cycle")) if output_type == "pwm" else 0
             on_setpoint: dict | None = {}
             if output_type == "pwm":
-                duty_cycle = to_float(rpi_output.get("default_duty_cycle"))
-                on_setpoint = {"duty_cycle": duty_cycle} if duty_cycle > 0 else None
+                on_setpoint = {"duty_cycle": default_duty_cycle} if default_duty_cycle > 0 else None
             elif output_type in ("ledstrip", "neopixel_direct", "neopixel_indirect"):
                 color_key = "default_ledstrip_color" if output_type == "ledstrip" else "default_neopixel_color"
                 color = str(rpi_output.get(color_key, ""))
@@ -410,6 +410,15 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                     time=rpi_output.get("startup_time", 0),
                     printing=True,
                     setpoint=on_setpoint,
+                )
+
+            if is_pwm_temperature_linked and default_duty_cycle > 0:
+                add_rule(
+                    rpi_output,
+                    ["PrintDone", "PrintCancelled", "PrintFailed"],
+                    "on",
+                    enabled=True,
+                    setpoint={"duty_cycle": default_duty_cycle},
                 )
 
             shutdown_time = rpi_output.get("shutdown_time", 0)
@@ -441,12 +450,14 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             if rpi_output.get("shutdown_on_error"):
                 add_rule(rpi_output, ["Error", "Disconnected"], "off", enabled=True)
 
-            if rpi_output.get("startup_with_server") and on_setpoint is not None:
+            if default_duty_cycle > 0:
+                add_rule(rpi_output, ["Startup"], "on", enabled=True, setpoint={"duty_cycle": default_duty_cycle})
+            elif rpi_output.get("startup_with_server") and on_setpoint is not None:
                 add_rule(rpi_output, ["Startup"], "on", enabled=True, setpoint=on_setpoint)
 
         # Up to version 10, every output held the keys of every type of item. The outputs that remain lose the keys of
-        # actions, alarms, PWM curves, automatic fields and toggle timers; the actions and the automations keep only the
-        # keys of their type.
+        # actions, alarms, PWM curves, automatic fields, toggle timers and defaults; the actions and the automations
+        # keep only the keys of their type.
         moved_keys = (
             "gcode",
             "shell_script",
@@ -468,6 +479,10 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "toggle_timer",
             "toggle_timer_on",
             "toggle_timer_off",
+            "default_duty_cycle",
+            "default_ledstrip_color",
+            "default_neopixel_color",
+            "temp_ctr_default_value",
         )
         for rpi_output in rpi_outputs:
             for key in moved_keys:

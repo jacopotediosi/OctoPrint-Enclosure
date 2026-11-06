@@ -247,12 +247,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
         output_type = payload["output_type"]
         temperature_unit = self._settings.temperature_unit
         if output_type == "temp_hum_control" and payload["temp_ctr_type"] != "dehumidifier":
-            # 0 is the thermostat off, and 0 or less is no maximum, in every unit
-            if to_float(payload["temp_ctr_default_value"]) != 0:
-                payload["temp_ctr_default_value"] = self._converted(
-                    payload["temp_ctr_default_value"],
-                    temperature_unit.from_celsius,
-                )
             if to_float(payload["temp_ctr_max_temp"]) > 0:
                 payload["temp_ctr_max_temp"] = self._converted(
                     payload["temp_ctr_max_temp"],

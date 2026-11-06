@@ -197,12 +197,6 @@
         <div data-bind="if: output_type() == 'temp_hum_control'">
             {{ select_control_group("temp_ctr_type", _("Device Type"), [("heater", _("Heater")), ("cooler", _("Cooler")), ("dehumidifier", _("Dehumidifier"))], placeholder="Select Device Type") }}
             <div data-bind="if: temp_ctr_type() == 'dehumidifier'">
-                {{ text_control_group("temp_ctr_default_value", _("Default Value"), "Default humidity the thermostat will be set to when the print starts or the server starts.") }}
-            </div>
-            <div data-bind="ifnot: temp_ctr_type() == 'dehumidifier'">
-                {{ temperature_control_group("temp_ctr_default_value", _("Default Value"), "Default temperature the thermostat will be set to when the print starts or the server starts.", zero_off=true) }}
-            </div>
-            <div data-bind="if: temp_ctr_type() == 'dehumidifier'">
                 {{ text_control_group("temp_ctr_deadband", _("Value Deadband"), "Allowable drift of the thermostat below its target. Set it to zero to disable.") }}
             </div>
             <div data-bind="ifnot: temp_ctr_type() == 'dehumidifier'">
@@ -214,7 +208,6 @@
         </div>
         <div data-bind="if: output_type() == 'pwm'">
             {{ text_control_group("pwm_frequency", _("PWM Frequency"), "Value is in Hz") }}
-            {{ text_control_group("default_duty_cycle", _("Default Duty Cycle"), "Value is in percentage, between 0 and 100") }}
         </div>
         <div data-bind="if: output_type() == 'neopixel_indirect'">
             {% call text_control_group("microcontroller_address", _("Microcontroller Address")) %}
@@ -225,26 +218,10 @@
         <div data-bind="if: output_type() == 'ledstrip'">
             {{ text_control_group("ledstrip_gpio_clk", _("CLK GPIO"), "GPIO of the clock line") }}
             {{ text_control_group("ledstrip_gpio_dat", _("DAT GPIO"), "GPIO of the data line") }}
-            <div class="control-group">
-                <label class="control-label">{{ _("Color") }}</label>
-                <div class="controls">
-                    <input type="color"
-                           class="input-block-level"
-                           data-bind="rgbColor: default_ledstrip_color">
-                </div>
-            </div>
         </div>
         <div data-bind="if: output_type() == 'neopixel_indirect' || output_type() == 'neopixel_direct'">
             {{ text_control_group("neopixel_count", _("Number of LEDS"), "Number of led's on strip") }}
             {{ text_control_group("neopixel_brightness", _("Brightness"), "Value between 0 and 255") }}
-            <div class="control-group">
-                <label class="control-label">{{ _("Default Color") }}</label>
-                <div class="controls">
-                    <input type="color"
-                           class="input-block-level"
-                           data-bind="rgbColor: default_neopixel_color">
-                </div>
-            </div>
         </div>
         <div data-bind="if: output_type() == 'neopixel_direct'">
             {{ text_control_group("neopixel_dma", _("DMA Channel"), "DMA channel used to drive the NeoPixels.") }}
@@ -357,8 +334,8 @@
             <span class="help-inline"
                   data-bind="visible: automation_type() == 'pwm_temperature_linked'">
                 <span class="label label-info">Info:</span> Sets the duty cycle of a PWM output from the temperature read by a sensor, interpolated between the
-                point from duty A, temperature A -> duty B, temperature B, while its conditions are satisfied: for example only during a print,
-                with the output back to the default duty cycle when the print is complete.
+                point from duty A, temperature A -> duty B, temperature B, while its conditions are satisfied, for example only during a print;
+                when they stop being satisfied the output is turned off.
             </span>
             <span class="help-inline"
                   data-bind="visible: automation_type() == 'toggle_timer'">

@@ -27,20 +27,6 @@ class PwmConfig(OutputConfig):
     pwm_frequency: int = REQUIRED
     """The frequency of the PWM, in Hz."""
 
-    default_duty_cycle: int = 0
-    """The duty cycle the PWM starts with, from 0 to 100."""
-
-    def __post_init__(self) -> None:
-        """Check the default duty cycle.
-
-        Raises:
-            ValueError: If the default duty cycle is not between 0 and 100.
-
-        """
-        if not 0 <= self.default_duty_cycle <= 100:
-            msg = f"default_duty_cycle must be between 0 and 100, not {self.default_duty_cycle}"
-            raise ValueError(msg)
-
 
 @dataclass(frozen=True)
 class PwmSetpoint(BaseConfig):
@@ -76,7 +62,7 @@ class PwmOutput(Output[PwmConfig, PwmSetpoint]):
     def __init__(self, config: PwmConfig, gpio: GpioBackend, i2c: I2cBackend, logger: logging.Logger) -> None:
         super().__init__(config, gpio, i2c, logger)
         self._pwm = None
-        self._duty_cycle = config.default_duty_cycle
+        self._duty_cycle = 0
 
     @property
     def duty_cycle(self) -> float:
@@ -90,7 +76,7 @@ class PwmOutput(Output[PwmConfig, PwmSetpoint]):
 
     @override
     def setup(self) -> None:
-        """Set up the pin and start the PWM with the default duty cycle.
+        """Set up the pin and start the PWM, off.
 
         Raises:
             Exception: If the PWM can't be started.
@@ -101,7 +87,7 @@ class PwmOutput(Output[PwmConfig, PwmSetpoint]):
 
         self._gpio.setup(pin, self._gpio.OUT, initial=self._gpio.LOW)
         pwm = self._gpio.PWM(pin, self.config.pwm_frequency)
-        pwm.start(self.config.default_duty_cycle)
+        pwm.start(0)
         self._pwm = pwm
 
     @override
