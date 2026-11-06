@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.settings import BaseConfig
 from octoprint_enclosure.utils import Rgb
 
 from .base import Output

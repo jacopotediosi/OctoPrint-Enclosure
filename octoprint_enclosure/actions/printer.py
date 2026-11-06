@@ -5,7 +5,7 @@ from enum import Enum
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import REQUIRED, BaseConfig
 
 from .base import Action
 

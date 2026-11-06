@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from octoprint_enclosure.automations.events import GpioEdgeEvent
-from octoprint_enclosure.core import REQUIRED, BaseConfig
 from octoprint_enclosure.inputs import Edge
+from octoprint_enclosure.settings import REQUIRED, BaseConfig
 
 from .base import Trigger
 

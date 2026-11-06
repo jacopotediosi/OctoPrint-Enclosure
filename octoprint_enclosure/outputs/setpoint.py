@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.settings import BaseConfig
 from octoprint_enclosure.utils import Rgb
 
 from .color import ColorSetpoint

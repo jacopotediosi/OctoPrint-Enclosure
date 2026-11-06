@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, HexInt
 from octoprint_enclosure.inputs.config import InputConfig, PullResistor
+from octoprint_enclosure.settings import REQUIRED, HexInt
 
 if TYPE_CHECKING:
     import logging

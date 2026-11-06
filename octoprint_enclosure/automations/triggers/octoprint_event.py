@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, FrozenSet
 from typing_extensions import override
 
 from octoprint_enclosure.automations.events import OctoprintEvent
-from octoprint_enclosure.core import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import REQUIRED, BaseConfig
 
 from .base import Trigger
 

@@ -3,9 +3,7 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.utils import to_int
-
-from .measurement import TemperatureUnit
+from octoprint_enclosure.utils import TemperatureUnit, to_int
 
 if TYPE_CHECKING:
     from octoprint.plugin import PluginSettings

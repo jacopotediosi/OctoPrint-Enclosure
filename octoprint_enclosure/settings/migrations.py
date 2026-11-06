@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.utils import is_rgb, parse_hhmm, parse_rgb, to_float, to_int
-
-from .measurement import TemperatureUnit
+from octoprint_enclosure.utils import TemperatureUnit, is_rgb, parse_hhmm, parse_rgb, to_float, to_int
 
 if TYPE_CHECKING:
     import logging

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import REQUIRED, BaseConfig
 
 from .base import Reaction
 

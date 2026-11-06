@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED
+from octoprint_enclosure.settings import REQUIRED
 
 from .base import Automation, AutomationConfig
 from .events import GpioEdgeEvent

@@ -114,7 +114,7 @@ ignore = [
 extend-immutable-calls = ["octoprint_enclosure.utils.Rgb"]
 
 [tool.ruff.lint.flake8-type-checking]
-runtime-evaluated-base-classes = ["octoprint_enclosure.core.BaseConfig"]
+runtime-evaluated-base-classes = ["octoprint_enclosure.settings.BaseConfig"]
 
 [tool.djlint]
 ignore = [

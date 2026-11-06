@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 from octoprint.events import Events
 
-from .actions import ActionError, GcodeAction, GcodeConfig, PrinterAction
-from .automations import (
+from octoprint_enclosure.actions import ActionError, GcodeAction, GcodeConfig, PrinterAction
+from octoprint_enclosure.automations import (
     AutomationError,
     AutomationEvent,
     FilamentAutomation,
@@ -25,9 +25,9 @@ from .automations import (
     TemperatureTrigger,
     ToggleTimerAutomation,
 )
-from .inputs import GpioInputError
-from .notifications import NotificationType
-from .outputs import (
+from octoprint_enclosure.inputs import GpioInputError
+from octoprint_enclosure.notifications import NotificationType
+from octoprint_enclosure.outputs import (
     Output,
     OutputError,
     OutputSetpointConfig,
@@ -43,13 +43,16 @@ if TYPE_CHECKING:
 
     from octoprint.printer import PrinterInterface
 
-    from .actions import Action, Actions
-    from .automations import Automations, Reaction
-    from .core import Frontend, Scheduler, Settings
-    from .inputs import GpioInputs, Reading, SensorPoller
-    from .notifications import Notifications
+    from octoprint_enclosure.actions import Action, Actions
+    from octoprint_enclosure.automations import Automations, Reaction
+    from octoprint_enclosure.frontend import Frontend
+    from octoprint_enclosure.inputs import GpioInputs, Reading, SensorPoller
+    from octoprint_enclosure.notifications import Notifications
+    from octoprint_enclosure.outputs import Outputs
+    from octoprint_enclosure.settings import Settings
+
     from .output_executor import OutputExecutor
-    from .outputs import Outputs
+    from .scheduler import Scheduler
 
 TICK_INTERVAL_SECONDS = 10
 """The seconds between two ticks, at which the loop takes the decisions again on everything."""

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, HexInt
+from octoprint_enclosure.settings import REQUIRED, HexInt
 from octoprint_enclosure.utils import Rgb, get_gcode_param, to_int
 
 from .color import ColorOutput, ColorSetpoint

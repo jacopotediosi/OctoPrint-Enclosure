@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.core import REQUIRED
 from octoprint_enclosure.inputs.config import InputConfig, PullResistor
+from octoprint_enclosure.settings import REQUIRED
 
 if TYPE_CHECKING:
     import logging

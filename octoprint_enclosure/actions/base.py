@@ -3,14 +3,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.settings import BaseConfig
 
 if TYPE_CHECKING:
     import logging
 
     from octoprint.printer import PrinterInterface
 
-    from octoprint_enclosure.core import Frontend
+    from octoprint_enclosure.frontend import Frontend
 
 _ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
 

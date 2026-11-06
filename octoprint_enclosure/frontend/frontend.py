@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .measurement import MeasurementType
+from octoprint_enclosure.utils import MeasurementType
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -12,8 +12,7 @@ if TYPE_CHECKING:
 
     from octoprint_enclosure.inputs import Reading
     from octoprint_enclosure.outputs import Thermostat
-
-    from .settings import Settings
+    from octoprint_enclosure.settings import Settings
 
 
 class Frontend:

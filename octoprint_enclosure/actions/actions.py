@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import REQUIRED, BaseConfig
 
 from .base import Action, ActionError
 from .registry import ACTIONS
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
     from octoprint.printer import PrinterInterface
 
-    from octoprint_enclosure.core import Frontend
+    from octoprint_enclosure.frontend import Frontend
 
 _ActionT = TypeVar("_ActionT", bound=Action)
 

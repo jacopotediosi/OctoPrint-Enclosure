@@ -19,10 +19,11 @@ if TYPE_CHECKING:
 
     from octoprint.util.comm import MachineCom
 
-    from octoprint_enclosure.core import PluginContext, Settings
     from octoprint_enclosure.inputs import GpioInputs, Sensors
     from octoprint_enclosure.inputs.sensors.dummy import DummySensor
     from octoprint_enclosure.outputs import Outputs
+    from octoprint_enclosure.plugin_context import PluginContext
+    from octoprint_enclosure.settings import Settings
 
 NUMBER_REGEX = r"-?\d+(?:\.\d+)?"
 

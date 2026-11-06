@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import spidev
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, HexInt
+from octoprint_enclosure.settings import REQUIRED, HexInt
 
 from .base import Reading, Sensor, SensorError, SensorInputConfig
 

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 from typing_extensions import Protocol, runtime_checkable
 
-from octoprint_enclosure.core import BaseConfig
+from octoprint_enclosure.settings import BaseConfig
 
 from .config import OutputConfig
 

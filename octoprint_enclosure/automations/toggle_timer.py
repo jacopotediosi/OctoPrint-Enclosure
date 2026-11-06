@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.core import REQUIRED
 from octoprint_enclosure.outputs import OutputSetpointConfig
+from octoprint_enclosure.settings import REQUIRED
 
 from .base import Automation, AutomationConfig
 

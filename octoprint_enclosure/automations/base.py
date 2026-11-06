@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import REQUIRED, BaseConfig
 
 from .conditions import conditions_from_settings
 

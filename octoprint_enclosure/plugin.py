@@ -19,15 +19,13 @@ from .automations import (
     RuleAutomation,
     TemperatureTrigger,
 )
-from .control_loop import ControlLoop
-from .core import Frontend, PluginContext, Scheduler, Settings
-from .core.migrations import migrate_settings
+from .engine import ControlLoop, OutputExecutor, Scheduler
+from .frontend import Frontend
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
 from .inputs import GpioInputs, InputType, SensorError, SensorPoller, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
-from .output_executor import OutputExecutor
 from .outputs import (
     LedstripOutput,
     NeopixelDirectOutput,
@@ -39,6 +37,9 @@ from .outputs import (
     ThermostatDeviceType,
     ThermostatOutput,
 )
+from .plugin_context import PluginContext
+from .settings import Settings
+from .settings.migrations import migrate_settings
 from .utils import to_int
 
 

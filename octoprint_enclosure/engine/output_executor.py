@@ -6,7 +6,7 @@ from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import TYPE_CHECKING, TypeVar
 
-from .outputs import Output, OutputError, Switchable, ThermostatOutput
+from octoprint_enclosure.outputs import Output, OutputError, Switchable, ThermostatOutput
 
 if TYPE_CHECKING:
     import logging
@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 
     from typing_extensions import Protocol
 
-    from .core import BaseConfig
-    from .outputs import Outputs
+    from octoprint_enclosure.outputs import Outputs
+    from octoprint_enclosure.settings import BaseConfig
 
 _T = TypeVar("_T")
 _T_co = TypeVar("_T_co", covariant=True)

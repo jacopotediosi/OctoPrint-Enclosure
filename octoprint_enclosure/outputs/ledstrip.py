@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED
+from octoprint_enclosure.settings import REQUIRED
 
 from .color import ColorOutput
 from .config import OutputConfig

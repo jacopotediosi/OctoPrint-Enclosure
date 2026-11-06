@@ -8,7 +8,7 @@ from .providers import NOTIFICATION_PROVIDERS
 if TYPE_CHECKING:
     import logging
 
-    from octoprint_enclosure.core import Settings
+    from octoprint_enclosure.settings import Settings
 
 
 class NotificationType(Enum):

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, ClassVar
 if TYPE_CHECKING:
     import logging
 
-    from octoprint_enclosure.core import Settings
+    from octoprint_enclosure.settings import Settings
 
 
 class NotificationProvider(ABC):

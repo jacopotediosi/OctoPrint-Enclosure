@@ -2,11 +2,14 @@ from .bool_utils import parse_bool
 from .color_utils import Rgb, is_rgb, parse_hex_color, parse_rgb
 from .crc_utils import crc16_modbus
 from .gcode_utils import get_gcode_param
+from .measurement import MeasurementType, TemperatureUnit
 from .number_utils import clamp, is_number, parse_float, parse_hex, to_float, to_int
 from .time_utils import parse_hhmm, seconds_until_next
 
 __all__ = [
+    "MeasurementType",
     "Rgb",
+    "TemperatureUnit",
     "clamp",
     "crc16_modbus",
     "get_gcode_param",

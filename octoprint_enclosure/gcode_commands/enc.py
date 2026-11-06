@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.core import MeasurementType
 from octoprint_enclosure.outputs import Output, OutputError, ThermostatOutput
-from octoprint_enclosure.utils import get_gcode_param, to_float, to_int
+from octoprint_enclosure.utils import MeasurementType, get_gcode_param, to_float, to_int
 
 if TYPE_CHECKING:
     import logging
@@ -12,9 +11,10 @@ if TYPE_CHECKING:
 
     from octoprint.util.comm import MachineCom
 
-    from octoprint_enclosure.core import PluginContext, Settings
-    from octoprint_enclosure.output_executor import OutputExecutor
+    from octoprint_enclosure.engine import OutputExecutor
     from octoprint_enclosure.outputs import Outputs
+    from octoprint_enclosure.plugin_context import PluginContext
+    from octoprint_enclosure.settings import Settings
 
 
 class EncHandler:

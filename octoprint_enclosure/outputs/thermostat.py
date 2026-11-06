@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED, BaseConfig, MeasurementType
+from octoprint_enclosure.settings import REQUIRED, BaseConfig
+from octoprint_enclosure.utils import MeasurementType
 
 from .base import Output
 from .switch import Switch, SwitchConfig

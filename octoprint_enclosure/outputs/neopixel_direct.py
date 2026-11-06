@@ -8,7 +8,7 @@ from pathlib import Path
 
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED
+from octoprint_enclosure.settings import REQUIRED
 from octoprint_enclosure.utils import Rgb, get_gcode_param, to_int
 
 from .base import OutputError

@@ -10,7 +10,6 @@ from flask import jsonify, make_response, request
 from werkzeug.exceptions import BadRequest
 
 from octoprint_enclosure.actions import Action, ActionError, GcodeAction, PrinterAction, ShellAction
-from octoprint_enclosure.core import MeasurementType, TemperatureUnit
 from octoprint_enclosure.inputs import PullResistor, Reading
 from octoprint_enclosure.outputs import (
     ColorSetpoint,
@@ -24,7 +23,17 @@ from octoprint_enclosure.outputs import (
     RegularSetpoint,
     ThermostatOutput,
 )
-from octoprint_enclosure.utils import Rgb, is_number, is_rgb, parse_float, parse_rgb, to_float, to_int
+from octoprint_enclosure.utils import (
+    MeasurementType,
+    Rgb,
+    TemperatureUnit,
+    is_number,
+    is_rgb,
+    parse_float,
+    parse_rgb,
+    to_float,
+    to_int,
+)
 
 if TYPE_CHECKING:
     import logging
@@ -33,13 +42,13 @@ if TYPE_CHECKING:
     from flask import Response
 
     from octoprint_enclosure.actions import Actions
-    from octoprint_enclosure.control_loop import ControlLoop
-    from octoprint_enclosure.core import PluginContext, Settings
+    from octoprint_enclosure.engine import ControlLoop, OutputExecutor
     from octoprint_enclosure.hardware import GpioBackend
     from octoprint_enclosure.inputs import SensorPoller
-    from octoprint_enclosure.output_executor import OutputExecutor
     from octoprint_enclosure.outputs import Output, Outputs
     from octoprint_enclosure.outputs.color import ColorOutput
+    from octoprint_enclosure.plugin_context import PluginContext
+    from octoprint_enclosure.settings import Settings
 
 
 _JSON_TYPES: dict[str, Callable[[object], bool]] = {

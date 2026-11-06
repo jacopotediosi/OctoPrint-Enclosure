@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.core import REQUIRED
+from octoprint_enclosure.settings import REQUIRED
 
 from .base import Reading, Sensor, SensorError, SensorInputConfig
 
