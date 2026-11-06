@@ -33,6 +33,9 @@ class AutomationConfig(BaseConfig):
     enabled: bool = field(default=True, compare=False)
     """Whether the automation is enabled."""
 
+    show_in_tab: bool = field(default=False, compare=False)
+    """Whether the Enclosure tab shows the automation, with a switch to enable or disable it."""
+
 
 _ConfigT = TypeVar("_ConfigT", bound=AutomationConfig)
 

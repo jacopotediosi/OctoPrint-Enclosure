@@ -157,6 +157,14 @@
                       data-bind="text: gpio_status() ? 'on' : 'off', css: {'badge-success': gpio_status(), 'badge-important': !gpio_status()}"></span>
             </h4>
         </div>
+        <div data-bind="foreach: $root.automationsOn(index_id())">
+            <h5>
+                <span>Automation: <span data-bind="text: label"></span></span>
+                <a href="#"
+                   data-bind="visible: $root.isUser(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
+                   class="fa enclosure-link"></a>
+            </h5>
+        </div>
         <span data-bind="visible: output_type() == 'temp_hum_control' && temp_ctr_type() == 'heater' && !$root.isTurnedOffAtPrintEnd(index_id())">
             <span class="label label-important">Warning:</span>
             <span> Nothing turns this
@@ -166,14 +174,6 @@
             <span>Time Toggle</span>
             <span class="badge">active</span>
         </h5>
-        <div data-bind="foreach: $root.automationsOn(index_id())">
-            <h5>
-                <span>Automation: <span data-bind="text: label"></span></span>
-                <a href="#"
-                   data-bind="visible: $root.isUser(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
-                   class="fa enclosure-link"></a>
-            </h5>
-        </div>
     </div>
 </div>
 <div data-bind="foreach: $root.tab_actions()">
@@ -219,6 +219,15 @@
         <span class="badge">filament sensor</span>
         <a href="#"
            data-bind="visible: $root.isUser(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable Filament Sensor' : 'Enable Filament Sensor'}"
+           class="fa enclosure-link"></a>
+    </h4>
+</div>
+<div data-bind="foreach: $root.tab_automations()">
+    <h4>
+        <span data-bind="text: label"></span>
+        <span class="badge">automation</span>
+        <a href="#"
+           data-bind="visible: $root.isUser(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
            class="fa enclosure-link"></a>
     </h4>
 </div>

@@ -174,6 +174,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             if action_type == "printer_control" and printer_action == "filament":
                 # A filament sensor is an automation of its own type, not a rule
                 automation["automation_type"] = "filament"
+                automation["show_in_tab"] = True
                 if "filament_sensor_enabled" in moved:
                     automation["enabled"] = moved["filament_sensor_enabled"]
                 if "filament_sensor_timeout" in moved:
@@ -304,7 +305,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
         # "startup_with_server", "shutdown_on_failed" and "shutdown_on_error" become a rule only if the key was on. The
         # rules on PWM, LED strip, NeoPixel and thermostat outputs take the setpoint from the default of the output:
         # without one, and for a PWM driven by a curve, the rule is not created.
-        def add_rule(rpi_output, events, state, *, enabled, time=0, printing=None, setpoint=None):
+        def add_rule(rpi_output, events, state, *, enabled, show_in_tab=False, time=0, printing=None, setpoint=None):
             nonlocal next_automation_id
 
             # startup_time and shutdown_time held seconds, or a time of day as HH:MM
@@ -331,6 +332,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                     "label": f"Turn {state} {rpi_output.get('label')} {label_suffixes.get(tuple(events), '')}".strip(),
                     "automation_type": "rule",
                     "enabled": enabled,
+                    "show_in_tab": show_in_tab,
                     "trigger_type": "octoprint_event",
                     "octoprint_events": events,
                     "delay": delay,
@@ -369,8 +371,11 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             elif output_type == "temp_hum_control":
                 target = to_float(rpi_output.get("temp_ctr_default_value"))
                 on_setpoint = {"target": target} if target != 0 else None
-            if to_int(rpi_output.get("index_id")) in pwm_temperature_linked_ids:
+            is_pwm_temperature_linked = to_int(rpi_output.get("index_id")) in pwm_temperature_linked_ids
+            if is_pwm_temperature_linked:
                 on_setpoint = None
+            has_toggle_timer = output_type in ("regular", "pwm") and bool(rpi_output.get("toggle_timer"))
+            toggles_were_shown = not is_pwm_temperature_linked and not has_toggle_timer
 
             if on_setpoint is not None:
                 add_rule(
@@ -378,13 +383,17 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                     ["PrintStarted"],
                     "on",
                     enabled=bool(rpi_output.get("auto_startup")),
+                    show_in_tab=toggles_were_shown,
                     time=rpi_output.get("startup_time", 0),
                     printing=True,
                     setpoint=on_setpoint,
                 )
 
+            shutdown_time = rpi_output.get("shutdown_time", 0)
+            shutdown_is_delayed = parse_hhmm(str(shutdown_time)) is not None or to_float(shutdown_time) > 0
+            failure_has_own_rule = output_type == "temp_hum_control" and shutdown_is_delayed
             end_events = ["PrintDone"]
-            if rpi_output.get("shutdown_on_failed") and output_type != "temp_hum_control":
+            if rpi_output.get("shutdown_on_failed") and not failure_has_own_rule:
                 end_events += ["PrintCancelled", "PrintFailed"]
 
             add_rule(
@@ -392,16 +401,18 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                 end_events,
                 "off",
                 enabled=bool(rpi_output.get("auto_shutdown")),
-                time=rpi_output.get("shutdown_time", 0),
+                show_in_tab=toggles_were_shown,
+                time=shutdown_time,
                 printing=False,
             )
 
-            if rpi_output.get("shutdown_on_failed") and output_type == "temp_hum_control":
+            if rpi_output.get("shutdown_on_failed") and failure_has_own_rule:
                 add_rule(
                     rpi_output,
                     ["PrintCancelled", "PrintFailed"],
                     "off",
                     enabled=bool(rpi_output.get("auto_shutdown")),
+                    show_in_tab=toggles_were_shown,
                 )
 
             if rpi_output.get("shutdown_on_error"):
@@ -464,6 +475,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "at",
             "conditions",
             "enabled",
+            "show_in_tab",
             "filament_sensor_timeout",
             "output",
             "temperature_a",
@@ -506,6 +518,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "at": "",
             "conditions": [],
             "enabled": True,
+            "show_in_tab": False,
             "filament_sensor_timeout": 120,
             "output": "",
             "temperature_a": 0,

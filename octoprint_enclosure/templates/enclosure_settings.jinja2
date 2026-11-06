@@ -369,6 +369,7 @@
         {% endcall %}
         {{ text_control_group("label", _("Label"), "Name of Automation") }}
         {{ checkbox_control_group("enabled", _("Enabled"), "A disabled automation does nothing.") }}
+        {{ checkbox_control_group("show_in_tab", _("Show in tab"), "Shows the automation in the Enclosure tab, with a switch to enable or disable it.") }}
         <div data-bind="if: automation_type() == 'rule'">
             {{ select_control_group("trigger_type", _("Trigger"), [
                 ("gpio_input", _("GPIO Input")),
@@ -469,7 +470,7 @@
                     </span>
                 {% endcall %}
                 <div data-bind="if: reaction_type() == 'output_control'">
-                    {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settings_outputs", "When the event happens, do you want control of which OUTPUT?", placeholder="Select Output") }}
+                    {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settingsViewModel.settings.plugins.enclosure.rpi_outputs","When the event happens, do you want control of which OUTPUT?", placeholder="Select Output") }}
                     {{ select_control_group("controlled_io_set_state", _("Set Controlled IO State"), [("on", "On"), ("off", "Off"), ("toggle", "Toggle")], "When the event happens, do you want to turn the controlled IO on, off, or toggle it?", placeholder="Select State") }}
                     <div data-bind="ifnot: controlled_io_set_state() == 'off'">
                         <div data-bind="if: $root.outputType(controlled_io()) == 'pwm'">

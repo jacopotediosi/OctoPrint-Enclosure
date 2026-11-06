@@ -131,14 +131,6 @@ $(function () {
       }
     };
 
-    self.settings_outputs = ko.pureComputed(function () {
-      return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs(), function (item) {
-        var type = item.output_type();
-        if ((type === "regular" || type === "pwm") && item.toggle_timer()) return false;
-        return !(type === "pwm" && self.isPwmLinked(item.index_id()));
-      });
-    });
-
     self.settings_outputs_pwm = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs(), function (item) {
         return (item.output_type() === "pwm");
@@ -200,7 +192,13 @@ $(function () {
 
     self.tab_filament_sensors = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.automations(), function (item) {
-        return (item.automation_type() === "filament" && item.input() !== "");
+        return (item.automation_type() === "filament" && item.input() !== "" && item.show_in_tab());
+      });
+    });
+
+    self.tab_automations = ko.pureComputed(function () {
+      return ko.utils.arrayFilter(self.automations(), function (item) {
+        return item.show_in_tab() && item.automation_type() !== "filament" && self.controlledOutputs(item).length != 1;
       });
     });
 
@@ -221,8 +219,8 @@ $(function () {
     };
 
     self.isPwmLinked = function (index_id) {
-      return self.automationsOn(index_id).some(function (automation) {
-        return automation.automation_type() == "pwm_temperature_linked" && automation.enabled();
+      return self.automations().some(function (automation) {
+        return automation.automation_type() == "pwm_temperature_linked" && automation.output() == index_id && automation.enabled();
       });
     };
 
@@ -237,14 +235,28 @@ $(function () {
       });
     };
 
+    self.controlledOutputs = function (automation) {
+      var outputs = [];
+      if (automation.automation_type() == "pwm_temperature_linked") {
+        outputs = [automation.output()];
+      } else if (automation.automation_type() == "rule") {
+        outputs = automation.reactions().filter(function (reaction) {
+          return reaction.reaction_type() == "output_control";
+        }).map(function (reaction) {
+          return reaction.controlled_io();
+        });
+      }
+      return outputs.filter(function (output_id, index) {
+        return outputs.indexOf(output_id) == index && self.rpi_outputs().some(function (output) {
+          return output.index_id() == output_id;
+        });
+      });
+    };
+
     self.automationsOn = function (index_id) {
       return ko.utils.arrayFilter(self.automations(), function (automation) {
-        if (automation.automation_type() == "pwm_temperature_linked") {
-          return automation.output() == index_id;
-        }
-        return automation.automation_type() == "rule" && automation.reactions().some(function (reaction) {
-          return reaction.reaction_type() == "output_control" && reaction.controlled_io() == index_id;
-        });
+        var outputs = self.controlledOutputs(automation);
+        return automation.show_in_tab() && outputs.length == 1 && outputs[0] == index_id;
       });
     };
 
@@ -629,6 +641,7 @@ $(function () {
         index_id: ko.observable(nextIndex),
         label: ko.observable("Automation " + nextIndex),
         enabled: ko.observable(true),
+        show_in_tab: ko.observable(false),
         automation_type: ko.observable(""),
         trigger_type: ko.observable(""),
         input: ko.observable(""),
