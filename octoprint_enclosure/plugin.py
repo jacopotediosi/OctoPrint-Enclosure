@@ -26,17 +26,7 @@ from .hardware import dummy_gpio, dummy_i2c, gpio
 from .inputs import GpioInputs, InputType, SensorError, SensorPoller, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
-from .outputs import (
-    LedstripOutput,
-    NeopixelDirectOutput,
-    NeopixelIndirectOutput,
-    OutputError,
-    Outputs,
-    PwmOutput,
-    RegularOutput,
-    ThermostatDeviceType,
-    ThermostatOutput,
-)
+from .outputs import Outputs, ThermostatDeviceType, ThermostatOutput
 from .plugin_context import PluginContext
 from .settings import Settings
 from .settings.migrations import migrate_settings
@@ -82,7 +72,6 @@ class EnclosurePlugin(
 
         # Init general plugin components
         self._enclosure_settings = Settings(self._settings)
-        self._frontend = Frontend(self._plugin_manager, self._identifier, self._enclosure_settings)
 
         # Init hardware
         self.development_mode = self._enclosure_settings.development_mode
@@ -98,8 +87,18 @@ class EnclosurePlugin(
         self._sensors = Sensors(self._gpio, self._logger, dummy=self.development_mode)
         self._gpio_inputs = GpioInputs(self._gpio, self.handle_gpio_input, self._logger)
         self._outputs = Outputs(self._gpio, self._i2c, self._logger)
-        self._actions = Actions(self._printer, self._frontend, self._logger)
         self._automations = Automations(self._logger)
+        self._sensor_poller = SensorPoller(self._sensors, self.handle_sensor_reading, self._logger)
+        self._frontend = Frontend(
+            self._plugin_manager,
+            self._identifier,
+            self._enclosure_settings,
+            self._outputs,
+            self._automations,
+            self._sensor_poller,
+            self._logger,
+        )
+        self._actions = Actions(self._printer, self._frontend, self._logger)
 
         # Init notifications
         self._notifications = Notifications(self._enclosure_settings, self._logger)
@@ -108,9 +107,8 @@ class EnclosurePlugin(
         self._mqtt = Mqtt(self._plugin_manager, self._logger)
 
         # Init threads
-        self._sensor_poller = SensorPoller(self._sensors, self.handle_sensor_reading, self._logger)
         self._scheduler = Scheduler(self._logger)
-        self._output_executor = OutputExecutor(self._outputs, self._logger, update_ui_outputs=self.send_ui_outputs)
+        self._output_executor = OutputExecutor(self._outputs, self._frontend, self._logger)
         self._control_loop = ControlLoop(
             self._gpio_inputs,
             self._sensor_poller,
@@ -158,21 +156,8 @@ class EnclosurePlugin(
             handle_event=self.on_event,
         )
 
-        # Init the API
-        self._api = Api(
-            self._plugin_context,
-            update_ui=self.update_ui,
-            set_automation_enabled=self.set_automation_enabled,
-        )
-
-    def output_state_boolean(self, index_id, output_class):
-        try:
-            return self._outputs.get(index_id, output_class).is_on()
-        except OutputError:
-            return "ERROR: Unable to read pin"
-        except Exception:
-            self._logger.exception("Error reading output %s", index_id)
-            return "ERROR: Unable to read pin"
+        # Init API
+        self._api = Api(self._plugin_context, set_automation_enabled=self.set_automation_enabled)
 
     # ~~ StartupPlugin mixin
     def on_after_startup(self):
@@ -233,17 +218,6 @@ class EnclosurePlugin(
 
     def is_blueprint_csrf_protected(self):
         return True
-
-    def output_color(self, index_id, output_class):
-        try:
-            color = self._outputs.get(index_id, output_class).color
-        except OutputError:
-            color = None
-
-        # Until a color is set, the output is shown as black
-        red, green, blue = (0, 0, 0) if color is None else color
-
-        return f"rgb({red},{green},{blue})"
 
     def get_sensor_inputs_settings(self):
         return [item for item in self.rpi_inputs if item["input_type"] == InputType.TEMPERATURE_SENSOR.value]
@@ -313,7 +287,7 @@ class EnclosurePlugin(
                 )
                 self._mqtt.publish_sensor_reading(sensor.config.label, temperature, reading.humidity)
 
-        self.update_ui_readings()
+        self._frontend.update_readings()
         self._control_loop.evaluate_reading(index_id)
 
     def handle_sensor_failure(self, sensor, error):
@@ -342,71 +316,6 @@ class EnclosurePlugin(
             self.failing_sensors.remove(sensor.index_id)
             self._logger.info("Sensor %s has started working again", sensor.label)
 
-    def update_ui(self):
-        self.update_ui_readings()
-        self.update_ui_automations()
-        self.update_ui_outputs()
-        self.update_ui_targets()
-
-    def update_ui_readings(self):
-        self._frontend.update_readings(self._sensor_poller.get_readings())
-
-    def update_ui_automations(self):
-        try:
-            self._frontend.update_automations(
-                [
-                    {"index_id": automation.config.index_id, "enabled": automation.enabled}
-                    for automation in self._automations.get_all(Automation, include_disabled=True)
-                ],
-            )
-        except Exception:
-            self._logger.exception("Error sending the automations to the UI")
-
-    def update_ui_targets(self):
-        self._control_loop.update_ui_targets()
-
-    def update_ui_outputs(self):
-        self._output_executor.update_ui_outputs()
-
-    def send_ui_outputs(self):
-        try:
-            regular_status = []
-            pwm_status = []
-            neopixel_status = []
-            ledstrip_status = []
-            thermostat_status = []
-            for output in self.rpi_outputs:
-                index = to_int(output["index_id"])
-
-                if output["output_type"] == "regular":
-                    val = self.output_state_boolean(index, RegularOutput) is True
-                    regular_status.append({"index_id": index, "status": val})
-                if output["output_type"] == "temp_hum_control":
-                    val = self.output_state_boolean(index, ThermostatOutput) is True
-                    thermostat_status.append({"index_id": index, "status": val})
-                if output["output_type"] == "neopixel_indirect" or output["output_type"] == "neopixel_direct":
-                    neopixel_class = (
-                        NeopixelDirectOutput if output["output_type"] == "neopixel_direct" else NeopixelIndirectOutput
-                    )
-                    val = self.output_color(index, neopixel_class)
-                    neopixel_status.append({"index_id": index, "color": val})
-                if output["output_type"] == "ledstrip":
-                    val = self.output_color(index, LedstripOutput)
-                    ledstrip_status.append({"index_id": index, "color": val})
-                if output["output_type"] == "pwm":
-                    with contextlib.suppress(OutputError):
-                        val = to_int(self._outputs.get(index, PwmOutput).duty_cycle)
-                        pwm_status.append({"index_id": index, "pwm_value": val})
-            self._frontend.update_outputs(
-                regular=regular_status,
-                pwm=pwm_status,
-                neopixel=neopixel_status,
-                ledstrip=ledstrip_status,
-                thermostats=thermostat_status,
-            )
-        except Exception:
-            self._logger.exception("Error sending outputs status to the UI")
-
     def handle_gpio_input(self, input_id, level):
         self._control_loop.evaluate_gpio_input_edge(input_id, level)
 
@@ -425,7 +334,7 @@ class EnclosurePlugin(
             self._automations.get(index_id, Automation).enabled = enabled
         self._logger.info("Setting automation %s enabled to %s", index_id, enabled)
         self._control_loop.evaluate()
-        self.update_ui_automations()
+        self._frontend.update_automations()
         return True
 
     # ~~ EventPlugin mixin
@@ -485,7 +394,7 @@ class EnclosurePlugin(
         self._control_loop.evaluate_settings()
 
         # Update UI in every client
-        self.update_ui()
+        self._control_loop.update_ui()
 
     def get_settings_defaults(self):
         return {

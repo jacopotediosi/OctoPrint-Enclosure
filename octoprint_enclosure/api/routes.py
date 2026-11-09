@@ -120,9 +120,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
     _sensor_poller: SensorPoller
     _logger: logging.Logger
 
-    _update_ui: Callable[[], None]
-    """The function refreshing the UI."""
-
     _set_automation_enabled: Callable[[int, bool], bool]
     """The function enabling or disabling an automation, with the id of the automation and whether to enable it,
     that returns whether an automation has that id."""
@@ -131,14 +128,12 @@ class Api(octoprint.plugin.BlueprintPlugin):
         self,
         plugin_context: PluginContext,
         *,
-        update_ui: Callable[[], None],
         set_automation_enabled: Callable[[int, bool], bool],
     ) -> None:
         """Set up the API.
 
         Args:
             plugin_context (PluginContext): The plugin context.
-            update_ui (Callable[[], None]): The function refreshing the UI.
             set_automation_enabled (Callable[[int, bool], bool]): The function enabling or disabling an automation,
                 with the id of the automation and whether to enable it, that returns whether an automation has that
                 id.
@@ -155,7 +150,6 @@ class Api(octoprint.plugin.BlueprintPlugin):
         self._sensor_poller = plugin_context.sensor_poller
         self._logger = plugin_context.logger.getChild("Api")
 
-        self._update_ui = update_ui
         self._set_automation_enabled = set_automation_enabled
 
     ##########
@@ -334,7 +328,7 @@ class Api(octoprint.plugin.BlueprintPlugin):
 
     @octoprint.plugin.BlueprintPlugin.route("/update", methods=["POST"])
     def update_ui(self) -> Response:
-        self._update_ui()
+        self._control_loop.update_ui()
         return make_response("", 204)
 
     @octoprint.plugin.BlueprintPlugin.route("/shell/<int:action_id>", methods=["POST"])

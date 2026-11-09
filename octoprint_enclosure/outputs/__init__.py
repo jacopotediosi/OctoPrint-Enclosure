@@ -1,5 +1,6 @@
 from .base import Output, OutputError, Switchable
 from .color import ColorSetpoint
+from .config import OutputType
 from .ledstrip import LedstripOutput
 from .neopixel_direct import NeopixelDirectOutput
 from .neopixel_indirect import NeopixelIndirectOutput
@@ -17,6 +18,7 @@ __all__ = [
     "Output",
     "OutputError",
     "OutputSetpointConfig",
+    "OutputType",
     "Outputs",
     "PwmOutput",
     "PwmSetpoint",

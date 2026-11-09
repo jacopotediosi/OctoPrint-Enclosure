@@ -109,8 +109,8 @@ class _WaitForTemperature(_Message):
 
 
 @dataclass(frozen=True)
-class _UpdateUiTargets(_Message):
-    """The UI asks for the targets of the thermostats."""
+class _UpdateUi(_Message):
+    """The UI has to receive the state of everything."""
 
 
 @dataclass(frozen=True)
@@ -295,9 +295,9 @@ class ControlLoop:
         """
         self._put(_WaitForTemperature(index_id))
 
-    def update_ui_targets(self) -> None:
-        """Update the targets of the thermostats in the UI."""
-        self._put(_UpdateUiTargets())
+    def update_ui(self) -> None:
+        """Update the UI."""
+        self._put(_UpdateUi())
 
     def _put(self, message: _Message | AutomationEvent) -> None:
         self._queue.put(message)
@@ -363,8 +363,11 @@ class ControlLoop:
         elif isinstance(message, _WaitForTemperature):
             self._waiting_temperature.add(message.index_id)
             self._decide_thermostats(self._sensor_poller.get_readings(), None)
-        elif isinstance(message, _UpdateUiTargets):
+        elif isinstance(message, _UpdateUi):
+            self._frontend.update_readings()
+            self._frontend.update_automations()
             self._frontend.update_targets(self.get_thermostats())
+            self._output_executor.update_ui_outputs()
         elif isinstance(message, _RunRule):
             index_id = message.rule.config.index_id
             try:

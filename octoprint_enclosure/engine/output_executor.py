@@ -10,11 +10,12 @@ from octoprint_enclosure.outputs import Output, OutputError, Switchable, Thermos
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable, Iterable
+    from collections.abc import Iterable
     from typing import Any
 
     from typing_extensions import Protocol
 
+    from octoprint_enclosure.frontend import Frontend
     from octoprint_enclosure.outputs import Outputs
     from octoprint_enclosure.settings import BaseConfig
 
@@ -52,10 +53,8 @@ class OutputExecutor:
     """
 
     _outputs: Outputs
+    _frontend: Frontend
     _logger: logging.Logger
-
-    _update_ui_outputs: Callable[[], object]
-    """The function pushing the state of the outputs to the UI."""
 
     _update_ui_outputs_already_requested: bool
     """Whether an outputs UI update has already been requested."""
@@ -71,24 +70,18 @@ class OutputExecutor:
 
     _thread: threading.Thread
 
-    def __init__(
-        self,
-        outputs: Outputs,
-        logger: logging.Logger,
-        *,
-        update_ui_outputs: Callable[[], object],
-    ) -> None:
+    def __init__(self, outputs: Outputs, frontend: Frontend, logger: logging.Logger) -> None:
         """Set up the executor and start executing.
 
         Args:
             outputs (Outputs): The outputs.
+            frontend (Frontend): The frontend handler.
             logger (logging.Logger): The logger to write to.
-            update_ui_outputs (Callable[[], object]): The function pushing the state of the outputs to the UI.
 
         """
         self._outputs = outputs
+        self._frontend = frontend
         self._logger = logger.getChild("OutputExecutor")
-        self._update_ui_outputs = update_ui_outputs
         self._update_ui_outputs_already_requested = False
         self._shutting_down = False
         self._queue = queue.Queue()
@@ -287,7 +280,7 @@ class OutputExecutor:
         def update_ui_outputs() -> None:
             self._update_ui_outputs_already_requested = False
             try:
-                self._update_ui_outputs()
+                self._frontend.update_outputs()
             except Exception:
                 self._logger.exception("Error updating the outputs in the UI")
 
