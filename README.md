@@ -196,6 +196,8 @@ You have the ability to add a filament sensor to the enclosure: when you run out
 
 http://www.thingiverse.com/thing:1698397
 
+The end of the filament counts once per change: the sensor fires again only after the filament has been in place for 90 seconds, and it does not fire while the print is paused in OctoPrint.
+
 ## Plugin configuration
 
 You need to enable what do you want the plugin to control. Settings from plugin version < 3.6 are not compatible anymore, you will loose all settings after upgrading the plugin.
@@ -229,9 +231,7 @@ Temperature Sensors will be used to input temperature and humidity data, they ca
 
 GPIO inputs will trigger events for the plugin, this feature can be used to add buttons to the enclosure and cause pressing those buttons to act on the printer or other pre-configured outputs.
 
-After selecting GPIO for the input type, and selecting output control on the action type, the button will be able to turn on / off or toggle linked regular_gpio outputs, basically being able to control your lights / fan using mechanical buttons instead of the octoprint interface. You can also use buttons to send g-code commands.
-
-Selecting print control on the action type will trigger printer actions when the configured GPIO receives a signal. The actions can be Resume and Pause a print job or Change Filament. You can use the "change filament" action and set up the input GPIO according to your filament sensor, for example, if your filament sensor connects to ground when detects the end of the filament, you should choose PULL UP resistors and detect the event on the falling edge.
+A GPIO input starts automations. A rule can turn on, turn off or toggle an output, so mechanical buttons can control your lights or fan instead of the OctoPrint interface, run a G-code or shell action, or pause, resume and cancel the print. A Filament Sensor automation runs the action you choose when the input detects the end of the filament: set up the input according to your sensor, for example, if it connects to ground when the filament runs out, choose pull-up resistors and the falling edge.
 You can also add mechanical buttons to pause, resume and change filaments near your printer for convenience.
 
 ## Advanced Area

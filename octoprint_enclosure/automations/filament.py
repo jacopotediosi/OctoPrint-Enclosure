@@ -17,6 +17,9 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
+MIN_PRESENCE_SECONDS = 90
+"""The seconds the filament has to be present before its end counts."""
+
 
 @dataclass(frozen=True)
 class FilamentConfig(AutomationConfig):
@@ -24,9 +27,6 @@ class FilamentConfig(AutomationConfig):
 
     action: int = REQUIRED
     """The id of the action run when the filament ends."""
-
-    filament_sensor_timeout: int = REQUIRED
-    """The seconds after an end of the filament during which another end is ignored."""
 
 
 class FilamentAutomation(Automation[FilamentConfig]):
@@ -37,11 +37,8 @@ class FilamentAutomation(Automation[FilamentConfig]):
     _trigger: GpioInputTrigger
     """The GPIO input of the sensor, with the edge that means that the filament is missing."""
 
-    _armed: bool
-    """Whether the automation is actually watching for the end of the filament."""
-
-    _last_detection_time: float
-    """When the end of the filament was last detected, as a timestamp, or 0 if not since the detection was armed."""
+    _present_since: float | None
+    """When the filament was last found present, as a time.monotonic() timestamp, or None while it is missing."""
 
     def __init__(self, config: FilamentConfig, trigger: GpioInputTrigger, logger: logging.Logger) -> None:
         """Set up the filament detection automation.
@@ -55,8 +52,7 @@ class FilamentAutomation(Automation[FilamentConfig]):
         """
         super().__init__(config, logger)
         self._trigger = trigger
-        self._armed = False
-        self._last_detection_time = 0
+        self._present_since = None
 
     @property
     @override
@@ -89,35 +85,40 @@ class FilamentAutomation(Automation[FilamentConfig]):
         """
         return self.trigger.matches(GpioEdgeEvent(self.trigger.config.input, level))
 
-    @property
-    def is_armed(self) -> bool:
-        """Whether the automation is actually watching for the end of the filament."""
-        return self._armed
+    def update_filament_presence(self, level: int) -> None:
+        """Update since when the filament is present from a level of the input of the sensor.
 
-    def arm(self) -> None:
-        """Start detecting the end of the filament."""
-        self._armed = True
-        self._last_detection_time = 0
-
-    def disarm(self) -> None:
-        """Stop detecting the end of the filament."""
-        self._armed = False
-
-    def detect_end(self) -> bool:
-        """Check whether the filament ended.
-
-        Returns:
-            bool: Whether the filament ended.
+        Args:
+            level (int): The level of the input, 1 if high or 0 if low.
 
         """
-        if not self._armed or not self.enabled:
+        if self.is_filament_missing(level):
+            self._present_since = None
+        elif self._present_since is None:
+            self._present_since = time.monotonic()
+
+    def detect_filament_end(self, *, printing: bool) -> bool:
+        """Check whether the filament ended, when the input of the sensor has the edge that means that it is missing.
+
+        Args:
+            printing (bool): Whether OctoPrint is printing, and not paused.
+
+        Returns:
+            bool: Whether the filament ended: only while printing, and only if the filament was present for
+                MIN_PRESENCE_SECONDS, otherwise a change of the filament is still going on.
+
+        """
+        present_since = self._present_since
+        self._present_since = None
+        if not self.enabled or not printing or present_since is None:
             return False
 
-        now = time.time()
-        if int(now - self._last_detection_time) <= self.config.filament_sensor_timeout:
-            self._logger.info("Prevented end of filament detection, filament sensor timeout not elapsed.")
+        if time.monotonic() - present_since < MIN_PRESENCE_SECONDS:
+            self._logger.info(
+                "Ignored the end of the filament: it was present for less than %s seconds.",
+                MIN_PRESENCE_SECONDS,
+            )
             return False
 
         self._logger.info("Detected end of filament.")
-        self._last_detection_time = now
         return True

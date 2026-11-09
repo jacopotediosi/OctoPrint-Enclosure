@@ -346,11 +346,6 @@ class ControlLoop:
         elif isinstance(message, _SettingsLoaded):
             self._load_thermostats()
             self._frontend.update_targets(self.get_thermostats())
-
-            # While printing every filament automation has to watch, the new ones too
-            if self._printer.is_printing():
-                self._start_filament_detection()
-
             self._decide_continuous()
         elif isinstance(message, _ThermostatTargetChanged):
             thermostat = self._thermostats.get(message.index_id)
@@ -453,6 +448,7 @@ class ControlLoop:
         self._decide_thermostats(readings, None)
         self._decide_pwm_linked_temperature(readings, None)
         self._decide_toggle_timers()
+        self._read_filament_sensors(pause_if_missing=False)
 
     def _decide_thermostats(self, readings: Mapping[int, Reading], sensor_id: int | None) -> None:
         try:
@@ -636,32 +632,39 @@ class ControlLoop:
 
     def _detect_filament_end(self, automation: FilamentAutomation, input_id: int, input_label: str) -> None:
         try:
-            if automation.detect_end():
-                try:
-                    self._actions.run(automation.config.action)
-                except ActionError as error:
-                    self._logger.debug("Can't run action %s: %s", automation.config.action, error)
-                else:
-                    self._notifications.send(
-                        NotificationType.FILAMENT_CHANGE,
-                        f"Filament change action caused by sensor: {input_label}",
-                    )
+            printing = bool(self._printer.is_printing() and not self._printer.is_paused())
+            if not automation.detect_filament_end(printing=printing):
+                return
+
+            try:
+                self._actions.run(automation.config.action)
+            except ActionError as error:
+                self._logger.warning(
+                    "Filament sensor %s detected the end of the filament, but its action %s can't run: %s",
+                    automation.config.index_id,
+                    automation.config.action,
+                    error,
+                )
+            else:
+                self._notifications.send(
+                    NotificationType.FILAMENT_CHANGE,
+                    f"Filament change action caused by sensor: {input_label}",
+                )
         except Exception:
             self._logger.exception("Error handling filament detection of input %s", input_id)
 
     def _decide_octoprint_event(self, event: OctoprintEvent) -> None:
         if event.name == Events.PRINT_STARTED:
             self._print_job_running = True
-            self._start_filament_detection()
+            self._read_filament_sensors(pause_if_missing=True)
         elif event.name == Events.PRINT_RESUMED:
             self._waiting_temperature.clear()
-            self._start_filament_detection()
+            self._read_filament_sensors(pause_if_missing=True)
         elif event.name == Events.PRINT_PAUSED:
             self._decide_waiting_print()
         elif event.name in (Events.PRINT_DONE, Events.PRINT_CANCELLED, Events.PRINT_FAILED):
             self._print_job_running = False
             self._waiting_temperature.clear()
-            self._stop_filament_detection()
 
         # The automation conditions depend on the print job: decide the continuous automations again when it changes
         if event.name in (
@@ -678,12 +681,9 @@ class ControlLoop:
             if isinstance(automation, RuleAutomation):
                 self._react(automation, None)
 
-    def _start_filament_detection(self) -> None:
+    def _read_filament_sensors(self, *, pause_if_missing: bool) -> None:
         try:
-            # The disabled sensors too: they follow the print like the others, and detect as soon as they are enabled
             for automation in self._automations.get_all(FilamentAutomation, include_disabled=True):
-                automation.disarm()
-
                 input_id = automation.trigger.config.input
 
                 try:
@@ -692,17 +692,12 @@ class ControlLoop:
                     self._logger.debug("Can't read GPIO input %s: %s", input_id, error)
                     continue
 
-                if automation.enabled and automation.is_filament_missing(level):
+                automation.update_filament_presence(level)
+                if pause_if_missing and automation.enabled and automation.is_filament_missing(level):
                     self._printer.pause_print()
                     self._logger.info("Started printing with no filament.")
-                else:
-                    automation.arm()
         except Exception:
-            self._logger.exception("Error starting filament detection")
-
-    def _stop_filament_detection(self) -> None:
-        for automation in self._automations.get_all(FilamentAutomation, include_disabled=True):
-            automation.disarm()
+            self._logger.exception("Error reading the filament sensors")
 
     def _decide_toggle_timers(self) -> None:
         try:

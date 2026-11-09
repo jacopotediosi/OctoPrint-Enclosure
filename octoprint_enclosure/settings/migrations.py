@@ -216,8 +216,6 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
                 automation["show_in_tab"] = True
                 if "filament_sensor_enabled" in moved:
                     automation["enabled"] = moved["filament_sensor_enabled"]
-                if "filament_sensor_timeout" in moved:
-                    automation["filament_sensor_timeout"] = moved["filament_sensor_timeout"]
             elif action_type == "printer_control" and printer_action == "stop_temp_hum_control":
                 reactions = [
                     {"reaction_type": "output_control", "controlled_io": index_id, "controlled_io_set_state": "off"}
@@ -557,7 +555,6 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "enabled",
             "show_in_tab",
             "action",
-            "filament_sensor_timeout",
             "output",
             "temperature_a",
             "duty_a",
@@ -577,7 +574,6 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
         # strictly, so these get 0.
         number_keys_by_type = {
             "temp_hum_control": ("temp_ctr_deadband", "temp_ctr_max_temp"),
-            "filament": ("filament_sensor_timeout",),
             "pwm_temperature_linked": ("temperature_a", "duty_a", "temperature_b", "duty_b"),
             "toggle_timer": ("toggle_timer_on", "toggle_timer_off"),
         }
@@ -607,7 +603,6 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "enabled": True,
             "show_in_tab": False,
             "action": "",
-            "filament_sensor_timeout": 120,
             "output": "",
             "temperature_a": 0,
             "duty_a": 0,

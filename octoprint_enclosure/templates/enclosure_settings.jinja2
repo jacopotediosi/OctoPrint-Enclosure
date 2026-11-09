@@ -488,7 +488,6 @@
         </div>
         <div data-bind="if: automation_type() == 'filament'">
             {{ select_control_group("action", _("Action"), "$root.settingsViewModel.settings.plugins.enclosure.actions", "Action run when the sensor detects the end of the filament, for example a G-code action that changes the filament or a printer action that pauses the print. Configured on the actions side of the plugin.", placeholder="Select Action") }}
-            {{ text_control_group("filament_sensor_timeout", _("Filament detection timeout"), "Time in seconds that filament sensor will be inactive after sensing end of filament. This is to avoid sending multiple commands to the printer.") }}
         </div>
         <div class="control-group">
             <a title="Delete Automation"
