@@ -192,7 +192,7 @@ You can get a [USB Mini Desktop Fan](https://www.amazon.com/gp/product/B00WM7TRT
 
 ### Filament sensor
 
-You have the ability to add a filament sensor to the enclosure, it will automatically pause the print and run a gcode command to change the filament if you run out of filament, I can be any type of filament sensor, the sensor should connect to ground if is set as an "active low" when the filament run out or 3.3v if the sensor is set as "active high" when detected the end of filament, it does not matter if it is normally open or closed, that will only interfere on your wiring. I'm using the following sensor:
+You have the ability to add a filament sensor to the enclosure: when you run out of filament during a print, it runs the action you choose, for example a G-code action that changes the filament (such as `M600`) or a printer action that pauses the print. It can be any type of filament sensor, the sensor should connect to ground if is set as an "active low" when the filament run out or 3.3v if the sensor is set as "active high" when detected the end of filament, it does not matter if it is normally open or closed, that will only interfere on your wiring. I'm using the following sensor:
 
 http://www.thingiverse.com/thing:1698397
 

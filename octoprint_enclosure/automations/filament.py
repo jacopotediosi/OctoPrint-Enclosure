@@ -20,14 +20,17 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class FilamentConfig(AutomationConfig):
-    """The configuration of an automation that changes the filament when a sensor detects its end."""
+    """The configuration of an automation that runs an action when a sensor detects the end of the filament."""
+
+    action: int = REQUIRED
+    """The id of the action run when the filament ends."""
 
     filament_sensor_timeout: int = REQUIRED
     """The seconds after an end of the filament during which another end is ignored."""
 
 
 class FilamentAutomation(Automation[FilamentConfig]):
-    """An automation that changes the filament when a sensor detects its end."""
+    """An automation that runs an action when a sensor detects the end of the filament."""
 
     config_class = FilamentConfig
 

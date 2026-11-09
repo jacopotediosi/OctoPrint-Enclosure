@@ -647,6 +647,7 @@ $(function () {
         at: ko.observable(""),
         conditions: ko.observableArray([]),
         reactions: ko.observableArray([self.newReaction()]),
+        action: ko.observable(""),
         filament_sensor_timeout: ko.observable(120),
         output: ko.observable(""),
         toggle_timer_on: ko.observable(0),

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from octoprint.events import Events
 
-from octoprint_enclosure.actions import ActionError, GcodeAction, GcodeConfig, PrinterAction
+from octoprint_enclosure.actions import ActionError, GcodeAction, PrinterAction
 from octoprint_enclosure.automations import (
     AutomationError,
     AutomationEvent,
@@ -637,13 +637,15 @@ class ControlLoop:
     def _detect_filament_end(self, automation: FilamentAutomation, input_id: int, input_label: str) -> None:
         try:
             if automation.detect_end():
-                gcode_config = GcodeConfig(self._settings.filament_sensor_gcode)
-                gcode_logger = self._logger.getChild("GcodeAction")
-                GcodeAction(gcode_config, self._printer, self._frontend, gcode_logger).run()
-                self._notifications.send(
-                    NotificationType.FILAMENT_CHANGE,
-                    f"Filament change action caused by sensor: {input_label}",
-                )
+                try:
+                    self._actions.run(automation.config.action)
+                except ActionError as error:
+                    self._logger.debug("Can't run action %s: %s", automation.config.action, error)
+                else:
+                    self._notifications.send(
+                        NotificationType.FILAMENT_CHANGE,
+                        f"Filament change action caused by sensor: {input_label}",
+                    )
         except Exception:
             self._logger.exception("Error handling filament detection of input %s", input_id)
 

@@ -141,6 +141,46 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             if rpi_output.get("output_type") == "temp_hum_control"
             and (rpi_output.get("temp_ctr_type") == "heater" or rpi_output.get("auto_shutdown"))
         ]
+        # Up to version 10, the global filament_sensor_gcode setting key held the G-code that every filament sensor
+        # sent. From version 11 a filament sensor runs an action: the G-code becomes a G-code action.
+        filament_action_id = None
+        if any(
+            rpi_input.get("input_type") == "gpio"
+            and rpi_input.get("action_type") == "printer_control"
+            and rpi_input.get("printer_action") == "filament"
+            for rpi_input in rpi_inputs
+        ):
+            filament_action_id = next_action_id
+            gcode = settings.get(["filament_sensor_gcode"])
+            if gcode is None:
+                # The key is missing when the G-code was never changed. The one below was the default of version 10.
+                gcode = (
+                    "G91  ;Set Relative Mode \n"
+                    "G1 E-5.000000 F500 ;Retract 5mm\n"
+                    "G1 Z15 F300         ;move Z up 15mm\n"
+                    "G90            ;Set Absolute Mode\n "
+                    "G1 X20 Y20 F9000      ;Move to hold position\n"
+                    "G91            ;Set Relative Mode\n"
+                    "G1 E-40 F500      ;Retract 40mm\n"
+                    "M0            ;Idle Hold\n"
+                    "G90            ;Set Absolute Mode\n"
+                    "G1 F5000         ;Set speed limits\n"
+                    "G28 X0 Y0         ;Home X Y\n"
+                    "M82            ;Set extruder to Absolute Mode\n"
+                    "G92 E0         ;Set Extruder to 0"
+                )
+            actions.append(
+                {
+                    "index_id": next_action_id,
+                    "label": "Filament change",
+                    "action_type": "gcode_output",
+                    "gcode": gcode,
+                    "hide_btn_ui": True,
+                    "show_on_navbar": False,
+                },
+            )
+            next_action_id += 1
+        settings.remove(["filament_sensor_gcode"])
         for rpi_input in rpi_inputs:
             moved = {key: rpi_input.pop(key) for key in input_keys if key in rpi_input}
             action_type = moved.get("action_type", "")
@@ -172,6 +212,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             if action_type == "printer_control" and printer_action == "filament":
                 # A filament sensor is an automation of its own type, not a rule
                 automation["automation_type"] = "filament"
+                automation["action"] = filament_action_id
                 automation["show_in_tab"] = True
                 if "filament_sensor_enabled" in moved:
                     automation["enabled"] = moved["filament_sensor_enabled"]
@@ -515,6 +556,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "conditions",
             "enabled",
             "show_in_tab",
+            "action",
             "filament_sensor_timeout",
             "output",
             "temperature_a",
@@ -564,6 +606,7 @@ def migrate_settings(target: int, current: int | None, settings: PluginSettings,
             "conditions": [],
             "enabled": True,
             "show_in_tab": False,
+            "action": "",
             "filament_sensor_timeout": 120,
             "output": "",
             "temperature_a": 0,

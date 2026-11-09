@@ -327,9 +327,10 @@
             </span>
             <span class="help-inline"
                   data-bind="visible: automation_type() == 'filament'">
-                <span class="label label-info">Info:</span> Sends the Filament Change Gcode of the advanced options when the sensor detects the end of the
-                filament during a print. Set up the input GPIO according to your sensor, for example, if your filament sensor connects to ground
-                when detects the end of the filament, you should choose PULL UP resistors and detect the event on the falling edge.
+                <span class="label label-info">Info:</span> Runs the selected action when the sensor detects the end of the filament during a print, for
+                example a G-code action that changes the filament or a printer action that pauses the print. Set up the input GPIO according to
+                your sensor, for example, if your filament sensor connects to ground when detects the end of the filament, you should choose
+                PULL UP resistors and detect the event on the falling edge.
             </span>
             <span class="help-inline"
                   data-bind="visible: automation_type() == 'pwm_temperature_linked'">
@@ -486,6 +487,7 @@
             </div>
         </div>
         <div data-bind="if: automation_type() == 'filament'">
+            {{ select_control_group("action", _("Action"), "$root.settingsViewModel.settings.plugins.enclosure.actions", "Action run when the sensor detects the end of the filament, for example a G-code action that changes the filament or a printer action that pauses the print. Configured on the actions side of the plugin.", placeholder="Select Action") }}
             {{ text_control_group("filament_sensor_timeout", _("Filament detection timeout"), "Time in seconds that filament sensor will be inactive after sensing end of filament. This is to avoid sending multiple commands to the printer.") }}
         </div>
         <div class="control-group">
@@ -523,14 +525,6 @@
                 <a href="https://github.com/jacopotediosi/OctoPrint-Enclosure">github</a> page</span>
         {% endcall %}
         {{ select_control_group("temperature_unit", _("Temperature Unit"), [("celsius", "Celsius (°C)"), ("fahrenheit", "Fahrenheit (°F)")], "Unit of every temperature shown and entered in the plugin") }}
-        <div class="control-group">
-            <label class="control-label">{{ _("Filament Change Gcode") }}</label>
-            <div class="controls">
-                <textarea rows="4" class="block" data-bind="value: filament_sensor_gcode"></textarea>
-                <span class="help-inline">GCODE that will be sent to the printer to pause and allow filament to be changed. You should add
-                    <code>ENTER</code> to the end of every line sent to the printer</span>
-            </div>
-        </div>
         {{ select_control_group("notification_provider", _("Notification Provider"), [("", "Disabled"), ("ifttt", "IFTTT")]) }}
         <div data-bind="if: notification_provider() == 'ifttt'">
             {{ text_control_group("notification_event_name", _("Event Name"), "Event name that was configured on the maker channel of IFTTT, don't use space between the words") }}

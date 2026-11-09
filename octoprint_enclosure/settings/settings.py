@@ -100,7 +100,7 @@ class Settings:
         return True
 
     ##########
-    ### Temperatures
+    ### Temperature unit
     ##########
 
     @property
@@ -112,18 +112,13 @@ class Settings:
             return TemperatureUnit.CELSIUS
 
     ##########
-    ### G-code
+    ### G-code commands
     ##########
 
     @property
     def gcode_control(self) -> bool:
         """Whether the outputs can be controlled through the ENC G-code command."""
         return bool(self._settings.get_boolean(["gcode_control"]))
-
-    @property
-    def filament_sensor_gcode(self) -> str:
-        """The G-code sent to the printer when a filament sensor detects the end of the filament."""
-        return self._settings.get(["filament_sensor_gcode"]) or ""
 
     ##########
     ### Notifications

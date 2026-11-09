@@ -403,21 +403,6 @@ class EnclosurePlugin(
             "actions": [],
             "automations": [],
             "temperature_unit": "celsius",
-            "filament_sensor_gcode": (
-                "G91  ;Set Relative Mode \n"
-                "G1 E-5.000000 F500 ;Retract 5mm\n"
-                "G1 Z15 F300         ;move Z up 15mm\n"
-                "G90            ;Set Absolute Mode\n "
-                "G1 X20 Y20 F9000      ;Move to hold position\n"
-                "G91            ;Set Relative Mode\n"
-                "G1 E-40 F500      ;Retract 40mm\n"
-                "M0            ;Idle Hold\n"
-                "G90            ;Set Absolute Mode\n"
-                "G1 F5000         ;Set speed limits\n"
-                "G28 X0 Y0         ;Home X Y\n"
-                "M82            ;Set extruder to Absolute Mode\n"
-                "G92 E0         ;Set Extruder to 0"
-            ),
             "gcode_control": False,
             "notification_provider": "",
             "notification_api_key": "",
