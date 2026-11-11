@@ -10,7 +10,7 @@ from octoprint_enclosure.outputs import Output, OutputError, Switchable, Thermos
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
     from typing import Any
 
     from typing_extensions import Protocol
@@ -265,6 +265,19 @@ class OutputExecutor:
     def update_ui_outputs(self) -> None:
         """Update the outputs in the UI once the commands queued so far are executed."""
         self._submit(self._queue_update_ui_outputs, wait=False)
+
+    def run_after_commands(self, callback: Callable[[], object]) -> None:
+        """Call a function once the commands queued so far are executed.
+
+        Args:
+            callback (Callable[[], object]): The function to call, on the thread of the executor.
+
+        """
+
+        def run_after_commands() -> None:
+            callback()
+
+        self._submit(run_after_commands, wait=False)
 
     def _get_switchable(self, index_id: int, setpoint: BaseConfig | None = None) -> Switchable:
         output = self._outputs.get(index_id, Output)

@@ -514,7 +514,11 @@ $(function () {
       }
 
       if(self.isNumeric(newSetTemperature)){
-        OctoPrint.patchJson(self.buildPluginUrl("temperature/" + item.index_id()), {temperature: parseFloat(newSetTemperature)})
+        var target = parseFloat(newSetTemperature);
+        if (item.temp_ctr_type() != "dehumidifier") {
+          target = self.toCelsius(target);
+        }
+        OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), {target: target})
           .done(function () {
             item.temp_ctr_new_set_value("");
           })
@@ -725,7 +729,7 @@ $(function () {
     };
 
     self.turnOffHeater = function (item) {
-      OctoPrint.patchJson(self.buildPluginUrl("temperature/" + item.index_id()), {temperature: null});
+      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), {target: null});
     };
 
     self.getUpdateUI = function () {
@@ -733,19 +737,19 @@ $(function () {
     };
 
     self.handleIO = function (item, form) {
-      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), {status: !item.gpio_status()});
+      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), {on: !item.gpio_status()});
     };
 
     self.handleGcode = function (item, form) {
-      OctoPrint.post(self.buildPluginUrl("gcode/" + item.index_id()));
+      OctoPrint.post(self.buildPluginUrl("actions/" + item.index_id() + "/run"));
     };
 
     self.handleShellOutput = function (item, form) {
-      OctoPrint.post(self.buildPluginUrl("shell/" + item.index_id()));
+      OctoPrint.post(self.buildPluginUrl("actions/" + item.index_id() + "/run"));
     };
 
     self.handlePrinterAction = function (item, form) {
-      OctoPrint.post(self.buildPluginUrl("printer/" + item.index_id()));
+      OctoPrint.post(self.buildPluginUrl("actions/" + item.index_id() + "/run"));
     };
 
     self.switchAutomation = function (item) {
@@ -767,7 +771,7 @@ $(function () {
           type: "error"
         });
       } else {
-        OctoPrint.patchJson(self.buildPluginUrl("pwm/" + item.index_id()), {duty_cycle: pwm_value})
+        OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), {duty_cycle: pwm_value})
           .done(function () {
             item.new_duty_cycle("");
           });
@@ -795,7 +799,7 @@ $(function () {
           type: "error"
         });
       } else {
-        OctoPrint.patchJson(self.buildPluginUrl("neopixel/" + index), {red: r, green: g, blue: b})
+        OctoPrint.patchJson(self.buildPluginUrl("outputs/" + index), {color: rgbToHex(or_tempStr)})
           .done(function () {
             item.new_neopixel_color("");
           });
@@ -821,7 +825,7 @@ $(function () {
           type: "error"
         });
       } else {
-        OctoPrint.patchJson(self.buildPluginUrl("rgb-led/" + index), {rgb: or_tempStr})
+        OctoPrint.patchJson(self.buildPluginUrl("outputs/" + index), {color: rgbToHex(or_tempStr)})
           .done(function () {
             item.new_ledstrip_color("");
           });

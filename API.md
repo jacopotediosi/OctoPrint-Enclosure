@@ -1,25 +1,14 @@
-# API Reference v2.0
+# API Reference
 
 The API is located at \<OctoPrintURL>/plugin/enclosure. This needs to be added before each endpoint in order for the API to function properly. The API either returns a `application/json` body or an empty body for a successful request.
 
-A failed request will return an error code as well as a short error description.
+A failed request returns an error code and the body `{"errors": [string]}`, with one message for each problem found.
 
 ## List all inputs
 
 Endpoint: **GET** `/inputs`
 
-Response (200):
-
-```
-[
-    {
-        "index_id": number,
-        "label": string,
-        "GPIO_Pin": number (null for non-GPIO inputs),
-        "State": string ("ON", "OFF" or "ERROR: Unable to read pin"; null for non-GPIO inputs)
-    }
-]
-```
+Response (200): the inputs, ordered by id, each as in **GET** `/inputs/<id>`.
 
 Error Responses:
  - none
@@ -28,52 +17,36 @@ Error Responses:
 
 Endpoint: **GET** `/inputs/<id>`
 
-*Note: id needs to be int (index_id)*
-
-Response (200):
+Response (200), for an input with a temperature sensor:
 ```
 {
-    "temp_sensor_address": string,
-    "temp_sensor_type": string,
-    "temp_sensor_i2cbus": number,
-    "temp_i2c_bus": number,
-    "temp_i2c_address": number,
-    "temp_i2c_register": number,
-    "show_graph_temp": boolean,
-    "show_graph_humidity": boolean,
-    "temp_sensor_navbar": boolean,
-    "temp_sensor_humidity": number, or "" without a reading,
-    "ds18b20_serial": string,
-    "input_pull_resistor": string,
-    "input_type": string,
-    "temp_sensor_temp": number (in the temperature unit of the plugin settings), or "" without a reading,
+    "id": number,
+    "type": "temperature_sensor",
     "label": string,
-    "index_id": number,
-    "use_fahrenheit": boolean (whether the temperature unit of the plugin settings is Fahrenheit),
-    "gpio_pin": string
+    "temperature": number (in Celsius), or null if the sensor has none,
+    "humidity": number (relative, in percent), or null if the sensor has none,
+    "air_quality": number, or null if the sensor has none
+}
+```
+
+Response (200), for a GPIO input:
+```
+{
+    "id": number,
+    "type": "gpio",
+    "label": string,
+    "active": boolean (with a pull-up resistor the input is active when its pin is low), or null if the pin can't be read
 }
 ```
 
 Error Responses:
- - 404 if specified id cannot be found
+ - 404 if no input is set up with that id
 
 ## List all outputs
 
 Endpoint: **GET** `/outputs`
 
-*Note: lists the regular outputs only*
-
-Response (200):
-```
-[
-    {
-        "index_id": number,
-        "label": string,
-        "GPIO_Pin": number,
-        "State": string ("ON", "OFF" or "ERROR: Unable to read pin")
-    }
-]
-```
+Response (200): the outputs that are set up, ordered by id, each as in **GET** `/outputs/<id>`.
 
 Error Responses:
  - none
@@ -82,94 +55,141 @@ Error Responses:
 
 Endpoint: **GET** `/outputs/<id>`
 
-*Note: id needs to be int (index_id)*
+Response (200), for a regular output:
+```
+{
+    "id": number,
+    "type": "regular",
+    "label": string,
+    "on": boolean, or null if the output can't be read
+}
+```
 
+Response (200), for a PWM output:
+```
+{
+    "id": number,
+    "type": "pwm",
+    "label": string,
+    "on": boolean, or null if the output can't be read,
+    "duty_cycle": number (0-100)
+}
+```
+
+Response (200), for an output that has a color (e.g. an RGB LED strip, a NeoPixel, etc.):
+```
+{
+    "id": number,
+    "type": string ("ledstrip", "neopixel_direct" or "neopixel_indirect"),
+    "label": string,
+    "on": boolean, or null if the output can't be read,
+    "color": string ("#rrggbb")
+}
+```
+
+Response (200), for a thermostat:
+```
+{
+    "id": number,
+    "type": "temp_hum_control",
+    "label": string,
+    "on": boolean (whether its device, like a heater, is on), or null if the output can't be read,
+    "target": number (the temperature in Celsius, or the relative humidity in percent), or null if the thermostat is off,
+    "measurement": string ("temperature" or "humidity")
+}
+```
+
+Error Responses:
+ - 404 if no output is set up with that id
+
+## Control an output
+
+Endpoint: **PATCH** `/outputs/<id>`
+
+Body (Content-Type: `application/json`), with exactly one of these attributes:
+```
+{
+    "on": boolean (false turns any output off; true turns on a regular output only),
+    "duty_cycle": number (0-100; for a PWM output),
+    "color": string ("#rrggbb"; for an output that has a color, e.g. an RGB LED strip, a NeoPixel, etc.),
+    "target": number (the temperature in Celsius, or the relative humidity in percent; for a thermostat), or null to turn the thermostat off
+}
+```
+
+Response (200): the output, as in **GET** `/outputs/<id>`.
+
+Error Responses:
+- 415 - Content-Type is not application/json
+- 400 - malformed JSON
+- 422 - body is not a JSON object, or its attributes are unknown, missing, invalid or not valid for the type of the output
+- 404 - no output is set up with that id
+
+## List all actions
+
+Endpoint: **GET** `/actions`
+
+Response (200): the actions, ordered by id, each as in **GET** `/actions/<id>`.
+
+Error Responses:
+ - none
+
+## Get an action
+
+Endpoint: **GET** `/actions/<id>`
 
 Response (200):
 ```
 {
-    "linked_temp_sensor": string,
-    "ledstrip_gpio_dat": string,
-    "temp_ctr_deadband": number (in the temperature unit of the plugin settings, or humidity for a dehumidifier),
-    "neopixel_brightness": number,
-    "gpio_pin": number,
-    "gpio_i2c_enabled": boolean,
-    "gpio_i2c_bus": number,
-    "gpio_i2c_address": number,
-    "gpio_i2c_register": number,
-    "gpio_i2c_data_on": number,
-    "gpio_i2c_data_off": number,
-    "gpio_i2c_register_status": number,
-    "neopixel_color": string,
-    "hide_btn_ui": boolean,
-    "temp_ctr_set_value": number, or null if the thermostat is off,
+    "id": number,
+    "type": string ("gcode_output", "shell_output" or "printer"),
+    "label": string
+}
+```
+
+Error Responses:
+ - 404 if no action is set up with that id
+
+## Run an action
+
+Endpoint: **POST** `/actions/<id>/run`
+
+Body: empty
+
+Response (204): No-Content
+
+Error Responses:
+- 404 - no action is set up with that id
+- 409 - the action can't be run, because its settings are not valid
+
+## List all automations
+
+Endpoint: **GET** `/automations`
+
+Response (200): the automations, ordered by id, each as in **GET** `/automations/<id>`.
+
+Error Responses:
+ - none
+
+## Get an automation
+
+Endpoint: **GET** `/automations/<id>`
+
+Response (200):
+```
+{
+    "id": number,
+    "type": string ("rule", "filament", "pwm_temperature_linked" or "toggle_timer"),
     "label": string,
-    "ledstrip_gpio_clk": string,
-    "temp_ctr_type": string,
-    "current_value": boolean,
-    "ledstrip_color": string,
-    "neopixel_count": number,
-    "neopixel_dma": number,
-    "duty_cycle": number,
-    "show_on_navbar": boolean,
-    "gpio_status": boolean,
-    "pwm_frequency": number,
-    "active_low": boolean,
-    "temp_ctr_max_temp": number (in the temperature unit of the plugin settings), or null if the thermostat has no maximum,
-    "output_type": string,
-    "microcontroller_address": number,
-    "index_id": number
+    "enabled": boolean
 }
 ```
 
 Error Responses:
- - 404 if no output has the specified id
-
-## Switch an output
-
-Endpoint: **PATCH** `/outputs/<id>`
-
-*Note: id needs to be int (index_id)*
-
-Body (Content-Type: `application/json`):
-```
-{
-    "status": boolean
-}
-```
-
-Response (204): No-Content
-
-Error Responses:
-- 415 - Content-Type is not application/json
-- 400 - malformed JSON
-- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
-
-## Set the target of a thermostat
-
-Endpoint: **PATCH** `/temperature/<id>`
-
-*Note: id needs to be int (index_id) of a thermostat output*
-
-Body (Content-Type: `application/json`):
-```
-{
-    "temperature": number (the target temperature in the temperature unit of the plugin settings, or humidity for a dehumidifier), or null to turn the thermostat off
-}
-```
-
-Response (204): No-Content
-
-Error Responses:
-- 415 - Content-Type is not application/json
-- 400 - malformed JSON
-- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
+ - 404 if no automation is set up with that id
 
 ## Enable or disable an automation
 
 Endpoint: **PATCH** `/automations/<id>`
-
-*Note: id needs to be int (index_id) of an automation*
 
 Body (Content-Type: `application/json`):
 ```
@@ -178,118 +198,17 @@ Body (Content-Type: `application/json`):
 }
 ```
 
-Response (204): No-Content
+Response (200): the automation, as in **GET** `/automations/<id>`.
 
 Error Responses:
 - 415 - Content-Type is not application/json
 - 400 - malformed JSON
-- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
-- 404 - no automation has the specified id
-
-## Set the duty cycle of a PWM output
-
-Endpoint: **PATCH** `/pwm/<id>`
-
-*Note: id needs to be int (index_id)*
-
-Body (Content-Type: `application/json`):
-```
-{
-    "duty_cycle": number (0-100)
-}
-```
-
-Response (204): No-Content
-
-Error Responses:
-- 415 - Content-Type is not application/json
-- 400 - malformed JSON
-- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
-
-## Set the color of an RGB LED strip
-
-Endpoint: **PATCH** `/rgb-led/<id>`
-
-*Note: id needs to be int (index_id)*
-
-Body (Content-Type: `application/json`):
-```
-{
-    "rgb": string ("rgb(r,g,b)", with r, g and b from 0 to 255)
-}
-```
-
-Response (204): No-Content
-
-Error Responses:
-- 415 - Content-Type is not application/json
-- 400 - malformed JSON
-- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
-
-## Set the color of a NeoPixel output
-
-Endpoint: **PATCH** `/neopixel/<id>`
-
-*Note: id needs to be int (index_id)*
-
-Body (Content-Type: `application/json`):
-```
-{
-    "red": number (0-255),
-    "green": number (0-255),
-    "blue": number (0-255)
-}
-```
-
-Response (204): No-Content
-
-Error Responses:
-- 415 - Content-Type is not application/json
-- 400 - malformed JSON
-- 422 - body is not a JSON object, or attributes are missing or invalid (all of them are listed in the response body)
+- 422 - body is not a JSON object, or its attributes are unknown, missing or invalid
+- 404 - no automation is set up with that id
 
 ## Refresh the UI
 
 Endpoint: **POST** `/update`
-
-Body: empty
-
-Response (204): No-Content
-
-Error Responses:
-- none
-
-## Run a shell action
-
-Endpoint: **POST** `/shell/<id>`
-
-*Note: id needs to be int (index_id) of a shell action*
-
-Body: empty
-
-Response (204): No-Content
-
-Error Responses:
-- none
-
-## Run a G-code action
-
-Endpoint: **POST** `/gcode/<id>`
-
-*Note: id needs to be int (index_id) of a G-code action*
-
-Body: empty
-
-Response (204): No-Content
-
-Error Responses:
-- none
-
-## Run a printer action
-
-Endpoint: **POST** `/printer/<id>`
-
-*Note: id needs to be int (index_id) of a printer action*
 
 Body: empty
 

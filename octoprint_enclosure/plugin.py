@@ -13,8 +13,6 @@ from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
 from .actions import Actions
 from .api import Api
 from .automations import (
-    Automation,
-    AutomationError,
     Automations,
     OutputControlReaction,
     OutputSetState,
@@ -160,7 +158,7 @@ class EnclosurePlugin(
         )
 
         # Init API
-        self._api = Api(self._plugin_context, set_automation_enabled=self.set_automation_enabled)
+        self._api = Api(self._plugin_context)
 
     # ~~ StartupPlugin mixin
     def on_after_startup(self):
@@ -351,18 +349,6 @@ class EnclosurePlugin(
         if wait and self._printer.is_printing():
             self._printer.pause_print()
             self._control_loop.wait_for_temperature(index_id)
-
-    def set_automation_enabled(self, index_id, enabled):
-        if not self._enclosure_settings.set_automation_enabled(index_id, enabled=enabled):
-            return False
-
-        self.automations = self._enclosure_settings.automations
-        with contextlib.suppress(AutomationError):
-            self._automations.get(index_id, Automation).enabled = enabled
-        self._logger.info("Setting automation %s enabled to %s", index_id, enabled)
-        self._control_loop.evaluate()
-        self._frontend.update_automations()
-        return True
 
     # ~~ EventPlugin mixin
     def on_event(self, event, payload):

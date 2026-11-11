@@ -1,5 +1,5 @@
 from .base import Output, OutputError, Switchable
-from .color import ColorSetpoint
+from .color import ColorOutput, ColorSetpoint
 from .config import OutputType
 from .ledstrip import LedstripOutput
 from .neopixel_direct import NeopixelDirectOutput
@@ -11,6 +11,7 @@ from .setpoint import OutputSetpointConfig
 from .thermostat import Thermostat, ThermostatDeviceType, ThermostatOutput, ThermostatSetpoint, ThermostatStatus
 
 __all__ = [
+    "ColorOutput",
     "ColorSetpoint",
     "LedstripOutput",
     "NeopixelDirectOutput",

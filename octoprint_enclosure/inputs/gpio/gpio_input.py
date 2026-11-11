@@ -83,3 +83,17 @@ class GpioInput:
 
         """
         return self._gpio.input(self.config.gpio_pin)
+
+    def is_active(self) -> bool:
+        """Check whether the input is active.
+
+        Returns:
+            bool: Whether the input is active: with a pull-up resistor when its pin is low, otherwise when its pin
+                is high.
+
+        Raises:
+            Exception: If the pin can't be read.
+
+        """
+        active_level = 0 if self.config.input_pull_resistor is PullResistor.UP else 1
+        return self.read_pin_level() == active_level

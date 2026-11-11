@@ -10,6 +10,7 @@ from octoprint.events import Events
 
 from octoprint_enclosure.actions import ActionError, GcodeAction, PrinterAction
 from octoprint_enclosure.automations import (
+    Automation,
     AutomationError,
     AutomationEvent,
     FilamentAutomation,
@@ -57,6 +58,9 @@ if TYPE_CHECKING:
 TICK_INTERVAL_SECONDS = 10
 """The seconds between two ticks, at which the loop takes the decisions again on everything."""
 
+WAIT_TIMEOUT_SECONDS = 5
+"""The maximum seconds a caller waits for the loop to apply what it asked."""
+
 ##########
 ### Messages
 ##########
@@ -99,6 +103,10 @@ class _ThermostatTargetChanged(_Message):
     target: float | None
     """The new target temperature or humidity, or None if the thermostat turned off."""
 
+    done: threading.Event | None = None
+    """Set once the target is applied and the device of the thermostat is switched, or None if nobody waits for
+    it."""
+
 
 @dataclass(frozen=True)
 class _WaitForTemperature(_Message):
@@ -106,6 +114,20 @@ class _WaitForTemperature(_Message):
 
     index_id: int
     """The id of the thermostat."""
+
+
+@dataclass(frozen=True)
+class _AutomationEnabledChanged(_Message):
+    """An automation was enabled or disabled."""
+
+    index_id: int
+    """The id of the automation."""
+
+    enabled: bool
+    """Whether the automation is enabled now."""
+
+    done: threading.Event | None = None
+    """Set once the automation is enabled or disabled, or None if nobody waits for it."""
 
 
 @dataclass(frozen=True)
@@ -267,15 +289,19 @@ class ControlLoop:
         """Take the decisions again after new settings were loaded."""
         self._put(_SettingsLoaded())
 
-    def set_thermostat_target(self, index_id: int, target: float | None) -> None:
+    def set_thermostat_target(self, index_id: int, target: float | None, *, wait: bool = False) -> None:
         """Set the target of a thermostat, and take the decisions regarding it.
 
         Args:
             index_id (int): The id of the thermostat.
             target (float | None): The target temperature or humidity, or None to turn the thermostat off.
+            wait (bool): Whether to wait until the target is applied and the device of the thermostat is switched.
 
         """
-        self._put(_ThermostatTargetChanged(index_id, target))
+        done = threading.Event() if wait else None
+        self._put(_ThermostatTargetChanged(index_id, target, done))
+        if done is not None and not done.wait(WAIT_TIMEOUT_SECONDS):
+            self._logger.warning("Target of thermostat %s not applied after %s s", index_id, WAIT_TIMEOUT_SECONDS)
 
     def get_thermostats(self) -> dict[int, Thermostat]:
         """Get the thermostats.
@@ -294,6 +320,25 @@ class ControlLoop:
 
         """
         self._put(_WaitForTemperature(index_id))
+
+    def set_automation_enabled(self, index_id: int, *, enabled: bool, wait: bool = False) -> None:
+        """Enable or disable an automation, and take the decisions again.
+
+        Args:
+            index_id (int): The id of the automation.
+            enabled (bool): Whether to enable the automation, or to disable it.
+            wait (bool): Whether to wait until the automation is enabled or disabled.
+
+        """
+        done = threading.Event() if wait else None
+        self._put(_AutomationEnabledChanged(index_id, enabled, done))
+        if done is not None and not done.wait(WAIT_TIMEOUT_SECONDS):
+            self._logger.warning(
+                "Automation %s not %s after %s s",
+                index_id,
+                "enabled" if enabled else "disabled",
+                WAIT_TIMEOUT_SECONDS,
+            )
 
     def update_ui(self) -> None:
         """Update the UI."""
@@ -348,16 +393,32 @@ class ControlLoop:
             self._frontend.update_targets(self.get_thermostats())
             self._decide_continuous()
         elif isinstance(message, _ThermostatTargetChanged):
-            thermostat = self._thermostats.get(message.index_id)
-            if thermostat is None:
-                self._logger.debug("Can't set the target of output %s: it isn't a thermostat", message.index_id)
-            else:
-                thermostat.set_target(message.target)
-                self._frontend.update_targets(self.get_thermostats())
-                self._decide_thermostats(self._sensor_poller.get_readings(), None)
+            try:
+                thermostat = self._thermostats.get(message.index_id)
+                if thermostat is None:
+                    self._logger.debug("Can't set the target of output %s: it isn't a thermostat", message.index_id)
+                else:
+                    thermostat.set_target(message.target)
+                    self._frontend.update_targets(self.get_thermostats())
+                    self._decide_thermostats(self._sensor_poller.get_readings(), None)
+            finally:
+                if message.done is not None:
+                    self._output_executor.run_after_commands(message.done.set)
         elif isinstance(message, _WaitForTemperature):
             self._waiting_temperature.add(message.index_id)
             self._decide_thermostats(self._sensor_poller.get_readings(), None)
+        elif isinstance(message, _AutomationEnabledChanged):
+            try:
+                automation = self._automations.get(message.index_id, Automation)
+            except AutomationError as error:
+                self._logger.debug("Can't enable or disable automation %s: %s", message.index_id, error)
+            else:
+                automation.enabled = message.enabled
+                self._frontend.update_automations()
+            finally:
+                if message.done is not None:
+                    message.done.set()
+            self._decide_continuous()
         elif isinstance(message, _UpdateUi):
             self._frontend.update_readings()
             self._frontend.update_automations()
