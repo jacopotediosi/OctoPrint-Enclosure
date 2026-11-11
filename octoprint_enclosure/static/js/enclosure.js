@@ -27,8 +27,8 @@ $(function () {
     init: function (element, valueAccessor, allBindings, viewModel, bindingContext) {
       ko.utils.registerEventHandler(element, "change", function () {
         var value = parseFloat(element.value);
-        if (isNaN(value) || (value === 0 && allBindings.get("temperatureZeroOff"))) {
-          valueAccessor()(isNaN(value) ? element.value : 0);
+        if (isNaN(value)) {
+          valueAccessor()(element.value.trim() === "" ? null : element.value);
           return;
         }
         var toCelsius = allBindings.get("temperatureInterval") ? bindingContext.$root.toCelsiusInterval : bindingContext.$root.toCelsius;
@@ -37,7 +37,7 @@ $(function () {
     },
     update: function (element, valueAccessor, allBindings, viewModel, bindingContext) {
       var value = parseFloat(ko.unwrap(valueAccessor()));
-      if (isNaN(value) || (value === 0 && allBindings.get("temperatureZeroOff"))) {
+      if (isNaN(value)) {
         element.value = ko.unwrap(valueAccessor());
         return;
       }
@@ -230,7 +230,7 @@ $(function () {
           && automation.octoprint_events().indexOf("PrintDone") >= 0
           && automation.reactions().some(function (reaction) {
             return reaction.reaction_type() == "output_control" && reaction.controlled_io() == index_id
-              && (reaction.controlled_io_set_state() == "off" || (reaction.controlled_io_set_state() == "on" && parseFloat(reaction.target()) == 0));
+              && reaction.controlled_io_set_state() == "off";
           });
       });
     };
@@ -584,7 +584,7 @@ $(function () {
         linked_temp_sensor: ko.observable(""),
         temp_ctr_type: ko.observable(""),
         temp_ctr_deadband: ko.observable(0),
-        temp_ctr_max_temp: ko.observable(0),
+        temp_ctr_max_temp: ko.observable(null),
         pwm_frequency: ko.observable(50),
         neopixel_count: ko.observable(0),
         neopixel_brightness: ko.observable(255),
@@ -653,7 +653,7 @@ $(function () {
         toggle_timer_off: ko.observable(0),
         duty_cycle: ko.observable(0),
         color: ko.observable(""),
-        target: ko.observable(0),
+        target: ko.observable(null),
         temperature_a: ko.observable(0),
         duty_a: ko.observable(0),
         temperature_b: ko.observable(0),
@@ -711,7 +711,7 @@ $(function () {
         controlled_io_set_state: ko.observable("on"),
         duty_cycle: ko.observable(0),
         color: ko.observable(""),
-        target: ko.observable(0),
+        target: ko.observable(null),
         action: ko.observable("")
       };
     };

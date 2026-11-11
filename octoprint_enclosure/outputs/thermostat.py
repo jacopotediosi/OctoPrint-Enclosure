@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from typing_extensions import override
 
@@ -47,8 +47,8 @@ class ThermostatConfig(SwitchConfig):
     """How far below the target the value can go before a heater turns on, or a cooler turns off. Between there and
     the target, the device stays as it is. A dehumidifier ignores it."""
 
-    temp_ctr_max_temp: float = REQUIRED
-    """The temperature above which a heater turns its thermostat off, or 0 or less if it has no maximum."""
+    temp_ctr_max_temp: Optional[float] = None  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
+    """The temperature above which a heater turns its thermostat off, or None if it has no maximum."""
 
 
 @dataclass(frozen=True)
@@ -228,7 +228,8 @@ class Thermostat:
             config.temp_ctr_type is ThermostatDeviceType.HEATER
             and self._target is not None
             and temperature is not None
-            and 0 < config.temp_ctr_max_temp < temperature
+            and config.temp_ctr_max_temp is not None
+            and config.temp_ctr_max_temp < temperature
         )
 
     def decide(self, temperature: float | None, humidity: float | None) -> bool:

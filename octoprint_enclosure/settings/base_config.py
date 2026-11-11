@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import MISSING, dataclass, fields
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, FrozenSet, NewType, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, FrozenSet, NewType, Optional, get_type_hints
 
 from octoprint_enclosure.utils import Rgb, parse_bool, parse_float, parse_hex, parse_hex_color
 
@@ -36,6 +36,7 @@ _PARSERS: dict[Any, Callable[[Any], Any]] = {
     str: str,
     int: int,
     float: parse_float,
+    Optional[float]: parse_float,
     bool: parse_bool,
     HexInt: parse_hex,
     Rgb: parse_hex_color,
@@ -52,8 +53,8 @@ class BaseConfig:
     def from_settings(cls, settings: dict) -> Self:
         """Read the configuration from settings.
 
-        A key that is missing or empty gives the default of its field. A field with no default, or with REQUIRED as
-        default, needs its key.
+        A key that is missing, empty or null gives the default of its field. A field with no default, or with
+        REQUIRED as default, needs its key.
 
         Args:
             settings (dict): The settings to read.
@@ -63,8 +64,8 @@ class BaseConfig:
 
         Raises:
             TypeError: If a field has a type that can't be read from settings.
-            ValueError: If a key is missing or empty and its field needs it, or its value is not valid for its field
-                or for the configuration.
+            ValueError: If a key is missing, empty or null and its field needs it, or its value is not valid for its
+                field or for the configuration.
 
         Examples:
             >>> @dataclass(frozen=True)
@@ -90,7 +91,7 @@ class BaseConfig:
                 raise TypeError(msg)
 
             value = settings.get(field.name, "")
-            if value == "":
+            if value == "" or value is None:
                 if field.default is MISSING or field.default is REQUIRED:
                     msg = f"{field.name} is not set"
                     raise ValueError(msg)

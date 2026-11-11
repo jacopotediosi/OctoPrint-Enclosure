@@ -738,9 +738,11 @@ class ControlLoop:
         except OutputError:
             return False
         setpoint_class = output.setpoint_class
-        setpoint = setpoint_class(
-            **{field.name: getattr(setpoint_config, field.name) for field in fields(setpoint_class)},
-        )
+        setpoint_values = {field.name: getattr(setpoint_config, field.name) for field in fields(setpoint_class)}
+        if state is not OutputSetState.OFF and None in setpoint_values.values():
+            self._logger.debug("Can't turn on output %s: its setpoint is not set", index_id)
+            return False
+        setpoint = setpoint_class(**setpoint_values)
 
         if isinstance(output, ThermostatOutput):
             thermostat = self._thermostats.get(index_id)

@@ -115,7 +115,7 @@ Response (200):
     "gpio_status": boolean,
     "pwm_frequency": number,
     "active_low": boolean,
-    "temp_ctr_max_temp": number (in the temperature unit of the plugin settings),
+    "temp_ctr_max_temp": number (in the temperature unit of the plugin settings), or null if the thermostat has no maximum,
     "output_type": string,
     "microcontroller_address": number,
     "index_id": number

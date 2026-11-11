@@ -11,14 +11,14 @@
         </div>
     </div>
 {% endmacro %}
-{% macro temperature_control_group(value_binding, label, help="", interval=false, zero_off=false) %}
+{% macro temperature_control_group(value_binding, label, help="", interval=false) %}
     <div class="control-group">
         <label class="control-label">{{ label }}</label>
         <div class="controls">
             <div class="input-append">
                 <input type="text"
                        class="input-medium"
-                       data-bind="temperature: {{ value_binding }}{% if interval %}, temperatureInterval: true{% endif %}{% if zero_off %}, temperatureZeroOff: true{% endif %}">
+                       data-bind="temperature: {{ value_binding }}{% if interval %}, temperatureInterval: true{% endif %}">
                 <span class="add-on" data-bind="text: $root.temperatureUnitLabel()"></span>
             </div>
             {% if help %}<span class="help-inline">{{ help }}</span>{% endif %}

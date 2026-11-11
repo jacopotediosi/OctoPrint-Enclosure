@@ -52,6 +52,7 @@ def migrate(settings: PluginSettings, logger: logging.Logger) -> None:
     _move_temperature_alarms_to_automations(rpi_outputs, automations)
     _move_pwm_temperature_curves_to_automations(rpi_outputs, automations)
     _move_toggle_timers_to_automations(rpi_outputs, automations)
+    _replace_thermostat_no_maximum_temperature_with_null(rpi_outputs)
     _convert_temperatures_to_celsius(rpi_inputs, rpi_outputs, automations, settings)
     _convert_auto_startup_shutdown_to_automations(rpi_outputs, automations)
     _remove_keys_of_other_item_kinds(rpi_outputs, actions, automations)
@@ -366,6 +367,17 @@ def _move_toggle_timers_to_automations(rpi_outputs: list[dict], automations: lis
         automations.append(automation)
 
 
+def _replace_thermostat_no_maximum_temperature_with_null(rpi_outputs: list[dict]) -> None:
+    """Replace the `temp_ctr_max_temp` of a thermostat that has no maximum temperature with null.
+
+    A thermostat with no maximum temperature used to save 0 or less, or nothing.
+    Version 11 saves null, so that 0 is a temperature like the others.
+    """
+    for rpi_output in rpi_outputs:
+        if to_float(rpi_output.get("temp_ctr_max_temp")) <= 0:
+            rpi_output["temp_ctr_max_temp"] = None
+
+
 def _convert_temperatures_to_celsius(
     rpi_inputs: list[dict],
     rpi_outputs: list[dict],
@@ -411,7 +423,7 @@ def _convert_temperatures_to_celsius(
         rpi_output["temp_ctr_deadband"] = fahrenheit.to_celsius_interval(
             to_float(rpi_output.get("temp_ctr_deadband")),
         )
-        if to_float(rpi_output.get("temp_ctr_max_temp")) > 0:
+        if rpi_output.get("temp_ctr_max_temp") is not None:
             rpi_output["temp_ctr_max_temp"] = fahrenheit.to_celsius(to_float(rpi_output.get("temp_ctr_max_temp")))
     for automation in automations:
         if to_int(automation.get("linked_temp_sensor")) not in fahrenheit_sensor_ids:
@@ -675,7 +687,7 @@ def _replace_empty_numbers_with_zero(rpi_outputs: list[dict], automations: list[
     the fields that could be left blank must be set to 0.
     """
     number_keys_by_item_type = {
-        "temp_hum_control": ("temp_ctr_deadband", "temp_ctr_max_temp"),
+        "temp_hum_control": ("temp_ctr_deadband",),
         "pwm_temperature_linked": ("temperature_a", "duty_a", "temperature_b", "duty_b"),
         "toggle_timer": ("toggle_timer_on", "toggle_timer_off"),
     }
@@ -720,7 +732,7 @@ def _add_keys_of_every_type_with_defaults(actions: list[dict], automations: list
         "toggle_timer_off": 0,
         "duty_cycle": 0,
         "color": "",
-        "target": 0,
+        "target": None,
     }
     reaction_defaults = {
         "reaction_type": "output_control",
@@ -728,7 +740,7 @@ def _add_keys_of_every_type_with_defaults(actions: list[dict], automations: list
         "controlled_io_set_state": "on",
         "duty_cycle": 0,
         "color": "",
-        "target": 0,
+        "target": None,
         "action": "",
     }
     for automation in automations:

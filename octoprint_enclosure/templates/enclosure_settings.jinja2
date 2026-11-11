@@ -203,7 +203,7 @@
                 {{ temperature_control_group("temp_ctr_deadband", _("Value Deadband"), "Allowable drift of the thermostat below its target. Set it to zero to disable.", interval=true) }}
             </div>
             <div data-bind="if: temp_ctr_type() == 'heater'">
-                {{ temperature_control_group("temp_ctr_max_temp", _("Maximum Temperature"), "Maximum temperature that the enclosure should reach, if this temperature is hit, the heater will be disabled until it's set temperature is set again.", zero_off=true) }}
+                {{ temperature_control_group("temp_ctr_max_temp", _("Maximum Temperature"), "Maximum temperature that the enclosure should reach, if this temperature is hit, the heater will be disabled until it's set temperature is set again. Leave it empty for no maximum.") }}
             </div>
         </div>
         <div data-bind="if: output_type() == 'pwm'">

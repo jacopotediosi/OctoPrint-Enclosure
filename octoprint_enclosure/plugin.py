@@ -16,8 +16,11 @@ from .automations import (
     Automation,
     AutomationError,
     Automations,
+    OutputControlReaction,
+    OutputSetState,
     RuleAutomation,
     TemperatureTrigger,
+    ToggleTimerAutomation,
 )
 from .engine import ControlLoop, OutputExecutor, Scheduler
 from .frontend import Frontend
@@ -176,6 +179,7 @@ class EnclosurePlugin(
         self._actions.load(self.actions)
         self._automations.load(self.automations)
         self.warn_missing_linked_sensors()
+        self.warn_missing_thermostat_targets()
 
         self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
         self._sensors.setup_pins()
@@ -249,6 +253,29 @@ class EnclosurePlugin(
                     "Automation %s is linked to sensor %s, which doesn't exist",
                     automation["index_id"],
                     automation["linked_temp_sensor"],
+                )
+
+    def warn_missing_thermostat_targets(self):
+        thermostat_ids = {thermostat.config.index_id for thermostat in self._outputs.get_all(ThermostatOutput)}
+
+        # The automation id, the output id and the target, each time an automation turns an output on
+        turned_on = []
+        for rule in self._automations.get_all(RuleAutomation, include_disabled=True):
+            for reaction in rule.reactions:
+                if not isinstance(reaction, OutputControlReaction):
+                    continue
+                if reaction.config.controlled_io_set_state is not OutputSetState.OFF:
+                    turned_on.append((rule.config.index_id, reaction.config.controlled_io, reaction.config.target))
+        for toggle_timer in self._automations.get_all(ToggleTimerAutomation, include_disabled=True):
+            config = toggle_timer.config
+            turned_on.append((config.index_id, config.output, config.target))
+
+        for automation_id, output_id, target in turned_on:
+            if output_id in thermostat_ids and target is None:
+                self._logger.warning(
+                    "Automation %s turns on thermostat %s without a target",
+                    automation_id,
+                    output_id,
                 )
 
     def link_dummy_sensors(self):
@@ -384,6 +411,7 @@ class EnclosurePlugin(
         # Update automations
         self._automations.load(self.automations)
         self.warn_missing_linked_sensors()
+        self.warn_missing_thermostat_targets()
 
         # Reload the GPIO inputs and set up the pins of the inputs
         self._gpio_inputs.load(self.get_gpio_inputs_settings())
