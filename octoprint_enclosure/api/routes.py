@@ -54,6 +54,7 @@ if TYPE_CHECKING:
 _JSON_TYPES: dict[str, Callable[[object], bool]] = {
     "bool": lambda value: isinstance(value, bool),
     "number": is_number,
+    "number or null": lambda value: value is None or is_number(value),
     "percent": lambda value: is_number(value) and 0 <= value <= 100,
     "byte": lambda value: is_number(value) and 0 <= value <= 255,
     "str": lambda value: isinstance(value, str),
@@ -195,15 +196,18 @@ class Api(octoprint.plugin.BlueprintPlugin):
         return jsonify(payload)
 
     @octoprint.plugin.BlueprintPlugin.route("/temperature/<int:output_id>", methods=["PATCH"])
-    @_expects_json(temperature="number")
-    def set_thermostat_target(self, output_id: int, *, temperature: float) -> Response:
+    @_expects_json(temperature="number or null")
+    def set_thermostat_target(self, output_id: int, *, temperature: float | None) -> Response:
         try:
             thermostat_output = self._outputs.get(output_id, ThermostatOutput)
         except OutputError:
             return make_response("", 204)
-        # 0 turns the thermostat off, in every unit
-        target = float(temperature)
-        if target != 0 and thermostat_output.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE:
+        # null turns the thermostat off
+        target = None if temperature is None else float(temperature)
+        if (
+            target is not None
+            and thermostat_output.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE
+        ):
             target = self._settings.temperature_unit.to_celsius(target)
         self._control_loop.set_thermostat_target(output_id, target)
         return make_response("", 204)
@@ -244,7 +248,7 @@ class Api(octoprint.plugin.BlueprintPlugin):
         payload["duty_cycle"] = 0
         payload["neopixel_color"] = "rgb(0,0,0)"
         payload["ledstrip_color"] = "rgb(0,0,0)"
-        payload["temp_ctr_set_value"] = 0
+        payload["temp_ctr_set_value"] = None
 
         # The settings hold the temperatures in Celsius, the API gives them in the temperature unit of the settings
         output_type = payload["output_type"]
@@ -268,11 +272,10 @@ class Api(octoprint.plugin.BlueprintPlugin):
             payload["gpio_status"] = payload["current_value"] is True
             thermostat = self._control_loop.get_thermostats().get(output_id)
             if thermostat is not None:
-                # 0 is the thermostat off, in every unit
                 temperature_unit = self._settings.temperature_unit
                 target = thermostat.target
                 is_temperature = thermostat.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE
-                if target != 0 and is_temperature:
+                if target is not None and is_temperature:
                     target = temperature_unit.from_celsius(target)
                 payload["temp_ctr_set_value"] = target
         elif output_type == "pwm":

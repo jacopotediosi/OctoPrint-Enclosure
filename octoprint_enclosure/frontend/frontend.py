@@ -89,9 +89,8 @@ class Frontend:
         temperature_unit = self._settings.temperature_unit
         set_temperature = []
         for index_id, thermostat in thermostats.items():
-            # 0 is the thermostat off, in every unit
             target = thermostat.target
-            if target != 0 and thermostat.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE:
+            if target is not None and thermostat.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE:
                 target = temperature_unit.from_celsius(target)
             set_temperature.append({"index_id": index_id, "set_temperature": target})
         self._send({"set_temperature": set_temperature})

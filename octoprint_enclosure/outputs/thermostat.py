@@ -55,8 +55,8 @@ class ThermostatConfig(SwitchConfig):
 class ThermostatSetpoint(BaseConfig):
     """The setpoint a thermostat is turned on to."""
 
-    target: float = 0
-    """The target temperature in Celsius, or the target humidity for a dehumidifier; 0 turns the thermostat off."""
+    target: float = REQUIRED
+    """The target temperature in Celsius, or the target humidity for a dehumidifier."""
 
 
 class ThermostatOutput(Output[ThermostatConfig, ThermostatSetpoint]):
@@ -149,8 +149,8 @@ class Thermostat:
 
     _config: ThermostatConfig
 
-    _target: float
-    """The target temperature or humidity, or 0 if the thermostat is off."""
+    _target: float | None
+    """The target temperature or humidity, or None if the thermostat is off."""
 
     _status: ThermostatStatus
     """What the thermostat is doing."""
@@ -167,7 +167,7 @@ class Thermostat:
         """
         self._config = config
 
-        self._target = 0.0
+        self._target = None
         self._status = ThermostatStatus.IDLE
         self._was_on = False
 
@@ -177,8 +177,8 @@ class Thermostat:
         return self._config
 
     @property
-    def target(self) -> float:
-        """The target temperature or humidity, or 0 if the thermostat is off."""
+    def target(self) -> float | None:
+        """The target temperature or humidity, or None if the thermostat is off."""
         return self._target
 
     @property
@@ -186,18 +186,18 @@ class Thermostat:
         """What the thermostat is doing."""
         return self._status
 
-    def set_target(self, target: float) -> None:
+    def set_target(self, target: float | None) -> None:
         """Set the target temperature or humidity.
 
         Args:
-            target (float): The target temperature or humidity, or 0 to turn the thermostat off.
+            target (float | None): The target temperature or humidity, or None to turn the thermostat off.
 
         """
         self._target = target
 
     def is_on(self) -> bool:
         """Tell whether the thermostat has a target."""
-        return self._target != 0
+        return self._target is not None
 
     def turn_on(self, setpoint: ThermostatSetpoint) -> None:
         """Set the target temperature or humidity.
@@ -209,8 +209,8 @@ class Thermostat:
         self._target = setpoint.target
 
     def turn_off(self) -> None:
-        """Set the target to 0."""
-        self._target = 0.0
+        """Turn the thermostat off."""
+        self._target = None
 
     def is_above_max_temp(self, temperature: float | None) -> bool:
         """Tell whether a heater has gone above its maximum temperature.
@@ -226,7 +226,7 @@ class Thermostat:
         config = self._config
         return (
             config.temp_ctr_type is ThermostatDeviceType.HEATER
-            and self._target != 0
+            and self._target is not None
             and temperature is not None
             and 0 < config.temp_ctr_max_temp < temperature
         )
@@ -251,7 +251,7 @@ class Thermostat:
             read_value, deadband = temperature, config.temp_ctr_deadband
 
         # Update the status
-        if self._target == 0:
+        if self._target is None:
             status = ThermostatStatus.IDLE
         elif read_value is None:
             status = ThermostatStatus.NO_READING

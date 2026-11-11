@@ -102,7 +102,7 @@ Response (200):
     "gpio_i2c_register_status": number,
     "neopixel_color": string,
     "hide_btn_ui": boolean,
-    "temp_ctr_set_value": number,
+    "temp_ctr_set_value": number, or null if the thermostat is off,
     "label": string,
     "ledstrip_gpio_clk": string,
     "temp_ctr_type": string,
@@ -154,7 +154,7 @@ Endpoint: **PATCH** `/temperature/<id>`
 Body (Content-Type: `application/json`):
 ```
 {
-    "temperature": number (the target temperature in the temperature unit of the plugin settings, or humidity for a dehumidifier; 0 turns the thermostat off)
+    "temperature": number (the target temperature in the temperature unit of the plugin settings, or humidity for a dehumidifier), or null to turn the thermostat off
 }
 ```
 

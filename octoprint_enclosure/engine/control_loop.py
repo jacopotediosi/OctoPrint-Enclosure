@@ -96,8 +96,8 @@ class _ThermostatTargetChanged(_Message):
     index_id: int
     """The id of the thermostat."""
 
-    target: float
-    """The new target temperature or humidity, or 0 if the thermostat turned off."""
+    target: float | None
+    """The new target temperature or humidity, or None if the thermostat turned off."""
 
 
 @dataclass(frozen=True)
@@ -267,12 +267,12 @@ class ControlLoop:
         """Take the decisions again after new settings were loaded."""
         self._put(_SettingsLoaded())
 
-    def set_thermostat_target(self, index_id: int, target: float) -> None:
+    def set_thermostat_target(self, index_id: int, target: float | None) -> None:
         """Set the target of a thermostat, and take the decisions regarding it.
 
         Args:
             index_id (int): The id of the thermostat.
-            target (float): The target temperature or humidity, or 0 to turn the thermostat off.
+            target (float | None): The target temperature or humidity, or None to turn the thermostat off.
 
         """
         self._put(_ThermostatTargetChanged(index_id, target))
@@ -465,7 +465,7 @@ class ControlLoop:
                 # Turn a heater off above its maximum temperature
                 if thermostat.is_above_max_temp(temperature):
                     self._logger.warning("Thermostat %s reached its maximum temperature: turning it off", index_id)
-                    thermostat.set_target(0.0)
+                    thermostat.turn_off()
                     self._frontend.update_targets(self.get_thermostats())
 
                 # Decide whether the device has to be on, and switch it

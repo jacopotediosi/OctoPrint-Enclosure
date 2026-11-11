@@ -25,22 +25,23 @@ class EncHandler:
     _output_executor: OutputExecutor
     _logger: logging.Logger
 
-    _set_temperature: Callable[[int, float, bool], None]
+    _set_temperature: Callable[[int, float | None, bool], None]
     """The function called to set the target of a thermostat, with the id of the output, the target (in Celsius for a
-    temperature) and whether the print has to pause until the target is reached."""
+    temperature, or None to turn the thermostat off) and whether the print has to pause until the target is
+    reached."""
 
     def __init__(
         self,
         plugin_context: PluginContext,
-        set_temperature: Callable[[int, float, bool], None],
+        set_temperature: Callable[[int, float | None, bool], None],
     ) -> None:
         """Set up the handler.
 
         Args:
             plugin_context (PluginContext): The plugin context.
-            set_temperature (Callable[[int, float, bool], None]): The function called to set the target of a
-                thermostat, with the id of the output, the target (in Celsius for a temperature) and whether the
-                print has to pause until the target is reached.
+            set_temperature (Callable[[int, float | None, bool], None]): The function called to set the target of a
+                thermostat, with the id of the output, the target (in Celsius for a temperature, or None to turn the
+                thermostat off) and whether the print has to pause until the target is reached.
 
         """
         self._settings = plugin_context.settings
@@ -72,9 +73,9 @@ class EncHandler:
         if isinstance(output, ThermostatOutput):
             value = to_float(get_gcode_param(cmd, "S"))
             wait = to_int(get_gcode_param(cmd, "W")) == 1
-            # 0 turns the thermostat off, in every unit
-            target = value
-            if target != 0 and output.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE:
+            # S0 turns the thermostat off, in every unit
+            target = None if value == 0 else value
+            if target is not None and output.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE:
                 target = self._settings.temperature_unit.to_celsius(target)
 
             self._set_temperature(index_id, target, wait)

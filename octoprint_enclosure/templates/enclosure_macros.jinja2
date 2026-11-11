@@ -87,7 +87,7 @@
             {{ text_control_group("target", _("Target"), "Humidity the thermostat is set to when the automation turns it on") }}
         </div>
         <div data-bind="ifnot: $root.thermostatDeviceType({{ output_binding }}()) == 'dehumidifier'">
-            {{ temperature_control_group("target", _("Target"), "Temperature the thermostat is set to when the automation turns it on", zero_off=true) }}
+            {{ temperature_control_group("target", _("Target"), "Temperature the thermostat is set to when the automation turns it on") }}
         </div>
     </div>
 {% endmacro %}

@@ -408,8 +408,8 @@ $(function () {
 
 
     self.getCleanTemperature = function (temp) {
+      if (temp === null) return String("off");
       if (temp === undefined || isNaN(parseFloat(temp))) return "-";
-      if (temp < 10) return String("off");
       return temp;
     }
 
@@ -438,7 +438,7 @@ $(function () {
         new_neopixel_color: ko.observable(""),
         ledstrip_color: ko.observable("rgb(0,0,0)"),
         new_ledstrip_color: ko.observable(""),
-        temp_ctr_set_value: ko.observable(0),
+        temp_ctr_set_value: ko.observable(null),
         temp_ctr_new_set_value: ko.observable("")
       };
     };
@@ -725,7 +725,7 @@ $(function () {
     };
 
     self.turnOffHeater = function (item) {
-      OctoPrint.patchJson(self.buildPluginUrl("temperature/" + item.index_id()), {temperature: 0});
+      OctoPrint.patchJson(self.buildPluginUrl("temperature/" + item.index_id()), {temperature: null});
     };
 
     self.getUpdateUI = function () {
