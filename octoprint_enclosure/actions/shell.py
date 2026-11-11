@@ -9,16 +9,14 @@ from dataclasses import dataclass
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import BaseConfig
-
-from .base import Action
+from .base import Action, ActionConfig
 
 SHELL_TIMEOUT_SECONDS = 5 * 60
 """The seconds a shell script may run before it is killed."""
 
 
 @dataclass(frozen=True)
-class ShellConfig(BaseConfig):
+class ShellConfig(ActionConfig):
     """The configuration of an action that runs a shell script."""
 
     shell_script: str = ""

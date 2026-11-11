@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import REQUIRED, BaseConfig
-
-from .base import Action, ActionError
+from .base import Action, ActionConfig, ActionError
 from .registry import ACTIONS
 
 if TYPE_CHECKING:
@@ -21,27 +18,23 @@ if TYPE_CHECKING:
 _ActionT = TypeVar("_ActionT", bound=Action)
 
 
-@dataclass(frozen=True)
-class ActionConfig(BaseConfig):
-    """The configuration shared by all the actions."""
-
-    index_id: int = REQUIRED
-    """The id of the action."""
-
-    action_type: str = ""
-    """The type of the action."""
-
-
-class _InvalidAction(Action[BaseConfig]):
+class _InvalidAction(Action[ActionConfig]):
     """An action that can't be set up."""
 
-    config_class = BaseConfig
+    config_class = ActionConfig
 
     reason: str
     """Why the action can't be set up."""
 
-    def __init__(self, reason: str, printer: PrinterInterface, frontend: Frontend, logger: logging.Logger) -> None:
-        super().__init__(BaseConfig(), printer, frontend, logger)
+    def __init__(
+        self,
+        reason: str,
+        config: ActionConfig,
+        printer: PrinterInterface,
+        frontend: Frontend,
+        logger: logging.Logger,
+    ) -> None:
+        super().__init__(config, printer, frontend, logger)
         self.reason = reason
 
     @override
@@ -98,11 +91,11 @@ class Actions:
             action_class = ACTIONS.get(action_config.action_type)
             if action_class is None:
                 action: Action = self._create_invalid_action(
-                    action_config.index_id,
+                    action_config,
                     f"Unsupported action type: {action_config.action_type!r}",
                 )
             else:
-                action = self._create_action(action_class, action_config.index_id, action_settings)
+                action = self._create_action(action_class, action_config, action_settings)
 
             actions[action_config.index_id] = action
 
@@ -130,6 +123,18 @@ class Actions:
         reason = action.reason if isinstance(action, _InvalidAction) else "The action is not set up"
         raise ActionError(reason)
 
+    def get_all(self, action_class: type[_ActionT]) -> list[_ActionT]:
+        """Get all the actions having a certain class.
+
+        Args:
+            action_class (type[_ActionT]): The class the actions must be an instance of.
+
+        Returns:
+            list[_ActionT]: The actions.
+
+        """
+        return [action for action in self._actions.values() if isinstance(action, action_class)]
+
     def run(self, index_id: int, action_class: type[Action] = Action) -> Action:
         """Run an action.
 
@@ -152,30 +157,31 @@ class Actions:
     def _create_action(
         self,
         action_class: type[_ActionT],
-        index_id: int,
+        action_config: ActionConfig,
         action_settings: dict,
     ) -> _ActionT | _InvalidAction:
         try:
-            action_config = action_class.config_class.from_settings(action_settings)
+            config = action_class.config_class.from_settings(action_settings)
         except ValueError as error:
-            return self._create_invalid_action(index_id, f"Invalid settings: {error}")
+            return self._create_invalid_action(action_config, f"Invalid settings: {error}")
 
-        # An action whose settings didn't change is kept as it is
-        action = self._actions.get(index_id)
-        if isinstance(action, action_class) and action.config == action_config:
+        # An action whose settings didn't change is kept
+        action = self._actions.get(action_config.index_id)
+        if isinstance(action, action_class) and action.config == config:
+            action.config = config
             return action
 
         return action_class(
-            action_config,
+            config,
             self._printer,
             self._frontend,
-            self._get_action_logger(action_class, index_id),
+            self._get_action_logger(action_class, action_config.index_id),
         )
 
-    def _create_invalid_action(self, index_id: int, reason: str) -> _InvalidAction:
-        logger = self._get_action_logger(_InvalidAction, index_id)
+    def _create_invalid_action(self, action_config: ActionConfig, reason: str) -> _InvalidAction:
+        logger = self._get_action_logger(_InvalidAction, action_config.index_id)
         logger.warning("%s", reason)
-        return _InvalidAction(reason, self._printer, self._frontend, logger)
+        return _InvalidAction(reason, action_config, self._printer, self._frontend, logger)
 
     def _get_action_logger(self, action_class: type[Action], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{action_class.__name__}.{index_id}")

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from octoprint_enclosure.settings import BaseConfig
+from octoprint_enclosure.settings import REQUIRED, BaseConfig
 
 if TYPE_CHECKING:
     import logging
@@ -12,11 +13,26 @@ if TYPE_CHECKING:
 
     from octoprint_enclosure.frontend import Frontend
 
-_ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
-
 
 class ActionError(Exception):
     """Raised when an action can't be used, with the reason as message."""
+
+
+@dataclass(frozen=True)
+class ActionConfig(BaseConfig):
+    """The configuration shared by all the actions."""
+
+    index_id: int = REQUIRED
+    """The id of the action."""
+
+    action_type: str = ""
+    """The type of the action."""
+
+    label: str = field(default="", compare=False)
+    """The label of the action."""
+
+
+_ConfigT = TypeVar("_ConfigT", bound=ActionConfig)
 
 
 class Action(ABC, Generic[_ConfigT]):
