@@ -64,8 +64,8 @@ class EncHandler:
         self._logger.debug("Received ENC command: %s", cmd)
         try:
             index_id = int(get_gcode_param(cmd, "O"))
-        except ValueError:
-            self._logger.exception("Error running ENC command: %s", cmd)
+        except ValueError as error:
+            self._logger.warning("Can't run ENC command %s: %s", cmd, error)
             return
 
         try:
@@ -78,8 +78,8 @@ class EncHandler:
             try:
                 value = parse_float(get_gcode_param(cmd, "S"))
                 wait = int(get_gcode_param(cmd, "W")) == 1
-            except ValueError:
-                self._logger.exception("Error running ENC command: %s", cmd)
+            except ValueError as error:
+                self._logger.warning("Can't run ENC command %s: %s", cmd, error)
                 return
 
             # S0 turns the thermostat off, in every unit

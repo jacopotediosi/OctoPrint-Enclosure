@@ -111,8 +111,8 @@ class GpioInputResponse(InputResponse):
         config = gpio_input.config
         try:
             active = gpio_input.is_active()
-        except Exception:
-            logger.exception("Error reading input %s", config.index_id)
+        except Exception as error:  # noqa: BLE001 - a traceback at every push would fill the log
+            logger.debug("Can't read input %s: %s", config.index_id, error)
             active = None
         return cls(id=config.index_id, type=config.input_type.value, label=config.label, active=active)
 

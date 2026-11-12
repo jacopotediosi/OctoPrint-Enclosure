@@ -239,6 +239,9 @@ class OutputExecutor:
             except OutputError as error:
                 self._logger.debug("Can't run ENC command %s: %s", gcode, error)
                 return None
+            except ValueError as error:
+                self._logger.warning("Can't run ENC command %s: %s", gcode, error)
+                return None
             except Exception:
                 self._logger.exception("Error running ENC command: %s", gcode)
                 return None
