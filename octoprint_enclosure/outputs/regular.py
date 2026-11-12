@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from octoprint_enclosure.settings import BaseConfig
-from octoprint_enclosure.utils import clamp, get_gcode_param, to_int
+from octoprint_enclosure.utils import clamp, get_gcode_param
 
 from .base import Output
 from .switch import Switch, SwitchConfig
@@ -80,9 +80,8 @@ class RegularOutput(Output[RegularConfig, RegularSetpoint]):
 
     @override
     def run_enc_command(self, command: str) -> str:
-        index_id = to_int(get_gcode_param(command, "O"))
-        on = clamp(to_int(get_gcode_param(command, "S")), 0, 1) == 1
+        on = clamp(int(get_gcode_param(command, "S")), 0, 1) == 1
 
         self._switch.set(on=on)
 
-        return f"Setting REGULAR output {index_id} to value {on}"
+        return f"Setting REGULAR output {self.config.index_id} to value {on}"

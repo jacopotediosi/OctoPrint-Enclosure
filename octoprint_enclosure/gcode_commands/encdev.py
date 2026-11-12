@@ -11,7 +11,6 @@ from octoprint.events import Events
 from octoprint_enclosure.hardware import dummy_gpio, dummy_i2c
 from octoprint_enclosure.inputs import PullResistor
 from octoprint_enclosure.outputs import Output
-from octoprint_enclosure.utils import to_int
 
 if TYPE_CHECKING:
     import logging
@@ -200,7 +199,7 @@ class EncDevHandler:
 
     def _input(self, send_reply: Callable[[str], None], index_id: str, state: str) -> None:
         config = self._get_input_config(index_id, "gpio")
-        pin = to_int(config["gpio_pin"])
+        pin = int(config["gpio_pin"])
         active_level = dummy_gpio.LOW if config["input_pull_resistor"] == PullResistor.UP.value else dummy_gpio.HIGH
         inactive_level = dummy_gpio.LOW if active_level == dummy_gpio.HIGH else dummy_gpio.HIGH
 
@@ -318,7 +317,7 @@ class EncDevHandler:
             (
                 config
                 for config in self._settings.rpi_inputs
-                if config["index_id"] == to_int(index_id) and config["input_type"] == input_type
+                if str(config["index_id"]) == index_id and config["input_type"] == input_type
             ),
             None,
         )

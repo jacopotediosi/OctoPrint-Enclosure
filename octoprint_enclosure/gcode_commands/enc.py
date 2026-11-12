@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from octoprint_enclosure.outputs import Output, OutputError, ThermostatOutput
-from octoprint_enclosure.utils import MeasurementType, get_gcode_param, to_float, to_int
+from octoprint_enclosure.utils import MeasurementType, get_gcode_param, parse_float
 
 if TYPE_CHECKING:
     import logging
@@ -62,7 +62,11 @@ class EncHandler:
             return
 
         self._logger.debug("Received ENC command: %s", cmd)
-        index_id = to_int(get_gcode_param(cmd, "O"))
+        try:
+            index_id = int(get_gcode_param(cmd, "O"))
+        except ValueError:
+            self._logger.exception("Error running ENC command: %s", cmd)
+            return
 
         try:
             output = self._outputs.get(index_id, Output)
@@ -71,8 +75,13 @@ class EncHandler:
             return
 
         if isinstance(output, ThermostatOutput):
-            value = to_float(get_gcode_param(cmd, "S"))
-            wait = to_int(get_gcode_param(cmd, "W")) == 1
+            try:
+                value = parse_float(get_gcode_param(cmd, "S"))
+                wait = int(get_gcode_param(cmd, "W")) == 1
+            except ValueError:
+                self._logger.exception("Error running ENC command: %s", cmd)
+                return
+
             # S0 turns the thermostat off, in every unit
             target = None if value == 0 else value
             if target is not None and output.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE:

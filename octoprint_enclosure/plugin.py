@@ -16,6 +16,7 @@ from .automations import (
     Automations,
     OutputControlReaction,
     OutputSetState,
+    PwmTemperatureLinkedAutomation,
     RuleAutomation,
     TemperatureTrigger,
     ToggleTimerAutomation,
@@ -31,7 +32,6 @@ from .outputs import Outputs, ThermostatDeviceType, ThermostatOutput
 from .plugin_context import PluginContext
 from .settings import Settings
 from .settings.migrations import migrate_settings
-from .utils import to_int
 
 
 class EnclosurePlugin(
@@ -241,17 +241,23 @@ class EnclosurePlugin(
                     config.index_id,
                     config.linked_temp_sensor,
                 )
-        for automation in self.automations:
-            is_temperature_rule = (
-                automation["automation_type"] == "rule" and automation["trigger_type"] == "temperature"
-            )
-            if not is_temperature_rule and automation["automation_type"] != "pwm_temperature_linked":
-                continue
-            if to_int(automation["linked_temp_sensor"]) not in sensor_ids:
+
+        linked_sensors = [
+            (rule.config.index_id, rule.trigger.config.linked_temp_sensor)
+            for rule in self._automations.get_all(RuleAutomation, include_disabled=True)
+            if isinstance(rule.trigger, TemperatureTrigger)
+        ]
+        linked_sensors += [
+            (automation.config.index_id, automation.config.linked_temp_sensor)
+            for automation in self._automations.get_all(PwmTemperatureLinkedAutomation, include_disabled=True)
+        ]
+
+        for automation_id, sensor_id in linked_sensors:
+            if sensor_id not in sensor_ids:
                 self._logger.warning(
                     "Automation %s is linked to sensor %s, which doesn't exist",
-                    automation["index_id"],
-                    automation["linked_temp_sensor"],
+                    automation_id,
+                    sensor_id,
                 )
 
     def warn_missing_thermostat_targets(self):

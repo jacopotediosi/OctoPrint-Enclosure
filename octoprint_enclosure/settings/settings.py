@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.utils import TemperatureUnit, to_int
+from octoprint_enclosure.utils import TemperatureUnit
 
 if TYPE_CHECKING:
     from octoprint.plugin import PluginSettings
@@ -91,7 +91,7 @@ class Settings:
         """
         with self.write_lock:
             automations = self.automations
-            automation = next((item for item in automations if to_int(item.get("index_id")) == index_id), None)
+            automation = next((item for item in automations if item.get("index_id") == index_id), None)
             if automation is None:
                 return False
             automation["enabled"] = enabled

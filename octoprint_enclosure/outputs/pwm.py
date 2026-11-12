@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from octoprint_enclosure.settings import REQUIRED, BaseConfig
-from octoprint_enclosure.utils import clamp, get_gcode_param, to_int
+from octoprint_enclosure.utils import clamp, get_gcode_param
 
 from .base import Output, OutputError
 from .config import OutputConfig
@@ -140,9 +140,8 @@ class PwmOutput(Output[PwmConfig, PwmSetpoint]):
 
     @override
     def run_enc_command(self, command: str) -> str:
-        index_id = to_int(get_gcode_param(command, "O"))
-        duty_cycle = clamp(to_int(get_gcode_param(command, "S")), 0, 100)
+        duty_cycle = clamp(int(get_gcode_param(command, "S")), 0, 100)
 
         self.turn_on(PwmSetpoint(duty_cycle))
 
-        return f"Setting PWM output {index_id} to value {duty_cycle}"
+        return f"Setting PWM output {self.config.index_id} to value {duty_cycle}"

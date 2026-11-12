@@ -20,10 +20,11 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.utils import Rgb, TemperatureUnit, format_hex_color, parse_hhmm, to_float, to_int
+from octoprint_enclosure.utils import Rgb, TemperatureUnit, format_hex_color, parse_hhmm
 
 if TYPE_CHECKING:
     import logging
+    from typing import Any
 
     from octoprint.plugin import PluginSettings
 
@@ -71,7 +72,23 @@ def migrate(settings: PluginSettings, logger: logging.Logger) -> None:
 
 def _new_id(items: list[dict]) -> int:
     """Return the next free id for `items`: the highest id plus one, or 1 if the list is empty."""
-    return max((to_int(item.get("index_id")) for item in items), default=0) + 1
+    return max((_to_int(item.get("index_id")) for item in items), default=0) + 1
+
+
+def _to_float(value: Any) -> float:  # noqa: ANN401 - value is purposely untyped
+    """Convert a value to float, or return 0 if it can't be converted."""
+    try:
+        return float(value)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _to_int(value: Any) -> int:  # noqa: ANN401 - value is purposely untyped
+    """Convert a value to int, or return 0 if it can't be converted."""
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return 0
 
 
 def _remove_runtime_values_saved_by_mistake(rpi_inputs: list[dict], rpi_outputs: list[dict]) -> None:
@@ -122,14 +139,14 @@ def _convert_controlled_io_level_to_state(rpi_inputs: list[dict], rpi_outputs: l
     depend on the wiring. On an output with `active_low` on, a level means the opposite state, so the conversion
     looks up the controlled output.
     """
-    active_low_by_id = {to_int(output.get("index_id")): bool(output.get("active_low")) for output in rpi_outputs}
+    active_low_by_id = {_to_int(output.get("index_id")): bool(output.get("active_low")) for output in rpi_outputs}
     for item_settings in [*rpi_inputs, *rpi_outputs]:
         set_value = item_settings.pop("controlled_io_set_value", "low")
         if set_value == "toggle":
             set_state = "toggle"
         else:
             high = set_value != "low"
-            active_low = active_low_by_id.get(to_int(item_settings.get("controlled_io")), False)
+            active_low = active_low_by_id.get(_to_int(item_settings.get("controlled_io")), False)
             set_state = "on" if high != active_low else "off"
         item_settings["controlled_io_set_state"] = set_state
     for action in actions:
@@ -155,7 +172,7 @@ def _convert_gpio_input_effects_to_automations(
       `auto_shutdown` is on when the migration runs;
     - a filament sensor: a "filament" automation, enabled as the sensor was.
     """
-    action_ids = {to_int(action.get("index_id")) for action in actions}
+    action_ids = {_to_int(action.get("index_id")) for action in actions}
     thermostat_ids_to_turn_off = [
         rpi_output.get("index_id")
         for rpi_output in rpi_outputs
@@ -225,7 +242,7 @@ def _convert_gpio_input_effects_to_automations(
                     "show_on_navbar": False,
                 },
             )
-        elif action_type == "output_control" and to_int(controlled_io) in action_ids:
+        elif action_type == "output_control" and _to_int(controlled_io) in action_ids:
             # Output control of an item which was an output and now is an action (gcode, shell script)
             reaction["reaction_type"] = "run_action"
             reaction["action"] = controlled_io
@@ -302,7 +319,7 @@ def _move_temperature_alarms_to_automations(rpi_outputs: list[dict], automations
     rpi_outputs[:] = [rpi_output for rpi_output in rpi_outputs if rpi_output.get("output_type") != "temperature_alarm"]
 
     for alarm in temperature_alarms:
-        if int(to_float(alarm.get("alarm_set_temp"))) == 0:
+        if int(_to_float(alarm.get("alarm_set_temp"))) == 0:
             # An alarm with alarm_set_temp 0 was disabled and is dropped
             continue
 
@@ -364,7 +381,7 @@ def _move_toggle_timers_to_automations(rpi_outputs: list[dict], automations: lis
             "toggle_timer_off": rpi_output.get("toggle_timer_off", 0),
         }
         if rpi_output.get("output_type") == "pwm":
-            automation["duty_cycle"] = to_float(rpi_output.get("default_duty_cycle"))
+            automation["duty_cycle"] = _to_float(rpi_output.get("default_duty_cycle"))
         automations.append(automation)
 
 
@@ -375,7 +392,7 @@ def _replace_thermostat_no_maximum_temperature_with_null(rpi_outputs: list[dict]
     Version 11 saves null, so that 0 is a temperature like the others.
     """
     for rpi_output in rpi_outputs:
-        if to_float(rpi_output.get("temp_ctr_max_temp")) <= 0:
+        if _to_float(rpi_output.get("temp_ctr_max_temp")) <= 0:
             rpi_output["temp_ctr_max_temp"] = None
 
 
@@ -398,9 +415,9 @@ def _convert_temperatures_to_celsius(
         if rpi_input.get("input_type") != "temperature_sensor":
             continue
         if use_fahrenheit:
-            fahrenheit_sensor_ids.add(to_int(rpi_input.get("index_id")))
+            fahrenheit_sensor_ids.add(_to_int(rpi_input.get("index_id")))
         else:
-            celsius_sensor_ids.add(to_int(rpi_input.get("index_id")))
+            celsius_sensor_ids.add(_to_int(rpi_input.get("index_id")))
 
     # Set the new global temperature unit, based on which one the sensors utilize the most
     new_unit_should_be_fahrenheit = len(fahrenheit_sensor_ids) > len(celsius_sensor_ids)
@@ -415,25 +432,25 @@ def _convert_temperatures_to_celsius(
         is_temperature_thermostat = (
             rpi_output.get("output_type") == "temp_hum_control" and rpi_output.get("temp_ctr_type") != "dehumidifier"
         )
-        if not is_temperature_thermostat or to_int(rpi_output.get("linked_temp_sensor")) not in fahrenheit_sensor_ids:
+        if not is_temperature_thermostat or _to_int(rpi_output.get("linked_temp_sensor")) not in fahrenheit_sensor_ids:
             continue
-        if to_float(rpi_output.get("temp_ctr_default_value")) != 0:
+        if _to_float(rpi_output.get("temp_ctr_default_value")) != 0:
             rpi_output["temp_ctr_default_value"] = fahrenheit.to_celsius(
-                to_float(rpi_output.get("temp_ctr_default_value")),
+                _to_float(rpi_output.get("temp_ctr_default_value")),
             )
         rpi_output["temp_ctr_deadband"] = fahrenheit.to_celsius_interval(
-            to_float(rpi_output.get("temp_ctr_deadband")),
+            _to_float(rpi_output.get("temp_ctr_deadband")),
         )
         if rpi_output.get("temp_ctr_max_temp") is not None:
-            rpi_output["temp_ctr_max_temp"] = fahrenheit.to_celsius(to_float(rpi_output.get("temp_ctr_max_temp")))
+            rpi_output["temp_ctr_max_temp"] = fahrenheit.to_celsius(_to_float(rpi_output.get("temp_ctr_max_temp")))
     for automation in automations:
-        if to_int(automation.get("linked_temp_sensor")) not in fahrenheit_sensor_ids:
+        if _to_int(automation.get("linked_temp_sensor")) not in fahrenheit_sensor_ids:
             continue
         if automation.get("automation_type") == "pwm_temperature_linked":
             for key in ("temperature_a", "temperature_b"):
-                automation[key] = fahrenheit.to_celsius(to_float(automation.get(key)))
-        elif automation.get("trigger_type") == "temperature" and to_float(automation.get("alarm_set_temp")) != 0:
-            automation["alarm_set_temp"] = fahrenheit.to_celsius(to_float(automation.get("alarm_set_temp")))
+                automation[key] = fahrenheit.to_celsius(_to_float(automation.get(key)))
+        elif automation.get("trigger_type") == "temperature" and _to_float(automation.get("alarm_set_temp")) != 0:
+            automation["alarm_set_temp"] = fahrenheit.to_celsius(_to_float(automation.get("alarm_set_temp")))
 
 
 def _convert_auto_startup_shutdown_to_automations(rpi_outputs: list[dict], automations: list[dict]) -> None:
@@ -457,7 +474,7 @@ def _convert_auto_startup_shutdown_to_automations(rpi_outputs: list[dict], autom
     def add_rule(rpi_output, events, state, *, enabled, show_in_tab=False, time=0, printing=None, setpoint=None):
         # Delay or time of day: startup_time and shutdown_time held seconds, or HH:MM
         time_of_day = parse_hhmm(str(time))
-        delay = 0 if time_of_day is not None else max(to_float(time), 0)
+        delay = 0 if time_of_day is not None else max(_to_float(time), 0)
         at = time_of_day.strftime("%H:%M") if time_of_day is not None else ""
 
         # Condition on the print job, only for a delayed rule
@@ -501,7 +518,7 @@ def _convert_auto_startup_shutdown_to_automations(rpi_outputs: list[dict], autom
 
     # Get ids of the PWM outputs linked to a PWM temperature automation
     pwm_temperature_linked_ids = {
-        to_int(automation.get("output"))
+        _to_int(automation.get("output"))
         for automation in automations
         if automation.get("automation_type") == "pwm_temperature_linked"
     }
@@ -517,7 +534,7 @@ def _convert_auto_startup_shutdown_to_automations(rpi_outputs: list[dict], autom
         shutdown_on_error = bool(rpi_output.get("shutdown_on_error"))
         startup_with_server = bool(rpi_output.get("startup_with_server"))
         has_toggle_timer = output_type in ("regular", "pwm") and bool(rpi_output.get("toggle_timer"))
-        default_duty_cycle = to_float(rpi_output.get("default_duty_cycle")) if output_type == "pwm" else 0
+        default_duty_cycle = _to_float(rpi_output.get("default_duty_cycle")) if output_type == "pwm" else 0
 
         # Prepare setpoint to turn on with, from the defaults of the output
         on_setpoint: dict | None = {}
@@ -533,9 +550,9 @@ def _convert_auto_startup_shutdown_to_automations(rpi_outputs: list[dict], autom
             is_color = rgb != Rgb(0, 0, 0) and max(rgb) <= 255
             on_setpoint = {"color": format_hex_color(rgb)} if is_color else None
         elif output_type == "temp_hum_control":
-            target = to_float(rpi_output.get("temp_ctr_default_value"))
+            target = _to_float(rpi_output.get("temp_ctr_default_value"))
             on_setpoint = {"target": target} if target != 0 else None
-        is_pwm_temperature_linked = to_int(rpi_output.get("index_id")) in pwm_temperature_linked_ids
+        is_pwm_temperature_linked = _to_int(rpi_output.get("index_id")) in pwm_temperature_linked_ids
         if is_pwm_temperature_linked:
             on_setpoint = None
 
@@ -566,7 +583,7 @@ def _convert_auto_startup_shutdown_to_automations(rpi_outputs: list[dict], autom
             )
 
         # Create print end rule
-        shutdown_is_delayed = parse_hhmm(str(shutdown_time)) is not None or to_float(shutdown_time) > 0
+        shutdown_is_delayed = parse_hhmm(str(shutdown_time)) is not None or _to_float(shutdown_time) > 0
         failure_has_own_rule = output_type == "temp_hum_control" and shutdown_is_delayed
         end_events = ["PrintDone"]
         if shutdown_on_failed and not failure_has_own_rule:
@@ -794,7 +811,7 @@ def _convert_board_pins_to_bcm(rpi_inputs: list[dict], rpi_outputs: list[dict], 
         }  # fmt: skip
 
         for rpi_input in rpi_inputs:
-            pin = to_int(rpi_input.get("gpio_pin"))
+            pin = _to_int(rpi_input.get("gpio_pin"))
             if rpi_input.get("input_type") == "gpio" and pin > 0:
                 rpi_input["gpio_pin"] = board_to_bcm.get(pin, "")
 
@@ -802,7 +819,7 @@ def _convert_board_pins_to_bcm(rpi_inputs: list[dict], rpi_outputs: list[dict], 
             output_type = rpi_output.get("output_type")
             is_switch = output_type in ("regular", "temp_hum_control")
             uses_pin = output_type == "pwm" or (is_switch and not rpi_output.get("gpio_i2c_enabled"))
-            pin = to_int(rpi_output.get("gpio_pin"))
+            pin = _to_int(rpi_output.get("gpio_pin"))
             if uses_pin and pin > 0:
                 rpi_output["gpio_pin"] = board_to_bcm.get(pin, "")
 
