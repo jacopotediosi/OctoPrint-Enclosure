@@ -1,28 +1,4 @@
 $(function () {
-  function rgbToHex(rgb) {
-    var match = /^\s*rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)\s*$/.exec(rgb || "");
-    if (!match) return "#000000";
-    return "#" + match.slice(1).map(function (component) {
-      return ("0" + Math.min(parseInt(component, 10), 255).toString(16)).slice(-2);
-    }).join("");
-  }
-
-  function hexToRgb(hex) {
-    var value = parseInt(hex.slice(1), 16);
-    return "rgb(" + ((value >> 16) & 255) + "," + ((value >> 8) & 255) + "," + (value & 255) + ")";
-  }
-
-  ko.bindingHandlers.rgbColor = {
-    init: function (element, valueAccessor) {
-      ko.utils.registerEventHandler(element, "change", function () {
-        valueAccessor()(hexToRgb(element.value));
-      });
-    },
-    update: function (element, valueAccessor, allBindings) {
-      element.value = rgbToHex(ko.unwrap(valueAccessor()) || ko.unwrap(allBindings.get("rgbColorPlaceholder")));
-    }
-  };
-
   ko.bindingHandlers.temperature = {
     init: function (element, valueAccessor, allBindings, viewModel, bindingContext) {
       ko.utils.registerEventHandler(element, "change", function () {
@@ -84,7 +60,7 @@ $(function () {
     });
 
     self.fromCelsius = function (celsius) {
-      if (self.temperatureUnit() !== "fahrenheit") return celsius;
+      if (celsius === null || self.temperatureUnit() !== "fahrenheit") return celsius;
       return Math.round((celsius * 1.8 + 32) * 10) / 10;
     };
 
@@ -285,117 +261,64 @@ $(function () {
     };
 
     self.onDataUpdaterPluginMessage = function (plugin, data) {
-
-      if (typeof plugin == 'undefined'){
+      if (plugin != "enclosure" || self.settingsOpen) {
         return;
       }
 
-      if (plugin != "enclosure") {
-        return;
-      }
-
-      if(self.settingsOpen){
-        return;
-      }
-
-      if (data.hasOwnProperty("sensor_data")) {
-        data.sensor_data.forEach(function (sensor_data) {
-          var linked_temp_sensor = ko.utils.arrayFilter(self.rpi_inputs_temperature_sensors(), function (temperature_sensor) {
-            return (sensor_data['index_id'] == temperature_sensor.index_id());
-          }).pop();
-          if (linked_temp_sensor){
-            linked_temp_sensor.temp_sensor_temp(sensor_data['temperature'] === null ? "" : sensor_data['temperature'])
-            linked_temp_sensor.temp_sensor_humidity(sensor_data['humidity'] === null ? "" : sensor_data['humidity'])
-          }
-        })
-      }
-
-      if (data.hasOwnProperty("set_temperature")) {
-        data.set_temperature.forEach(function (set_temperature) {
-          var linked_thermostat = ko.utils.arrayFilter(self.rpi_outputs(), function (thermostat) {
-            return (set_temperature['index_id'] == thermostat.index_id());
-          }).pop();
-          if (linked_thermostat) {
-            linked_thermostat.temp_ctr_set_value(set_temperature['set_temperature'])
-          }
-        })
-      }
-
-      if (data.hasOwnProperty("rpi_output_regular")) {
-        data.rpi_output_regular.forEach(function (output) {
-          var linked_output = ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
-            return (output['index_id'] == item.index_id());
-          }).pop();
-          if (linked_output) {
-            linked_output.gpio_status(output['status'])
-          }
-        })
-      }
-
-      if (data.hasOwnProperty("rpi_output_thermostat")) {
-        data.rpi_output_thermostat.forEach(function (output) {
-          var linked_output = ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
-            return (output['index_id'] == item.index_id());
-          }).pop();
-          if (linked_output) {
-            linked_output.gpio_status(output['status'])
-          }
-        })
-      }
-
-      if (data.hasOwnProperty("rpi_output_pwm")) {
-        data.rpi_output_pwm.forEach(function (output) {
-          var linked_output = ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
-            return (output['index_id'] == item.index_id());
-          }).pop();
-          if (linked_output) {
-            linked_output.duty_cycle(output['pwm_value'])
-          }
-        })
-      }
-
-      if (data.hasOwnProperty("rpi_output_neopixel")) {
-        data.rpi_output_neopixel.forEach(function (output) {
-          var linked_output = ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
-            return (output['index_id'] == item.index_id());
-          }).pop();
-          if (linked_output) {
-            linked_output.neopixel_color(output['color'])
-          }
-        })
-      }
-
-      if (data.hasOwnProperty("rpi_output_ledstrip")) {
-        data.rpi_output_ledstrip.forEach(function (output) {
-          var linked_output = ko.utils.arrayFilter(self.rpi_outputs(), function (item) {
-            return (output['index_id'] == item.index_id());
-          }).pop();
-          if (linked_output) {
-            linked_output.ledstrip_color(output['color'])
-          }
-        })
-      }
-
-      if (data.hasOwnProperty("automation_status")) {
-        data.automation_status.forEach(function (automation) {
-          var linked_automation = ko.utils.arrayFilter(self.automations(), function (item) {
-            return (automation['index_id'] == item.index_id());
-          }).pop();
-          if (linked_automation) {
-            linked_automation.enabled(automation['enabled'])
-          }
-        })
-      }
+      Object.keys(self.pushCounts).forEach(function (kind) {
+        if (data.hasOwnProperty(kind)) {
+          self.pushCounts[kind]++;
+        }
+      });
+      self.applyState(data);
 
       if (data.is_msg) {
-        new PNotify({
-          title: "Enclosure",
-          title_escape: true,
-          text: data.msg,
-          text_escape: true,
-          type: data.msg_type
-        });
+        self.notify(data.msg, data.msg_type);
       }
+    };
+
+    self.applyState = function (data) {
+      var states = {inputs: self.inputStates, outputs: self.outputStates, automations: {}};
+      self.automations().forEach(function (automation) {
+        states.automations[automation.index_id()] = {enabled: automation.enabled};
+      });
+
+      Object.keys(states).forEach(function (kind) {
+        (data[kind] || []).forEach(function (item) {
+          var state = states[kind][item.id] || {};
+          Object.keys(state).forEach(function (key) {
+            if (item.hasOwnProperty(key)) {
+              state[key](item[key]);
+            }
+          });
+        });
+      });
+    };
+
+    self.pushCounts = {inputs: 0, outputs: 0, automations: 0};
+
+    self.refreshState = function () {
+      Object.keys(self.pushCounts).forEach(function (kind) {
+        var pushCount = self.pushCounts[kind];
+        OctoPrint.get(self.buildPluginUrl(kind)).done(function (items) {
+          if (self.settingsOpen || self.pushCounts[kind] !== pushCount) {
+            return;
+          }
+          var data = {};
+          data[kind] = items;
+          self.applyState(data);
+        });
+      });
+    };
+
+    self.notify = function (text, type, options) {
+      new PNotify($.extend({
+        title: "Enclosure",
+        title_escape: true,
+        text: text,
+        text_escape: true,
+        type: type
+      }, options));
     };
 
     self.isUser = ko.computed(function () {
@@ -406,41 +329,43 @@ $(function () {
       return self.connectionViewModel.loginState.isUser() && self.printerStateViewModel.isOperational();
     });
 
+    self.shownTarget = function (thermostat) {
+      var target = thermostat.target();
+      if (target === null) return "off";
+      return thermostat.temp_ctr_type() == "dehumidifier" ? target : self.fromCelsius(target);
+    };
 
-    self.getCleanTemperature = function (temp) {
-      if (temp === null) return String("off");
-      if (temp === undefined || isNaN(parseFloat(temp))) return "-";
-      return temp;
-    }
-
-    self.getDutyCycle = function (duty_cycle) {
-      if (duty_cycle === undefined || isNaN(parseFloat(duty_cycle))) return "-";
-      if (parseInt(duty_cycle) == 0) return String("off");
-      return duty_cycle;
-    }
+    self.shownDutyCycle = function (duty_cycle) {
+      return duty_cycle == 0 ? "off" : duty_cycle;
+    };
 
     self.inputStates = {};
     self.outputStates = {};
 
     self.newInputState = function () {
       return {
-        temp_sensor_temp: ko.observable(""),
-        temp_sensor_humidity: ko.observable("")
+        temperature: ko.observable(null),
+        humidity: ko.observable(null)
       };
     };
 
     self.newOutputState = function () {
-      return {
-        gpio_status: ko.observable(false),
+      var state = {
+        on: ko.observable(false),
         duty_cycle: ko.observable(0),
         new_duty_cycle: ko.observable(""),
-        neopixel_color: ko.observable("rgb(0,0,0)"),
-        new_neopixel_color: ko.observable(""),
-        ledstrip_color: ko.observable("rgb(0,0,0)"),
-        new_ledstrip_color: ko.observable(""),
-        temp_ctr_set_value: ko.observable(null),
-        temp_ctr_new_set_value: ko.observable("")
+        color: ko.observable("#000000"),
+        new_color: ko.observable(""),
+        target: ko.observable(null),
+        new_target: ko.observable("")
       };
+      state.shown_color = ko.pureComputed({
+        read: function () {
+          return state.new_color() || state.color();
+        },
+        write: state.new_color
+      });
+      return state;
     };
 
     self.withState = function (items, states, newState) {
@@ -476,20 +401,13 @@ $(function () {
     self.onStartupComplete = function () {
       self.settingsOpen = false;
       self.notifyGpioAlert();
-      self.getUpdateUI();
+      self.refreshState();
     };
 
     self.notifyGpioAlert = function () {
       var gpioAlert = $(".enclosure-gpio-alert").first();
       if (gpioAlert.length) {
-        new PNotify({
-          title: "Enclosure",
-          title_escape: true,
-          text: gpioAlert.text(),
-          text_escape: true,
-          type: "error",
-          hide: false
-        });
+        self.notify(gpioAlert.text(), "error", {hide: false});
       }
     };
 
@@ -499,47 +417,34 @@ $(function () {
 
     self.onSettingsHidden = function () {
       self.settingsOpen = false;
-      self.getUpdateUI();
+      self.refreshState();
     };
 
     self.onServerReconnect = function () {
-      self.getUpdateUI();
+      self.refreshState();
     };
 
-    self.setTemperature = function (item, form) {
-
-      var newSetTemperature = item.temp_ctr_new_set_value();
+    self.setTarget = function (item, form) {
       if (form !== undefined) {
         $(form).find("input").blur();
       }
 
-      if(self.isNumeric(newSetTemperature)){
-        var target = parseFloat(newSetTemperature);
-        if (item.temp_ctr_type() != "dehumidifier") {
-          target = self.toCelsius(target);
-        }
-        OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), {target: target})
-          .done(function () {
-            item.temp_ctr_new_set_value("");
-          })
-          .fail(function () {
-            new PNotify({
-              title: "Enclosure",
-              title_escape: true,
-              text: "Error setting temperature",
-              text_escape: true,
-              type: "error"
-            });
-          });
-      }else{
-        new PNotify({
-          title: "Enclosure",
-          title_escape: true,
-          text: "Invalid set temperature",
-          text_escape: true,
-          type: "error"
-        });
+      if (!self.isNumeric(item.new_target())) {
+        self.notify("Invalid set temperature", "error");
+        return;
       }
+
+      var target = parseFloat(item.new_target());
+      if (item.temp_ctr_type() != "dehumidifier") {
+        target = self.toCelsius(target);
+      }
+      self.setOutput(item, {target: target})
+        .done(function () {
+          item.new_target("");
+        })
+        .fail(function () {
+          self.notify("Error setting temperature", "error");
+        });
     };
 
     self.nextIndexId = function (items) {
@@ -728,108 +633,44 @@ $(function () {
       automation.reactions.remove(reaction);
     };
 
-    self.turnOffHeater = function (item) {
-      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), {target: null});
+    self.setOutput = function (item, body) {
+      return OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), body);
     };
 
-    self.getUpdateUI = function () {
-      OctoPrint.post(self.buildPluginUrl("update"));
+    self.turnOffThermostat = function (item) {
+      self.setOutput(item, {target: null});
     };
 
-    self.handleIO = function (item, form) {
-      OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), {on: !item.gpio_status()});
+    self.toggleOutput = function (item) {
+      self.setOutput(item, {on: !item.on()});
     };
 
-    self.handleGcode = function (item, form) {
-      OctoPrint.post(self.buildPluginUrl("actions/" + item.index_id() + "/run"));
+    self.setDutyCycle = function (item) {
+      var duty_cycle = parseInt(item.new_duty_cycle());
+
+      if (isNaN(duty_cycle) || duty_cycle < 0 || duty_cycle > 100) {
+        item.new_duty_cycle("");
+        self.notify("Duty Cycle value needs to be between 0 and 100!", "error");
+        return;
+      }
+
+      self.setOutput(item, {duty_cycle: duty_cycle}).done(function () {
+        item.new_duty_cycle("");
+      });
     };
 
-    self.handleShellOutput = function (item, form) {
-      OctoPrint.post(self.buildPluginUrl("actions/" + item.index_id() + "/run"));
+    self.setColor = function (item) {
+      self.setOutput(item, {color: item.shown_color()}).done(function () {
+        item.new_color("");
+      });
     };
 
-    self.handlePrinterAction = function (item, form) {
+    self.runAction = function (item) {
       OctoPrint.post(self.buildPluginUrl("actions/" + item.index_id() + "/run"));
     };
 
     self.switchAutomation = function (item) {
       OctoPrint.patchJson(self.buildPluginUrl("automations/" + item.index_id()), {enabled: !item.enabled()});
-    };
-
-    self.handlePWM = function (item) {
-      var pwm_value = item.new_duty_cycle();
-
-      pwm_value = parseInt(pwm_value);
-
-      if (pwm_value < 0 || pwm_value > 100 || isNaN(pwm_value)) {
-        item.new_duty_cycle("")
-        new PNotify({
-          title: "Enclosure",
-          title_escape: true,
-          text: "Duty Cycle value needs to be between 0 and 100!",
-          text_escape: true,
-          type: "error"
-        });
-      } else {
-        OctoPrint.patchJson(self.buildPluginUrl("outputs/" + item.index_id()), {duty_cycle: pwm_value})
-          .done(function () {
-            item.new_duty_cycle("");
-          });
-      }
-    };
-
-    self.handleNeopixel = function (item) {
-
-      var index = item.index_id() ;
-      var or_tempStr = item.new_neopixel_color() || item.neopixel_color();
-      var tempStr = or_tempStr.replace("rgb(", "");
-
-      var r = parseInt(tempStr.substring(0, tempStr.indexOf(",")));
-      tempStr = tempStr.slice(tempStr.indexOf(",") + 1);
-      var g = parseInt(tempStr.substring(0, tempStr.indexOf(",")));
-      tempStr = tempStr.slice(tempStr.indexOf(",") + 1);
-      var b = parseInt(tempStr.substring(0, tempStr.indexOf(")")));
-
-      if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255 || isNaN(r) || isNaN(g) || isNaN(b)) {
-        new PNotify({
-          title: "Enclosure",
-          title_escape: true,
-          text: "Color needs to follow the format rgb(value_red,value_green,value_blue)!",
-          text_escape: true,
-          type: "error"
-        });
-      } else {
-        OctoPrint.patchJson(self.buildPluginUrl("outputs/" + index), {color: rgbToHex(or_tempStr)})
-          .done(function () {
-            item.new_neopixel_color("");
-          });
-      }
-    };
-
-    self.handleLedstripColor = function (item) {
-      var index = item.index_id() ;
-      var or_tempStr = item.new_ledstrip_color() || item.ledstrip_color();
-      var tempStr = or_tempStr.replace("rgb(", "");
-
-      var r = parseInt(tempStr.substring(0, tempStr.indexOf(",")));
-      tempStr = tempStr.slice(tempStr.indexOf(",") + 1);
-      var g = parseInt(tempStr.substring(0, tempStr.indexOf(",")));
-      tempStr = tempStr.slice(tempStr.indexOf(",") + 1);
-      var b = parseInt(tempStr.substring(0, tempStr.indexOf(")")));
-      if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255 || isNaN(r) || isNaN(g) || isNaN(b)) {
-        new PNotify({
-          title: "Enclosure",
-          title_escape: true,
-          text: "Color needs to follow the format rgb(value_red,value_green,value_blue)!",
-          text_escape: true,
-          type: "error"
-        });
-      } else {
-        OctoPrint.patchJson(self.buildPluginUrl("outputs/" + index), {color: rgbToHex(or_tempStr)})
-          .done(function () {
-            item.new_ledstrip_color("");
-          });
-      }
     };
 
     self.isNumeric = function (n) {

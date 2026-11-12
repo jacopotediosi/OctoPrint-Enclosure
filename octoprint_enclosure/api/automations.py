@@ -45,6 +45,21 @@ class AutomationResponse(ItemResponse):
             enabled=automation.enabled,
         )
 
+    @classmethod
+    def from_automations(cls, automations: Automations) -> list[AutomationResponse]:
+        """Describe every automation.
+
+        Args:
+            automations (Automations): The automations.
+
+        Returns:
+            list[AutomationResponse]: The automations, enabled or not.
+
+        """
+        return [
+            cls.from_automation(automation) for automation in automations.get_all(Automation, include_disabled=True)
+        ]
+
 
 @dataclass(frozen=True)
 class AutomationBody(Body):
@@ -76,8 +91,7 @@ class AutomationsApi(BaseApi):
     @route("GET", "/automations", responses={200: [AutomationResponse]})
     def get_automations(self) -> Response:
         """List the automations."""
-        automations = self._automations.get_all(Automation, include_disabled=True)
-        return list_response(AutomationResponse.from_automation(automation) for automation in automations)
+        return list_response(AutomationResponse.from_automations(self._automations))
 
     @route(
         "GET",

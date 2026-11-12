@@ -1,5 +1,5 @@
 from .bool_utils import parse_bool
-from .color_utils import Rgb, format_hex_color, is_rgb, parse_hex_color, parse_rgb
+from .color_utils import Rgb, format_hex_color, parse_hex_color
 from .crc_utils import crc16_modbus
 from .gcode_utils import get_gcode_param
 from .measurement import MeasurementType, TemperatureUnit
@@ -15,13 +15,11 @@ __all__ = [
     "format_hex_color",
     "get_gcode_param",
     "is_number",
-    "is_rgb",
     "parse_bool",
     "parse_float",
     "parse_hex",
     "parse_hex_color",
     "parse_hhmm",
-    "parse_rgb",
     "seconds_until_next",
     "to_float",
     "to_int",

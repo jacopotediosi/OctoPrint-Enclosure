@@ -93,10 +93,11 @@ class EnclosurePlugin(
         self._frontend = Frontend(
             self._plugin_manager,
             self._identifier,
-            self._enclosure_settings,
+            self._sensors,
+            self._gpio_inputs,
+            self._sensor_poller,
             self._outputs,
             self._automations,
-            self._sensor_poller,
             self._logger,
         )
         self._actions = Actions(self._printer, self._frontend, self._logger)
@@ -312,7 +313,7 @@ class EnclosurePlugin(
                 )
                 self._mqtt.publish_sensor_reading(sensor.config.label, temperature, reading.humidity)
 
-        self._frontend.update_readings()
+        self._frontend.update_inputs()
         self._control_loop.evaluate_reading(index_id)
 
     def handle_sensor_failure(self, sensor, error):

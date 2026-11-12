@@ -206,13 +206,9 @@ Error Responses:
 - 422 - body is not a JSON object, or its attributes are unknown, missing or invalid
 - 404 - no automation is set up with that id
 
-## Refresh the UI
+## Push messages
 
-Endpoint: **POST** `/update`
-
-Body: empty
-
-Response (204): No-Content
-
-Error Responses:
-- none
+The plugin also sends its state over the OctoPrint push socket, as plugin messages of the plugin `enclosure`. A message has one of these attributes:
+ - `inputs`: the inputs, ordered by id, each as in **GET** `/inputs/<id>`
+ - `outputs`: the outputs that are set up, ordered by id, each as in **GET** `/outputs/<id>`
+ - `automations`: the automations, ordered by id, each as in **GET** `/automations/<id>`

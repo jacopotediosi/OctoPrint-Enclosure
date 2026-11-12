@@ -23,11 +23,12 @@ from .routes import route
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Mapping
 
     from flask import Response
 
     from octoprint_enclosure.engine import ControlLoop, OutputExecutor
-    from octoprint_enclosure.outputs import Outputs
+    from octoprint_enclosure.outputs import Outputs, Thermostat
     from octoprint_enclosure.plugin_context import PluginContext
 
 
@@ -62,8 +63,8 @@ class OutputResponse(ItemResponse):
             on = output.is_on()
         except OutputError:
             raise
-        except Exception:
-            logger.exception("Error reading output %s", config.index_id)
+        except Exception as error:  # noqa: BLE001 - a traceback at every push would fill the log
+            logger.debug("Can't read output %s: %s", config.index_id, error)
             on = None
 
         if isinstance(output, RegularOutput):
@@ -79,6 +80,34 @@ class OutputResponse(ItemResponse):
 
         msg = "The output is not set up"
         raise OutputError(msg)
+
+    @classmethod
+    def from_outputs(
+        cls,
+        outputs: Outputs,
+        thermostats: Mapping[int, Thermostat],
+        logger: logging.Logger,
+    ) -> list[OutputResponse]:
+        """Describe the outputs that are set up, reading their state.
+
+        Args:
+            outputs (Outputs): The outputs.
+            thermostats (Mapping[int, Thermostat]): The thermostats, by the id of their output.
+            logger (logging.Logger): The logger to write to if an output can't be read.
+
+        Returns:
+            list[OutputResponse]: The outputs with their state, each as the response of its type.
+
+        """
+        responses = []
+        for output in outputs.get_all(Output):
+            thermostat = thermostats.get(output.config.index_id)
+            target = None if thermostat is None else thermostat.target
+            try:
+                responses.append(cls.from_output(output, target, logger))
+            except OutputError:
+                continue
+        return responses
 
 
 @dataclass(frozen=True)
@@ -166,14 +195,8 @@ class OutputsApi(BaseApi):
     @route("GET", "/outputs", responses={200: [OutputResponse]})
     def get_outputs(self) -> Response:
         """List the outputs that are set up, with their state."""
-        outputs = []
-        for output in self._outputs.get_all(Output):
-            try:
-                outputs.append(self._get_output_response(output))
-            except OutputError:
-                continue
-
-        return list_response(outputs)
+        thermostats = self._control_loop.get_thermostats()
+        return list_response(OutputResponse.from_outputs(self._outputs, thermostats, self._logger))
 
     @route("GET", "/outputs/<int:output_id>", responses={200: OutputResponse, 404: ErrorResponse})
     def get_output(self, output_id: int) -> Response:

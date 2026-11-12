@@ -26,12 +26,12 @@
                     data-bind="visible: first, text: sensor.label, attr: {title: sensor.label, rowspan: rowspan}"></th>
                 <td class="temperature_actual"
                     data-bind="visible: first, attr: {rowspan: rowspan}, with: sensor">
-                    <span data-bind="text: temp_sensor_temp, attr: {title: temp_sensor_temp}"></span>
+                    <span data-bind="text: $root.fromCelsius(temperature()), attr: {title: $root.fromCelsius(temperature())}"></span>
                     <span class="add-on" data-bind="text: $root.temperatureUnitLabel()"></span>
                 </td>
                 <td class="humidity_actual"
                     data-bind="visible: first && $root.humidityCapableSensor(sensor.temp_sensor_type()), attr: {rowspan: rowspan}, with: sensor">
-                    <span data-bind="text: temp_sensor_humidity, attr: {title: temp_sensor_humidity}"></span>
+                    <span data-bind="text: humidity, attr: {title: humidity}"></span>
                     <span class="add-on">%</span>
                 </td>
                 <td class="humidity_actual"
@@ -43,13 +43,13 @@
                     data-bind="visible: $root.hasAnyThermostat(), with: thermostat">
                     <form class="form-inline"
                           style="margin:0"
-                          data-bind="submit: function(element) { $root.setTemperature($data, element) }">
+                          data-bind="submit: function(element) { $root.setTarget($data, element) }">
                         <div class="input-append">
                             <input type="number"
                                    min="0"
                                    max="999"
                                    class="input-mini input-nospin"
-                                   data-bind="enable: $root.isUser(), value: temp_ctr_new_set_value, valueUpdate: 'input', attr: {placeholder:$root.getCleanTemperature(temp_ctr_set_value())}">
+                                   data-bind="enable: $root.isUser(), value: new_target, valueUpdate: 'input', attr: {placeholder: $root.shownTarget($data)}">
                             <span class="add-on"
                                   data-bind="text: temp_ctr_type() == 'dehumidifier' ? '%' : $root.temperatureUnitLabel()"></span>
                         </div>
@@ -68,7 +68,7 @@
                             </button>
                             <ul class="dropdown-menu">
                                 <li>
-                                    <a href="#" data-bind="click: $root.turnOffHeater">{{ _("Off") }}</a>
+                                    <a href="#" data-bind="click: $root.turnOffThermostat">{{ _("Off") }}</a>
                                 </li>
                             </ul>
                         </div>
@@ -85,11 +85,11 @@
                 <span data-bind="text: label"></span>
                 <span class="badge">regular gpio</span>
                 <span class="badge help-inline"
-                      data-bind="text: gpio_status() ? 'on' : 'off', css: {'badge-success': gpio_status(), 'badge-important': !gpio_status()}"></span>
+                      data-bind="text: on() ? 'on' : 'off', css: {'badge-success': on(), 'badge-important': !on()}"></span>
             </h4>
             <div>
                 <button type="button"
-                        data-bind="enable: $root.isUser(), click: $root.handleIO, text: gpio_status() ? 'Turn off' : 'Turn on'"
+                        data-bind="enable: $root.isUser(), click: $root.toggleOutput, text: on() ? 'Turn off' : 'Turn on'"
                         class="btn"></button>
             </div>
         </div>
@@ -99,13 +99,11 @@
                 <span class="badge">ledstrip</span>
             </h4>
             <div class="input-append ledstrip-div">
-                <input type="color"
-                       class="input-block-level"
-                       data-bind="rgbColor: new_ledstrip_color, rgbColorPlaceholder: ledstrip_color">
+                <input type="color" class="input-block-level" data-bind="value: shown_color">
                 <button type="submit"
                         class="btn btn-input-inc"
                         title="Set Color"
-                        data-bind="enable: $root.isUser(), click: $root.handleLedstripColor">
+                        data-bind="enable: $root.isUser(), click: $root.setColor">
                     <i class="fa fa-check"></i>
                 </button>
             </div>
@@ -118,10 +116,10 @@
             <div class="input-append">
                 <input type="text"
                        class="input-mini"
-                       data-bind="value: new_duty_cycle, valueUpdate: 'input', attr: {placeholder:$root.getDutyCycle(duty_cycle())}">
+                       data-bind="value: new_duty_cycle, valueUpdate: 'input', attr: {placeholder: $root.shownDutyCycle(duty_cycle())}">
                 <button type="button"
                         class="btn btn-input-inc"
-                        data-bind="enable: $root.isUser() && !$root.isPwmLinked(index_id()), click: $root.handlePWM, attr: {title: $root.isPwmLinked(index_id()) ? 'Temperature controlled PWM' : 'Set PWM'}">
+                        data-bind="enable: $root.isUser() && !$root.isPwmLinked(index_id()), click: $root.setDutyCycle, attr: {title: $root.isPwmLinked(index_id()) ? 'Temperature controlled PWM' : 'Set PWM'}">
                     <i class="fa fa-check"></i>
                 </button>
             </div>
@@ -132,13 +130,11 @@
                 <span class="badge">neopixel</span>
             </h4>
             <div class="input-append neopixel-div">
-                <input type="color"
-                       class="input-block-level"
-                       data-bind="rgbColor: new_neopixel_color, rgbColorPlaceholder: neopixel_color">
+                <input type="color" class="input-block-level" data-bind="value: shown_color">
                 <button type="submit"
                         class="btn btn-input-inc"
                         title="Set Color"
-                        data-bind="enable: $root.isUser(), click: $root.handleNeopixel">
+                        data-bind="enable: $root.isUser(), click: $root.setColor">
                     <i class="fa fa-check"></i>
                 </button>
             </div>
@@ -154,7 +150,7 @@
                 <span class="badge badge-warning"
                       data-bind="visible: temp_ctr_type() == 'dehumidifier'">Dehumidifier</span>
                 <span class="badge help-inline"
-                      data-bind="text: gpio_status() ? 'on' : 'off', css: {'badge-success': gpio_status(), 'badge-important': !gpio_status()}"></span>
+                      data-bind="text: on() ? 'on' : 'off', css: {'badge-success': on(), 'badge-important': !on()}"></span>
             </h4>
         </div>
         <div data-bind="foreach: $root.automationsOn(index_id())">
@@ -181,7 +177,7 @@
             </h4>
             <div>
                 <button type="button"
-                        data-bind="enable: $root.isOperational(), click: $root.handleGcode"
+                        data-bind="enable: $root.isOperational(), click: $root.runAction"
                         class="btn">Send gcode</button>
             </div>
         </div>
@@ -192,7 +188,7 @@
             </h4>
             <div>
                 <button type="button"
-                        data-bind="enable: $root.isUser(), click: $root.handleShellOutput"
+                        data-bind="enable: $root.isUser(), click: $root.runAction"
                         class="btn">Execute Script</button>
             </div>
         </div>
@@ -203,7 +199,7 @@
             </h4>
             <div>
                 <button type="button"
-                        data-bind="enable: $root.isUser(), click: $root.handlePrinterAction"
+                        data-bind="enable: $root.isUser(), click: $root.runAction"
                         class="btn">Send command</button>
             </div>
         </div>

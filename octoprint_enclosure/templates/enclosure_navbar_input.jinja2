@@ -12,11 +12,11 @@
         <a>
             <span data-bind="text: label"></span>
             <span>
-                <span data-bind="text: temp_sensor_temp, attr: {title: temp_sensor_temp}"></span>
+                <span data-bind="text: $root.fromCelsius(temperature()), attr: {title: $root.fromCelsius(temperature())}"></span>
                 <span class="add-on" data-bind="text: $root.temperatureUnitLabel()"></span>
             </span>
             <span data-bind="visible: $root.humidityCapableSensor(temp_sensor_type())">
-                <span data-bind="text: temp_sensor_humidity, attr: {title: temp_sensor_humidity}"></span>
+                <span data-bind="text: humidity, attr: {title: humidity}"></span>
                 <span class="add-on">%</span>
             </span>
         </a>

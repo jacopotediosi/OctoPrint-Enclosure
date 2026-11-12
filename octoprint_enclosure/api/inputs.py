@@ -11,6 +11,7 @@ from .routes import route
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Mapping
 
     from flask import Response
 
@@ -23,6 +24,33 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class InputResponse(ItemResponse):
     """An input, and its state."""
+
+    @classmethod
+    def from_inputs(
+        cls,
+        sensors: Sensors,
+        gpio_inputs: GpioInputs,
+        readings: Mapping[int, Reading],
+        logger: logging.Logger,
+    ) -> list[InputResponse]:
+        """Describe every input, reading the pins of the GPIO inputs.
+
+        Args:
+            sensors (Sensors): The temperature sensors.
+            gpio_inputs (GpioInputs): The GPIO inputs.
+            readings (Mapping[int, Reading]): The last reading of each sensor, by the id of its input.
+            logger (logging.Logger): The logger to write to if a pin can't be read.
+
+        Returns:
+            list[InputResponse]: The inputs with their state, each as the response of its type.
+
+        """
+        inputs: list[InputResponse] = [
+            SensorInputResponse.from_sensor(sensor, readings.get(index_id, Reading()))
+            for index_id, sensor in sensors.get_all().items()
+        ]
+        inputs += [GpioInputResponse.from_gpio_input(gpio_input, logger) for gpio_input in gpio_inputs.get_all()]
+        return inputs
 
 
 @dataclass(frozen=True)
@@ -112,14 +140,7 @@ class InputsApi(BaseApi):
     def get_inputs(self) -> Response:
         """List the inputs, with their state."""
         readings = self._sensor_poller.get_readings()
-        inputs: list[InputResponse] = [
-            SensorInputResponse.from_sensor(sensor, readings.get(index_id, Reading()))
-            for index_id, sensor in self._sensors.get_all().items()
-        ]
-        inputs += [
-            GpioInputResponse.from_gpio_input(gpio_input, self._logger) for gpio_input in self._gpio_inputs.get_all()
-        ]
-        return list_response(inputs)
+        return list_response(InputResponse.from_inputs(self._sensors, self._gpio_inputs, readings, self._logger))
 
     @route(
         "GET",

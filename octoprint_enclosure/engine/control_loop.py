@@ -390,7 +390,7 @@ class ControlLoop:
             self._decide_octoprint_event(message)
         elif isinstance(message, _SettingsLoaded):
             self._load_thermostats()
-            self._frontend.update_targets(self.get_thermostats())
+            self._output_executor.update_ui_outputs()
             self._decide_continuous()
         elif isinstance(message, _ThermostatTargetChanged):
             try:
@@ -399,7 +399,7 @@ class ControlLoop:
                     self._logger.debug("Can't set the target of output %s: it isn't a thermostat", message.index_id)
                 else:
                     thermostat.set_target(message.target)
-                    self._frontend.update_targets(self.get_thermostats())
+                    self._output_executor.update_ui_outputs()
                     self._decide_thermostats(self._sensor_poller.get_readings(), None)
             finally:
                 if message.done is not None:
@@ -420,9 +420,8 @@ class ControlLoop:
                     message.done.set()
             self._decide_continuous()
         elif isinstance(message, _UpdateUi):
-            self._frontend.update_readings()
+            self._frontend.update_inputs()
             self._frontend.update_automations()
-            self._frontend.update_targets(self.get_thermostats())
             self._output_executor.update_ui_outputs()
         elif isinstance(message, _RunRule):
             index_id = message.rule.config.index_id
@@ -470,6 +469,7 @@ class ControlLoop:
             thermostats[index_id] = thermostat
 
         self._thermostats = thermostats
+        self._frontend.set_thermostats(self.get_thermostats())
 
     def _decide_gpio_input_levels(self) -> None:
         try:
@@ -527,7 +527,7 @@ class ControlLoop:
                 if thermostat.is_above_max_temp(temperature):
                     self._logger.warning("Thermostat %s reached its maximum temperature: turning it off", index_id)
                     thermostat.turn_off()
-                    self._frontend.update_targets(self.get_thermostats())
+                    self._output_executor.update_ui_outputs()
 
                 # Decide whether the device has to be on, and switch it
                 should_be_on = thermostat.decide(temperature, humidity)
@@ -813,7 +813,7 @@ class ControlLoop:
                 thermostat.turn_on(setpoint)
             else:
                 thermostat.turn_off()
-            self._frontend.update_targets(self.get_thermostats())
+            self._output_executor.update_ui_outputs()
             self._decide_thermostats(self._sensor_poller.get_readings(), None)
         elif state is OutputSetState.ON:
             self._output_executor.turn_on(index_id, setpoint)

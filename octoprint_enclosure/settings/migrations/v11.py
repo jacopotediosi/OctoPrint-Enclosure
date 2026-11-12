@@ -17,9 +17,10 @@ The automations are new, and come in four types:
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.utils import TemperatureUnit, is_rgb, parse_hhmm, parse_rgb, to_float, to_int
+from octoprint_enclosure.utils import Rgb, TemperatureUnit, format_hex_color, parse_hhmm, to_float, to_int
 
 if TYPE_CHECKING:
     import logging
@@ -525,8 +526,12 @@ def _convert_auto_startup_shutdown_to_automations(rpi_outputs: list[dict], autom
         elif output_type in ("ledstrip", "neopixel_direct", "neopixel_indirect"):
             color_key = "default_ledstrip_color" if output_type == "ledstrip" else "default_neopixel_color"
             color = str(rpi_output.get(color_key, ""))
-            red, green, blue = (to_int(part) for part in parse_rgb(color)) if is_rgb(color) else (0, 0, 0)
-            on_setpoint = {"color": f"#{red:02x}{green:02x}{blue:02x}"} if (red, green, blue) != (0, 0, 0) else None
+
+            # Convert color to the hex format, black if it was invalid
+            match = re.fullmatch(r"rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)", color)
+            rgb = Rgb(*(int(part) for part in match.groups())) if match else Rgb(0, 0, 0)
+            is_color = rgb != Rgb(0, 0, 0) and max(rgb) <= 255
+            on_setpoint = {"color": format_hex_color(rgb)} if is_color else None
         elif output_type == "temp_hum_control":
             target = to_float(rpi_output.get("temp_ctr_default_value"))
             on_setpoint = {"target": target} if target != 0 else None
