@@ -800,25 +800,24 @@ class ControlLoop:
             return False
         setpoint_class = output.setpoint_class
         setpoint_values = {field.name: getattr(setpoint_config, field.name) for field in fields(setpoint_class)}
-        if state is not OutputSetState.OFF and None in setpoint_values.values():
-            self._logger.debug("Can't turn on output %s: its setpoint is not set", index_id)
-            return False
-        setpoint = setpoint_class(**setpoint_values)
 
         if isinstance(output, ThermostatOutput):
             thermostat = self._thermostats.get(index_id)
             if thermostat is None:
                 return False
-            if state is OutputSetState.ON or (state is OutputSetState.TOGGLE and not thermostat.is_on()):
-                thermostat.turn_on(setpoint)
-            else:
+            if state is OutputSetState.OFF or (state is OutputSetState.TOGGLE and thermostat.is_on()):
                 thermostat.turn_off()
+            elif None in setpoint_values.values():
+                self._logger.debug("Can't turn on output %s: its setpoint is not set", index_id)
+                return False
+            else:
+                thermostat.turn_on(setpoint_class(**setpoint_values))
             self._output_executor.update_ui_outputs()
             self._decide_thermostats(self._sensor_poller.get_readings(), None)
         elif state is OutputSetState.ON:
-            self._output_executor.turn_on(index_id, setpoint)
+            self._output_executor.turn_on(index_id, setpoint_class(**setpoint_values))
         elif state is OutputSetState.OFF:
             self._output_executor.turn_off(index_id)
         else:
-            self._output_executor.toggle(index_id, setpoint)
+            self._output_executor.toggle(index_id, setpoint_class(**setpoint_values))
         return True
