@@ -14,7 +14,8 @@ def _get_plugin_implementation() -> EnclosurePlugin:
 
     """
     if not is_octoprint_compatible(">=1.4.0"):
-        raise RuntimeError("OctoPrint 1.4.0 or greater required.")
+        msg = "OctoPrint 1.4.0 or greater required."
+        raise RuntimeError(msg)
 
     return EnclosurePlugin()
 

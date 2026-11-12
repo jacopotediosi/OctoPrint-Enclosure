@@ -116,6 +116,14 @@ class DummySensor(Sensor[DummyConfig]):
     """Tells whether a dehumidifier is drying the sensor."""
 
     def __init__(self, config: DummyConfig, gpio: GpioBackend, logger: logging.Logger) -> None:
+        """Set up the sensor.
+
+        Args:
+            config (DummyConfig): The configuration of the sensor.
+            gpio (GpioBackend): The GPIO backend.
+            logger (logging.Logger): The logger to write to.
+
+        """
         super().__init__(config, gpio, logger)
         self.temperature = DummyValue(TEMPERATURE_MIN_C, TEMPERATURE_MAX_C, TEMPERATURE_DELTA_C)
         self.humidity = DummyValue(HUMIDITY_MIN_PERCENT, HUMIDITY_MAX_PERCENT, HUMIDITY_DELTA_PERCENT)

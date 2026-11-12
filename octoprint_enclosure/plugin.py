@@ -43,6 +43,8 @@ class EnclosurePlugin(
     octoprint.plugin.BlueprintPlugin,
     octoprint.plugin.EventHandlerPlugin,
 ):
+    """The OctoPrint plugin that monitors and controls a printer enclosure."""
+
     rpi_inputs = []
     rpi_outputs = []
     actions = []

@@ -208,7 +208,7 @@ class SensorPoller:
         # Get the reading
         try:
             reading = sensor.read()
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - the error is kept in the outcome of the reading
             self._logger.debug("Couldn't read the sensor of input %s: %s", index_id, error)
             outcome = ReadingOutcome(None, error, time.monotonic())
         else:

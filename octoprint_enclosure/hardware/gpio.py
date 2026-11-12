@@ -38,7 +38,7 @@ def _rpi_gpio_in_bcm() -> GpioBackend:
     elif rpi_gpio.getmode() != rpi_gpio.BCM:
         msg = "GPIO numbering is BOARD, set by another plugin: this plugin needs BCM"
         raise RuntimeError(msg)
-    rpi_gpio.setwarnings(False)
+    rpi_gpio.setwarnings(False)  # noqa: FBT003 - RPi.GPIO.setwarnings takes it only by position
     return rpi_gpio
 
 

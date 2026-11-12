@@ -60,6 +60,15 @@ class PwmOutput(Output[PwmConfig, PwmSetpoint]):
     """The duty cycle of the PWM, from 0 to 100."""
 
     def __init__(self, config: PwmConfig, gpio: GpioBackend, i2c: I2cBackend, logger: logging.Logger) -> None:
+        """Set up the output.
+
+        Args:
+            config (PwmConfig): The configuration of the output.
+            gpio (GpioBackend): The GPIO backend.
+            i2c (I2cBackend): The I2C backend.
+            logger (logging.Logger): The logger to write to.
+
+        """
         super().__init__(config, gpio, i2c, logger)
         self._pwm = None
         self._duty_cycle = 0

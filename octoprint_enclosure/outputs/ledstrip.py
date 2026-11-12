@@ -75,8 +75,8 @@ class LedstripOutput(ColorOutput[LedstripConfig]):
         # The most significant bit first, with a clock pulse after each one
         for bit in reversed(range(count)):
             self._gpio.output(self.config.ledstrip_gpio_dat, bool((value >> bit) & 1))
-            self._gpio.output(self.config.ledstrip_gpio_clk, False)
-            self._gpio.output(self.config.ledstrip_gpio_clk, True)
+            self._gpio.output(self.config.ledstrip_gpio_clk, self._gpio.LOW)
+            self._gpio.output(self.config.ledstrip_gpio_clk, self._gpio.HIGH)
 
     @override
     def run_enc_command(self, command: str) -> None:

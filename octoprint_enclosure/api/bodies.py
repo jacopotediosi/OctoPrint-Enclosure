@@ -96,7 +96,8 @@ class Body:
 
         """
         if not isinstance(data, dict):
-            raise BodyError("Body is not a json object")
+            msg = "Body is not a json object"
+            raise BodyError(msg)
 
         type_hints = get_type_hints(cls)
         names = [field.name for field in fields(cls)]

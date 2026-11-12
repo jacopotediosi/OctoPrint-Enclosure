@@ -37,7 +37,7 @@ def main() -> None:
                 continue
 
             if humidity is not None and temperature is not None:
-                print(temperature, humidity)
+                sys.stdout.write(f"{temperature} {humidity}\n")
                 return
 
             time.sleep(EMPTY_ATTEMPT_DELAY_SECONDS)
