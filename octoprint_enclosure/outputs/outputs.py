@@ -41,7 +41,7 @@ class _InvalidOutput(Output[OutputConfig, BaseConfig]):
         self.reason = reason
 
     @override
-    def is_on(self) -> bool:
+    def _is_on(self) -> bool:
         raise OutputError(self.reason)
 
     @override

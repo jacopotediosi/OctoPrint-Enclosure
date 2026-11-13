@@ -107,7 +107,7 @@ class PwmOutput(Output[PwmConfig, PwmSetpoint]):
             self._pwm = None
 
     @override
-    def is_on(self) -> bool:
+    def _is_on(self) -> bool:
         """Tell whether the duty cycle of the PWM is above 0."""
         return self._duty_cycle > 0
 

@@ -551,6 +551,8 @@ class ControlLoop:
                 except GpioInputError as error:
                     self._logger.debug("Can't read GPIO input %s: %s", input_id, error)
                     continue
+                if level is None:
+                    continue
 
                 # React if the input level matches the trigger and the conditions of the rule are satisfied
                 if trigger.matches(GpioEdgeEvent(input_id, level)) and rule.conditions_satisfied(
@@ -806,6 +808,8 @@ class ControlLoop:
                     level = self._gpio_inputs.get(input_id).read_pin_level()
                 except GpioInputError as error:
                     self._logger.debug("Can't read GPIO input %s: %s", input_id, error)
+                    continue
+                if level is None:
                     continue
 
                 automation.update_filament_presence(level)

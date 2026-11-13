@@ -180,7 +180,13 @@ class OutputExecutor:
         def toggle() -> bool | None:
             try:
                 output = self._get_switchable(index_id, setpoint)
-                should_be_on = not output.is_on()
+
+                is_on = output.is_on()
+                if is_on is None:
+                    self._logger.debug("Can't toggle output %s: it can't be read", index_id)
+                    return None
+
+                should_be_on = not is_on
                 if should_be_on:
                     output.turn_on(setpoint)
                 else:

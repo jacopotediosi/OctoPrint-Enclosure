@@ -97,7 +97,7 @@ class ThermostatOutput(Output[ThermostatConfig, ThermostatSetpoint]):
         self.switch.setup()
 
     @override
-    def is_on(self) -> bool:
+    def _is_on(self) -> bool:
         """Read whether the device of the thermostat is on.
 
         Returns:

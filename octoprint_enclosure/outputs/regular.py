@@ -59,7 +59,7 @@ class RegularOutput(Output[RegularConfig, RegularSetpoint]):
         self._switch.setup()
 
     @override
-    def is_on(self) -> bool:
+    def _is_on(self) -> bool:
         return self._switch.is_on()
 
     def turn_on(self, setpoint: RegularSetpoint) -> None:

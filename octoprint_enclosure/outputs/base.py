@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
@@ -29,8 +30,8 @@ class Switchable(Protocol[_SetpointT]):
     setpoint_class: type[_SetpointT]
     """The dataclass of the setpoint, whose fields are named like the keys of the settings of who commands."""
 
-    def is_on(self) -> bool:
-        """Read whether it is on."""
+    def is_on(self) -> bool | None:
+        """Read whether it is on, or None if its state can't be read."""
         ...
 
     def turn_on(self, setpoint: _SetpointT) -> None:
@@ -63,6 +64,12 @@ class Output(ABC, Generic[_ConfigT, _SetpointT]):
 
     _logger: logging.Logger
 
+    _unreadable: bool
+    """Whether the state of the output couldn't be read the last time."""
+
+    _unreadable_lock: threading.Lock
+    """Held by every access to whether the state of the output couldn't be read the last time."""
+
     def __init__(self, config: _ConfigT, gpio: GpioBackend, i2c: I2cBackend, logger: logging.Logger) -> None:
         """Set up the output.
 
@@ -77,6 +84,8 @@ class Output(ABC, Generic[_ConfigT, _SetpointT]):
         self._gpio = gpio
         self._i2c = i2c
         self._logger = logger
+        self._unreadable = False
+        self._unreadable_lock = threading.Lock()
 
     @property
     def gpio_pins(self) -> frozenset[int]:
@@ -99,8 +108,40 @@ class Output(ABC, Generic[_ConfigT, _SetpointT]):
 
         """
 
+    def is_on(self) -> bool | None:
+        """Read whether the output is on.
+
+        Returns:
+            bool | None: Whether the output is on, or None if its state can't be read.
+
+        Raises:
+            OutputError: If the output is not set up.
+
+        """
+        # Read the output
+        try:
+            on = self._is_on()
+        except OutputError:
+            raise
+        except Exception:
+            with self._unreadable_lock:
+                stopped_working = not self._unreadable
+                self._unreadable = True
+            if stopped_working:
+                self._logger.exception("Output %s can't be read", self.config.index_id)
+            return None
+
+        # Log the output that can be read again
+        with self._unreadable_lock:
+            works_again = self._unreadable
+            self._unreadable = False
+        if works_again:
+            self._logger.warning("Output %s can be read again", self.config.index_id)
+
+        return on
+
     @abstractmethod
-    def is_on(self) -> bool:
+    def _is_on(self) -> bool:
         """Read whether the output is on.
 
         Returns:

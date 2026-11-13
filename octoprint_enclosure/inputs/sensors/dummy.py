@@ -106,14 +106,14 @@ class DummySensor(Sensor[DummyConfig]):
     failing: bool
     """Whether reading the sensor must fail."""
 
-    is_heater_on: Callable[[], bool]
-    """Tells whether a heater is warming the sensor up."""
+    is_heater_on: Callable[[], bool | None]
+    """Tells whether a heater is warming the sensor up, or None if it can't tell."""
 
-    is_cooler_on: Callable[[], bool]
-    """Tells whether a cooler is cooling the sensor down."""
+    is_cooler_on: Callable[[], bool | None]
+    """Tells whether a cooler is cooling the sensor down, or None if it can't tell."""
 
-    is_dehumidifier_on: Callable[[], bool]
-    """Tells whether a dehumidifier is drying the sensor."""
+    is_dehumidifier_on: Callable[[], bool | None]
+    """Tells whether a dehumidifier is drying the sensor, or None if it can't tell."""
 
     def __init__(self, config: DummyConfig, gpio: GpioBackend, logger: logging.Logger) -> None:
         """Set up the sensor.
@@ -138,7 +138,7 @@ class DummySensor(Sensor[DummyConfig]):
             msg = "The dummy sensor is set to fail"
             raise SensorError(msg)
 
-        self.temperature.advance(pushed_up=self.is_heater_on(), pushed_down=self.is_cooler_on())
-        self.humidity.advance(pushed_down=self.is_dehumidifier_on())
+        self.temperature.advance(pushed_up=bool(self.is_heater_on()), pushed_down=bool(self.is_cooler_on()))
+        self.humidity.advance(pushed_down=bool(self.is_dehumidifier_on()))
 
         return Reading(temperature=self.temperature.value, humidity=self.humidity.value)

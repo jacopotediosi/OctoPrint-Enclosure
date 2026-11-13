@@ -55,7 +55,7 @@ class ColorOutput(Output[_ConfigT, ColorSetpoint]):
         return self._color
 
     @override
-    def is_on(self) -> bool:
+    def _is_on(self) -> bool:
         """Tell whether a color other than black is set."""
         return self._color is not None and self._color != Rgb(0, 0, 0)
 

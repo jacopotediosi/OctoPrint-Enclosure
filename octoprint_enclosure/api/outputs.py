@@ -24,7 +24,6 @@ from .responses import ItemResponse, error_response, item_response, list_respons
 from .routes import route
 
 if TYPE_CHECKING:
-    import logging
     from collections.abc import Mapping
 
     from flask import Response
@@ -46,14 +45,13 @@ class OutputResponse(ItemResponse):
     """Whether the output is on, or null if it can't be read."""
 
     @classmethod
-    def from_output(cls, output: Output, target: float | None, logger: logging.Logger) -> OutputResponse:
+    def from_output(cls, output: Output, target: float | None) -> OutputResponse:
         """Describe an output, reading its state.
 
         Args:
             output (Output): The output.
             target (float | None): The target of the thermostat of the output, or None if the thermostat is off or
                 the output is not a thermostat.
-            logger (logging.Logger): The logger to write to if the output can't be read.
 
         Returns:
             OutputResponse: The output with its state, as the response of its type.
@@ -64,14 +62,7 @@ class OutputResponse(ItemResponse):
         """
         config = output.config
         item = {"id": config.index_id, "type": config.output_type.value, "label": config.label}
-
-        try:
-            on = output.is_on()
-        except OutputError:
-            raise
-        except Exception as error:  # noqa: BLE001 - a traceback at every push would fill the log
-            logger.debug("Can't read output %s: %s", config.index_id, error)
-            on = None
+        on = output.is_on()
 
         if isinstance(output, RegularOutput):
             return RegularOutputResponse(**item, on=on)
@@ -88,18 +79,12 @@ class OutputResponse(ItemResponse):
         raise OutputError(msg)
 
     @classmethod
-    def from_outputs(
-        cls,
-        outputs: Outputs,
-        thermostats: Mapping[int, Thermostat],
-        logger: logging.Logger,
-    ) -> list[OutputResponse]:
+    def from_outputs(cls, outputs: Outputs, thermostats: Mapping[int, Thermostat]) -> list[OutputResponse]:
         """Describe the outputs that are set up, reading their state.
 
         Args:
             outputs (Outputs): The outputs.
             thermostats (Mapping[int, Thermostat]): The thermostats, by the id of their output.
-            logger (logging.Logger): The logger to write to if an output can't be read.
 
         Returns:
             list[OutputResponse]: The outputs with their state, each as the response of its type.
@@ -110,7 +95,7 @@ class OutputResponse(ItemResponse):
             thermostat = thermostats.get(output.config.index_id)
             target = None if thermostat is None else thermostat.target
             try:
-                responses.append(cls.from_output(output, target, logger))
+                responses.append(cls.from_output(output, target))
             except OutputError:
                 continue
         return responses
@@ -209,7 +194,7 @@ class OutputsApi(BaseApi):
     def get_outputs(self) -> Response:
         """List the outputs that are set up, ordered by id, with their state."""
         thermostats = self._control_loop.get_thermostats()
-        return list_response(OutputResponse.from_outputs(self._outputs, thermostats, self._logger))
+        return list_response(OutputResponse.from_outputs(self._outputs, thermostats))
 
     @route(
         "GET",
@@ -280,4 +265,4 @@ class OutputsApi(BaseApi):
     def _get_output_response(self, output: Output) -> OutputResponse:
         thermostat = self._control_loop.get_thermostats().get(output.config.index_id)
         target = None if thermostat is None else thermostat.target
-        return OutputResponse.from_output(output, target, self._logger)
+        return OutputResponse.from_output(output, target)

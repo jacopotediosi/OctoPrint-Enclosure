@@ -81,12 +81,12 @@ class Frontend:
     def update_inputs(self) -> None:
         """Update the inputs."""
         readings = self._sensor_poller.get_readings()
-        inputs = InputResponse.from_inputs(self._sensors, self._gpio_inputs, readings, self._logger)
+        inputs = InputResponse.from_inputs(self._sensors, self._gpio_inputs, readings)
         self._send_items("inputs", inputs)
 
     def update_outputs(self) -> None:
         """Update the outputs."""
-        outputs = OutputResponse.from_outputs(self._outputs, self._thermostats, self._logger)
+        outputs = OutputResponse.from_outputs(self._outputs, self._thermostats)
         self._send_items("outputs", outputs)
 
     def update_automations(self) -> None:

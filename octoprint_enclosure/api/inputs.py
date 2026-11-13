@@ -11,7 +11,6 @@ from .responses import ItemResponse, error_response, item_response, list_respons
 from .routes import route
 
 if TYPE_CHECKING:
-    import logging
     from collections.abc import Mapping
 
     from flask import Response
@@ -32,7 +31,6 @@ class InputResponse(ItemResponse):
         sensors: Sensors,
         gpio_inputs: GpioInputs,
         readings: Mapping[int, Reading],
-        logger: logging.Logger,
     ) -> list[InputResponse]:
         """Describe every input, reading the pins of the GPIO inputs.
 
@@ -40,7 +38,6 @@ class InputResponse(ItemResponse):
             sensors (Sensors): The temperature sensors.
             gpio_inputs (GpioInputs): The GPIO inputs.
             readings (Mapping[int, Reading]): The last reading of each sensor, by the id of its input.
-            logger (logging.Logger): The logger to write to if a pin can't be read.
 
         Returns:
             list[InputResponse]: The inputs with their state, each as the response of its type.
@@ -50,7 +47,7 @@ class InputResponse(ItemResponse):
             SensorInputResponse.from_sensor(sensor, readings.get(index_id, Reading()))
             for index_id, sensor in sensors.get_all().items()
         ]
-        inputs += [GpioInputResponse.from_gpio_input(gpio_input, logger) for gpio_input in gpio_inputs.get_all()]
+        inputs += [GpioInputResponse.from_gpio_input(gpio_input) for gpio_input in gpio_inputs.get_all()]
         return inputs
 
 
@@ -102,24 +99,23 @@ class GpioInputResponse(InputResponse):
     """Whether the input is active, or null if its pin can't be read."""
 
     @classmethod
-    def from_gpio_input(cls, gpio_input: GpioInput, logger: logging.Logger) -> GpioInputResponse:
+    def from_gpio_input(cls, gpio_input: GpioInput) -> GpioInputResponse:
         """Describe an input on a GPIO pin, reading its pin.
 
         Args:
             gpio_input (GpioInput): The input.
-            logger (logging.Logger): The logger to write to if the pin can't be read.
 
         Returns:
             GpioInputResponse: The input, with its state.
 
         """
         config = gpio_input.config
-        try:
-            active = gpio_input.is_active()
-        except Exception as error:  # noqa: BLE001 - a traceback at every push would fill the log
-            logger.debug("Can't read input %s: %s", config.index_id, error)
-            active = None
-        return cls(id=config.index_id, type=config.input_type.value, label=config.label, active=active)
+        return cls(
+            id=config.index_id,
+            type=config.input_type.value,
+            label=config.label,
+            active=gpio_input.is_active(),
+        )
 
 
 class InputsApi(BaseApi):
@@ -145,7 +141,7 @@ class InputsApi(BaseApi):
     def get_inputs(self) -> Response:
         """List the inputs, ordered by id, with their state."""
         readings = self._sensor_poller.get_readings()
-        return list_response(InputResponse.from_inputs(self._sensors, self._gpio_inputs, readings, self._logger))
+        return list_response(InputResponse.from_inputs(self._sensors, self._gpio_inputs, readings))
 
     @route(
         "GET",
@@ -169,4 +165,4 @@ class InputsApi(BaseApi):
         except GpioInputError:
             return error_response(404, f"No input is set up with id {input_id}.")
 
-        return item_response(GpioInputResponse.from_gpio_input(gpio_input, self._logger))
+        return item_response(GpioInputResponse.from_gpio_input(gpio_input))
