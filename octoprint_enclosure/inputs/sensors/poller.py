@@ -43,7 +43,7 @@ class _SensorState(Enum):
     """The last reading gave an error."""
 
     STUCK = "stuck"
-    """The sensor worked and then stopped answering: its last reading is too old."""
+    """The sensor doesn't answer: its last good reading is too old, or its first reading never ended."""
 
 
 class SensorPoller:
@@ -68,7 +68,10 @@ class SensorPoller:
     """The outcome of the last reading of each sensor, by the id of its input."""
 
     _states: dict[int, _SensorState]
-    """The state of each sensor read at least once, by the id of its input."""
+    """The state of each sensor, by the id of its input."""
+
+    _started_at: dict[int, float]
+    """When each sensor started being read, as a monotonic time, by the id of its input."""
 
     _polled: dict[int, Sensor]
     """The sensor to read for each input, by the id of the input."""
@@ -92,6 +95,7 @@ class SensorPoller:
         self._started = False
         self._outcomes = {}
         self._states = {}
+        self._started_at = {}
         self._polled = {}
         self._lock = threading.Lock()
 
@@ -113,6 +117,7 @@ class SensorPoller:
                 del self._polled[index_id]
                 self._outcomes.pop(index_id, None)
                 self._states.pop(index_id, None)
+                self._started_at.pop(index_id, None)
 
             # Handle new sensors
             for index_id, sensor in sensors.items():
@@ -129,7 +134,7 @@ class SensorPoller:
             on_reading (Callable[[int], object]): The function called after each reading, good or failed, on the
                 thread that read the sensor, with the id of the input.
             on_failure (Callable[[int], object]): The function called when a sensor stops working, with the id of its
-                input: its reading failed, or it stopped answering.
+                input: its reading failed, or it doesn't answer.
 
         """
         with self._lock:
@@ -193,19 +198,20 @@ class SensorPoller:
     def _detect_stuck_sensors(self) -> None:
         stopped_working = []
 
-        # Find the sensors whose last reading became too old
+        # Find the sensors whose last good reading became too old, or whose first reading never ended
         with self._lock:
             now = time.monotonic()
-            for index_id, outcome in self._outcomes.items():
-                if self._states[index_id] is not _SensorState.WORKING or now - outcome.time <= READING_MAX_AGE_SECONDS:
+            for index_id in self._polled:
+                if self._states.get(index_id) in (_SensorState.FAILING, _SensorState.STUCK):
+                    continue
+
+                outcome = self._outcomes.get(index_id)
+                last_answer = self._started_at.get(index_id) if outcome is None else outcome.time
+                if last_answer is None or now - last_answer <= READING_MAX_AGE_SECONDS:
                     continue
 
                 self._states[index_id] = _SensorState.STUCK
-                self._logger.error(
-                    "The sensor of input %s stopped answering %.0f s ago",
-                    index_id,
-                    now - outcome.time,
-                )
+                self._logger.error("The sensor of input %s hasn't answered for %.0f s", index_id, now - last_answer)
                 stopped_working.append(index_id)
 
         # Call the failure callback
@@ -227,6 +233,7 @@ class SensorPoller:
         )
         thread.daemon = True
         thread.start()
+        self._started_at[index_id] = time.monotonic()
 
     def _poll(self, index_id: int, sensor: Sensor, shift_seconds: float) -> None:
         read_interval_seconds = READ_INTERVAL_SECONDS + shift_seconds
