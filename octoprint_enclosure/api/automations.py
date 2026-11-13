@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from octoprint_enclosure.automations import Automation, AutomationError
+from octoprint_enclosure.permissions import PluginPermission
 
 from .base import BaseApi
 from .bodies import Body
@@ -88,7 +89,7 @@ class AutomationsApi(BaseApi):
         self._control_loop = plugin_context.control_loop
         self._settings = plugin_context.settings
 
-    @route("GET", "/automations", responses={200: [AutomationResponse]})
+    @route("GET", "/automations", permission=PluginPermission.STATUS, responses={200: [AutomationResponse]})
     def get_automations(self) -> Response:
         """List the automations."""
         return list_response(AutomationResponse.from_automations(self._automations))
@@ -96,6 +97,7 @@ class AutomationsApi(BaseApi):
     @route(
         "GET",
         "/automations/<int:automation_id>",
+        permission=PluginPermission.STATUS,
         responses={200: AutomationResponse, 404: ErrorResponse},
     )
     def get_automation(self, automation_id: int) -> Response:
@@ -110,6 +112,7 @@ class AutomationsApi(BaseApi):
     @route(
         "PATCH",
         "/automations/<int:automation_id>",
+        permission=PluginPermission.AUTOMATIONS_ENABLE,
         body=AutomationBody,
         responses={200: AutomationResponse, 404: ErrorResponse},
     )

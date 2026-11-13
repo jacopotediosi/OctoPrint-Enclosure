@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
     from flask import Response
 
+    from octoprint_enclosure.permissions import PluginPermission
+
     from .bodies import Body
 
 
@@ -28,6 +30,9 @@ class Route:
 
     rule: str
     """The path of the route, with its parameters as Flask writes them."""
+
+    permission: PluginPermission
+    """The permission the requests need."""
 
     body: type[Body] | None
     """The body of the requests, or None if the route takes none."""
@@ -48,6 +53,7 @@ def route(
     method: str,
     rule: str,
     *,
+    permission: PluginPermission,
     body: type[Body] | None = None,
     responses: Mapping[int, object],
 ) -> Callable[[Callable[..., Response]], Callable[..., Response]]:
@@ -56,11 +62,12 @@ def route(
     Args:
         method (str): The HTTP method.
         rule (str): The path of the route, with its parameters as Flask writes them.
+        permission (PluginPermission): The permission the requests need.
         body (type[Body] | None): The body of the requests, read from their JSON and passed to the method as `body`,
             or None if the route takes none.
         responses (Mapping[int, object]): What the route answers, by HTTP status code: a response class, a list with
-            one for a JSON list of it, or None for an empty response. The answers to a body that is not valid don't
-            need to be listed.
+            one for a JSON list of it, or None for an empty response. The answers to a missing permission and to a
+            body that is not valid don't need to be listed.
 
     Returns:
         Callable[[Callable[..., Response]], Callable[..., Response]]: The decorator of the method.
@@ -70,6 +77,10 @@ def route(
     def decorator(function: Callable[..., Response]) -> Callable[..., Response]:
         @functools.wraps(function)
         def wrapper(*args: object, **kwargs: object) -> Response:
+            octoprint_permission = permission.to_octoprint()
+            if not octoprint_permission.can():
+                return error_response(403, f'The permission "{octoprint_permission.get_name()}" is needed.')
+
             if body is None:
                 return function(*args, **kwargs)
 
@@ -86,10 +97,11 @@ def route(
 
             return function(*args, **kwargs, body=parsed_body)
 
-        all_responses = dict(responses)
+        all_responses = {**responses, 403: ErrorResponse}
         if body is not None:
             all_responses.update({400: ErrorResponse, 415: ErrorResponse, 422: ErrorResponse})
-        ROUTES.append(Route(method, rule, body, all_responses, function))
+
+        ROUTES.append(Route(method, rule, permission, body, all_responses, function))
 
         return octoprint.plugin.BlueprintPlugin.route(rule, methods=[method])(wrapper)
 

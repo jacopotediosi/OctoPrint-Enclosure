@@ -4,6 +4,7 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 from octoprint_enclosure.api import AutomationResponse, InputResponse, OutputResponse
+from octoprint_enclosure.permissions import PluginPermission
 
 if TYPE_CHECKING:
     import logging
@@ -101,6 +102,10 @@ class Frontend:
 
     def _send(self, data: dict) -> None:
         try:
-            self._plugin_manager.send_plugin_message(self._plugin_identifier, data)
+            self._plugin_manager.send_plugin_message(
+                self._plugin_identifier,
+                data,
+                permissions=[PluginPermission.STATUS.to_octoprint()],
+            )
         except Exception:
             self._logger.exception("Error sending a message to the UI")

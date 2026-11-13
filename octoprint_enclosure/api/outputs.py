@@ -14,6 +14,7 @@ from octoprint_enclosure.outputs import (
     RegularSetpoint,
     ThermostatOutput,
 )
+from octoprint_enclosure.permissions import PluginPermission
 from octoprint_enclosure.utils import Rgb, format_hex_color
 
 from .base import BaseApi
@@ -192,13 +193,18 @@ class OutputsApi(BaseApi):
         self._output_executor = plugin_context.output_executor
         self._control_loop = plugin_context.control_loop
 
-    @route("GET", "/outputs", responses={200: [OutputResponse]})
+    @route("GET", "/outputs", permission=PluginPermission.STATUS, responses={200: [OutputResponse]})
     def get_outputs(self) -> Response:
         """List the outputs that are set up, with their state."""
         thermostats = self._control_loop.get_thermostats()
         return list_response(OutputResponse.from_outputs(self._outputs, thermostats, self._logger))
 
-    @route("GET", "/outputs/<int:output_id>", responses={200: OutputResponse, 404: ErrorResponse})
+    @route(
+        "GET",
+        "/outputs/<int:output_id>",
+        permission=PluginPermission.STATUS,
+        responses={200: OutputResponse, 404: ErrorResponse},
+    )
     def get_output(self, output_id: int) -> Response:
         """Get an output, with its state."""
         try:
@@ -209,6 +215,7 @@ class OutputsApi(BaseApi):
     @route(
         "PATCH",
         "/outputs/<int:output_id>",
+        permission=PluginPermission.OUTPUTS_CONTROL,
         body=OutputBody,
         responses={200: OutputResponse, 404: ErrorResponse},
     )

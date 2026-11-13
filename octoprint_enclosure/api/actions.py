@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from flask import make_response
 
 from octoprint_enclosure.actions import Action, ActionError
+from octoprint_enclosure.permissions import PluginPermission
 
 from .base import BaseApi
 from .responses import ErrorResponse, ItemResponse, error_response, item_response, list_response
@@ -52,12 +53,17 @@ class ActionsApi(BaseApi):
         super().__init__(plugin_context)
         self._actions = plugin_context.actions
 
-    @route("GET", "/actions", responses={200: [ActionResponse]})
+    @route("GET", "/actions", permission=PluginPermission.STATUS, responses={200: [ActionResponse]})
     def get_actions(self) -> Response:
         """List the actions."""
         return list_response(ActionResponse.from_action(action) for action in self._actions.get_all(Action))
 
-    @route("GET", "/actions/<int:action_id>", responses={200: ActionResponse, 404: ErrorResponse})
+    @route(
+        "GET",
+        "/actions/<int:action_id>",
+        permission=PluginPermission.STATUS,
+        responses={200: ActionResponse, 404: ErrorResponse},
+    )
     def get_action(self, action_id: int) -> Response:
         """Get an action."""
         try:
@@ -70,6 +76,7 @@ class ActionsApi(BaseApi):
     @route(
         "POST",
         "/actions/<int:action_id>/run",
+        permission=PluginPermission.ACTIONS_RUN,
         responses={204: None, 404: ErrorResponse, 409: ErrorResponse},
     )
     def run_action(self, action_id: int) -> Response:

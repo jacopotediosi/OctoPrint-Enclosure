@@ -2,7 +2,7 @@
    title="Enclosure Temperatures"
    class="dropdown-toggle"
    data-toggle="dropdown"
-   data-bind="visible: $root.navbar_temperature_sensors().length > 0 && $root.isUser()">
+   data-bind="visible: $root.navbar_temperature_sensors().length > 0 && $root.hasStatusPermission()">
     <i class="fa fa-fire"></i>
     <b class="caret"></b>
 </a>

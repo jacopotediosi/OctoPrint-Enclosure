@@ -4,18 +4,33 @@ The API is located at \<OctoPrintURL>/plugin/enclosure. This needs to be added b
 
 A failed request returns an error code and the body `{"errors": [string]}`, with one message for each problem found.
 
+## Permissions
+
+Each endpoint needs a permission of the plugin. OctoPrint gives the permissions to groups and users (OctoPrint Settings > Access Control), and a request has the permissions of its user, e.g. the user of its API key.
+
+| Permission | Key | Allows | Default groups |
+|---|---|---|---|
+| Status | `PLUGIN_ENCLOSURE_STATUS` | To see inputs, outputs, actions and automations, with their state | `admins`, `users`, `readonly` |
+| Control outputs | `PLUGIN_ENCLOSURE_OUTPUTS_CONTROL` | To control the outputs | `admins`, `users` |
+| Run actions | `PLUGIN_ENCLOSURE_ACTIONS_RUN` | To run the actions | `admins`, `users` |
+| Enable and disable automations | `PLUGIN_ENCLOSURE_AUTOMATIONS_ENABLE` | To enable and disable the automations | `admins`, `users` |
+
 ## List all inputs
 
 Endpoint: **GET** `/inputs`
 
+Permission: Status
+
 Response (200): the inputs, ordered by id, each as in **GET** `/inputs/<id>`.
 
 Error Responses:
- - none
+ - 403 if the user doesn't have the permission
 
 ## Get an input
 
 Endpoint: **GET** `/inputs/<id>`
+
+Permission: Status
 
 Response (200), for an input with a temperature sensor:
 ```
@@ -40,20 +55,25 @@ Response (200), for a GPIO input:
 ```
 
 Error Responses:
+ - 403 if the user doesn't have the permission
  - 404 if no input is set up with that id
 
 ## List all outputs
 
 Endpoint: **GET** `/outputs`
 
+Permission: Status
+
 Response (200): the outputs that are set up, ordered by id, each as in **GET** `/outputs/<id>`.
 
 Error Responses:
- - none
+ - 403 if the user doesn't have the permission
 
 ## Get an output
 
 Endpoint: **GET** `/outputs/<id>`
+
+Permission: Status
 
 Response (200), for a regular output:
 ```
@@ -100,11 +120,14 @@ Response (200), for a thermostat:
 ```
 
 Error Responses:
+ - 403 if the user doesn't have the permission
  - 404 if no output is set up with that id
 
 ## Control an output
 
 Endpoint: **PATCH** `/outputs/<id>`
+
+Permission: Control outputs
 
 Body (Content-Type: `application/json`), with exactly one of these attributes:
 ```
@@ -119,6 +142,7 @@ Body (Content-Type: `application/json`), with exactly one of these attributes:
 Response (200): the output, as in **GET** `/outputs/<id>`.
 
 Error Responses:
+- 403 - the user doesn't have the permission
 - 415 - Content-Type is not application/json
 - 400 - malformed JSON
 - 422 - body is not a JSON object, or its attributes are unknown, missing, invalid or not valid for the type of the output
@@ -128,14 +152,18 @@ Error Responses:
 
 Endpoint: **GET** `/actions`
 
+Permission: Status
+
 Response (200): the actions, ordered by id, each as in **GET** `/actions/<id>`.
 
 Error Responses:
- - none
+ - 403 if the user doesn't have the permission
 
 ## Get an action
 
 Endpoint: **GET** `/actions/<id>`
+
+Permission: Status
 
 Response (200):
 ```
@@ -147,17 +175,21 @@ Response (200):
 ```
 
 Error Responses:
+ - 403 if the user doesn't have the permission
  - 404 if no action is set up with that id
 
 ## Run an action
 
 Endpoint: **POST** `/actions/<id>/run`
 
+Permission: Run actions
+
 Body: empty
 
 Response (204): No-Content
 
 Error Responses:
+- 403 - the user doesn't have the permission
 - 404 - no action is set up with that id
 - 409 - the action can't be run, because its settings are not valid
 
@@ -165,14 +197,18 @@ Error Responses:
 
 Endpoint: **GET** `/automations`
 
+Permission: Status
+
 Response (200): the automations, ordered by id, each as in **GET** `/automations/<id>`.
 
 Error Responses:
- - none
+ - 403 if the user doesn't have the permission
 
 ## Get an automation
 
 Endpoint: **GET** `/automations/<id>`
+
+Permission: Status
 
 Response (200):
 ```
@@ -185,11 +221,14 @@ Response (200):
 ```
 
 Error Responses:
+ - 403 if the user doesn't have the permission
  - 404 if no automation is set up with that id
 
 ## Enable or disable an automation
 
 Endpoint: **PATCH** `/automations/<id>`
+
+Permission: Enable and disable automations
 
 Body (Content-Type: `application/json`):
 ```
@@ -201,6 +240,7 @@ Body (Content-Type: `application/json`):
 Response (200): the automation, as in **GET** `/automations/<id>`.
 
 Error Responses:
+- 403 - the user doesn't have the permission
 - 415 - Content-Type is not application/json
 - 400 - malformed JSON
 - 422 - body is not a JSON object, or its attributes are unknown, missing or invalid
@@ -208,7 +248,7 @@ Error Responses:
 
 ## Push messages
 
-The plugin also sends its state over the OctoPrint push socket, as plugin messages of the plugin `enclosure`. A message has one of these attributes:
+The plugin also sends its state over the OctoPrint push socket, as plugin messages of the plugin `enclosure`, to the users with the Status permission. A message has one of these attributes:
  - `inputs`: the inputs, ordered by id, each as in **GET** `/inputs/<id>`
  - `outputs`: the outputs that are set up, ordered by id, each as in **GET** `/outputs/<id>`
  - `automations`: the automations, ordered by id, each as in **GET** `/automations/<id>`

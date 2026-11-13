@@ -41,8 +41,9 @@ $(function () {
     self.pluginName = "enclosure";
 
     self.settingsViewModel = parameters[0];
-    self.connectionViewModel = parameters[1];
-    self.printerStateViewModel = parameters[2];
+    self.loginState = parameters[1];
+    self.access = parameters[2];
+    self.printerStateViewModel = parameters[3];
 
     self.rpi_inputs = ko.observableArray();
     self.rpi_outputs = ko.observableArray();
@@ -298,6 +299,10 @@ $(function () {
     self.pushCounts = {inputs: 0, outputs: 0, automations: 0};
 
     self.refreshState = function () {
+      if (!self.hasStatusPermission()) {
+        return;
+      }
+
       Object.keys(self.pushCounts).forEach(function (kind) {
         var pushCount = self.pushCounts[kind];
         OctoPrint.get(self.buildPluginUrl(kind)).done(function (items) {
@@ -321,12 +326,19 @@ $(function () {
       }, options));
     };
 
-    self.isUser = ko.computed(function () {
-      return self.connectionViewModel.loginState.isUser();
-    });
+    self.hasPluginPermissionKo = function (key) {
+      return ko.pureComputed(function () {
+        return self.loginState.hasPermission(self.access.permissions["PLUGIN_ENCLOSURE_" + key]);
+      });
+    };
 
-    self.isOperational = ko.computed(function () {
-      return self.connectionViewModel.loginState.isUser() && self.printerStateViewModel.isOperational();
+    self.hasStatusPermission = self.hasPluginPermissionKo("STATUS");
+    self.hasOutputsControlPermission = self.hasPluginPermissionKo("OUTPUTS_CONTROL");
+    self.hasActionsRunPermission = self.hasPluginPermissionKo("ACTIONS_RUN");
+    self.hasAutomationsEnablePermission = self.hasPluginPermissionKo("AUTOMATIONS_ENABLE");
+
+    self.isOperational = ko.pureComputed(function () {
+      return self.hasActionsRunPermission() && self.printerStateViewModel.isOperational();
     });
 
     self.shownTarget = function (thermostat) {
@@ -401,6 +413,9 @@ $(function () {
     self.onStartupComplete = function () {
       self.settingsOpen = false;
       self.notifyGpioAlert();
+    };
+
+    self.onUserPermissionsChanged = self.onUserLoggedIn = self.onUserLoggedOut = function () {
       self.refreshState();
     };
 
@@ -684,10 +699,8 @@ $(function () {
 
   OCTOPRINT_VIEWMODELS.push({
     construct: EnclosureViewModel,
-    // ViewModels your plugin depends on, e.g. loginStateViewModel, settingsViewModel, ...
-    dependencies: ["settingsViewModel", "connectionViewModel", "printerStateViewModel"],
-    // Elements to bind to, e.g. #settings_plugin_tasmota-mqtt, #tab_plugin_tasmota-mqtt, ...
-    elements: ["#tab_plugin_enclosure", "#settings_plugin_enclosure", "#navbar_plugin_enclosure_1", "#navbar_plugin_enclosure_2"]
+    dependencies: ["settingsViewModel", "loginStateViewModel", "accessViewModel", "printerStateViewModel"],
+    elements: ["#tab_plugin_enclosure", "#tab_plugin_enclosure_link", "#settings_plugin_enclosure", "#navbar_plugin_enclosure_1", "#navbar_plugin_enclosure_2"]
   });
 
 });

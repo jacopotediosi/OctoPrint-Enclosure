@@ -29,6 +29,7 @@ from .inputs import GpioInputs, InputType, SensorError, SensorPoller, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
 from .outputs import Outputs, ThermostatDeviceType, ThermostatOutput
+from .permissions import get_additional_permissions
 from .plugin_context import PluginContext
 from .settings import Settings
 from .settings.migrations import migrate_settings
@@ -217,9 +218,15 @@ class EnclosurePlugin(
     def on_settings_migrate(self, target, current=None):
         migrate_settings(target, current, self._settings, self._logger)
 
+    def get_settings_restricted_paths(self):
+        return {"admin": [["notification_api_key"]]}
+
     # ~~ BlueprintPlugin mixin
     def get_blueprint(self):
         return self._api.get_blueprint()
+
+    def is_blueprint_protected(self):
+        return False
 
     def is_blueprint_csrf_protected(self):
         return True
@@ -447,7 +454,12 @@ class EnclosurePlugin(
     def get_template_configs(self):
         return [
             {"type": "settings", "custom_bindings": True},
-            {"type": "tab", "custom_bindings": True},
+            {
+                "type": "tab",
+                "custom_bindings": True,
+                "styles": ["display: none;"],
+                "data_bind": "visible: hasStatusPermission",
+            },
             {
                 "type": "navbar",
                 "custom_bindings": True,
@@ -473,6 +485,10 @@ class EnclosurePlugin(
             "js": ["js/enclosure.js"],
             "css": ["css/enclosure.css"],
         }
+
+    # ~~ Access permissions hook
+    def get_additional_permissions(self):
+        return get_additional_permissions()
 
     # ~~ Softwareupdate hook
     def get_update_information(self):

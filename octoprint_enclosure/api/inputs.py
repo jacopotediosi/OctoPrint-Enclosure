@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from octoprint_enclosure.inputs import GpioInputError, Reading
+from octoprint_enclosure.permissions import PluginPermission
 
 from .base import BaseApi
 from .responses import ErrorResponse, ItemResponse, error_response, item_response, list_response
@@ -136,7 +137,7 @@ class InputsApi(BaseApi):
         self._gpio_inputs = plugin_context.gpio_inputs
         self._sensor_poller = plugin_context.sensor_poller
 
-    @route("GET", "/inputs", responses={200: [InputResponse]})
+    @route("GET", "/inputs", permission=PluginPermission.STATUS, responses={200: [InputResponse]})
     def get_inputs(self) -> Response:
         """List the inputs, with their state."""
         readings = self._sensor_poller.get_readings()
@@ -145,6 +146,7 @@ class InputsApi(BaseApi):
     @route(
         "GET",
         "/inputs/<int:input_id>",
+        permission=PluginPermission.STATUS,
         responses={200: InputResponse, 404: ErrorResponse},
     )
     def get_input(self, input_id: int) -> Response:

@@ -49,13 +49,13 @@
                                    min="0"
                                    max="999"
                                    class="input-mini input-nospin"
-                                   data-bind="enable: $root.isUser(), value: new_target, valueUpdate: 'input', attr: {placeholder: $root.shownTarget($data)}">
+                                   data-bind="enable: $root.hasOutputsControlPermission(), value: new_target, valueUpdate: 'input', attr: {placeholder: $root.shownTarget($data)}">
                             <span class="add-on"
                                   data-bind="text: temp_ctr_type() == 'dehumidifier' ? '%' : $root.temperatureUnitLabel()"></span>
                         </div>
                         <div class="btn-group">
                             <button type="submit"
-                                    data-bind="enable: $root.isUser()"
+                                    data-bind="enable: $root.hasOutputsControlPermission()"
                                     class="btn btn-primary"
                                     title="{{ _('Set') }}">
                                 <i class="fa fa-check"></i>
@@ -63,7 +63,7 @@
                             <button type="button"
                                     class="btn btn-primary dropdown-toggle"
                                     data-toggle="dropdown"
-                                    data-bind="enable: $root.isUser()">
+                                    data-bind="enable: $root.hasOutputsControlPermission()">
                                 <span class="caret"></span>
                             </button>
                             <ul class="dropdown-menu">
@@ -89,7 +89,7 @@
             </h4>
             <div>
                 <button type="button"
-                        data-bind="enable: $root.isUser(), click: $root.toggleOutput, text: on() ? 'Turn off' : 'Turn on'"
+                        data-bind="enable: $root.hasOutputsControlPermission(), click: $root.toggleOutput, text: on() ? 'Turn off' : 'Turn on'"
                         class="btn"></button>
             </div>
         </div>
@@ -99,11 +99,13 @@
                 <span class="badge">ledstrip</span>
             </h4>
             <div class="input-append ledstrip-div">
-                <input type="color" class="input-block-level" data-bind="value: shown_color">
+                <input type="color"
+                       class="input-block-level"
+                       data-bind="enable: $root.hasOutputsControlPermission(), value: shown_color">
                 <button type="submit"
                         class="btn btn-input-inc"
                         title="Set Color"
-                        data-bind="enable: $root.isUser(), click: $root.setColor">
+                        data-bind="enable: $root.hasOutputsControlPermission(), click: $root.setColor">
                     <i class="fa fa-check"></i>
                 </button>
             </div>
@@ -116,10 +118,10 @@
             <div class="input-append">
                 <input type="text"
                        class="input-mini"
-                       data-bind="value: new_duty_cycle, valueUpdate: 'input', attr: {placeholder: $root.shownDutyCycle(duty_cycle())}">
+                       data-bind="enable: $root.hasOutputsControlPermission(), value: new_duty_cycle, valueUpdate: 'input', attr: {placeholder: $root.shownDutyCycle(duty_cycle())}">
                 <button type="button"
                         class="btn btn-input-inc"
-                        data-bind="enable: $root.isUser() && !$root.isPwmLinked(index_id()), click: $root.setDutyCycle, attr: {title: $root.isPwmLinked(index_id()) ? 'Temperature controlled PWM' : 'Set PWM'}">
+                        data-bind="enable: $root.hasOutputsControlPermission() && !$root.isPwmLinked(index_id()), click: $root.setDutyCycle, attr: {title: $root.isPwmLinked(index_id()) ? 'Temperature controlled PWM' : 'Set PWM'}">
                     <i class="fa fa-check"></i>
                 </button>
             </div>
@@ -130,11 +132,13 @@
                 <span class="badge">neopixel</span>
             </h4>
             <div class="input-append neopixel-div">
-                <input type="color" class="input-block-level" data-bind="value: shown_color">
+                <input type="color"
+                       class="input-block-level"
+                       data-bind="enable: $root.hasOutputsControlPermission(), value: shown_color">
                 <button type="submit"
                         class="btn btn-input-inc"
                         title="Set Color"
-                        data-bind="enable: $root.isUser(), click: $root.setColor">
+                        data-bind="enable: $root.hasOutputsControlPermission(), click: $root.setColor">
                     <i class="fa fa-check"></i>
                 </button>
             </div>
@@ -157,8 +161,10 @@
             <h5>
                 <span>Automation: <span data-bind="text: label"></span></span>
                 <a href="#"
-                   data-bind="visible: $root.isUser(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
+                   data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
                    class="fa enclosure-link"></a>
+                <span data-bind="visible: !$root.hasAutomationsEnablePermission(), css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Enabled' : 'Disabled'}"
+                      class="fa muted"></span>
             </h5>
         </div>
         <span data-bind="visible: output_type() == 'temp_hum_control' && temp_ctr_type() == 'heater' && !$root.isTurnedOffAtPrintEnd(index_id())">
@@ -188,7 +194,7 @@
             </h4>
             <div>
                 <button type="button"
-                        data-bind="enable: $root.isUser(), click: $root.runAction"
+                        data-bind="enable: $root.hasActionsRunPermission(), click: $root.runAction"
                         class="btn">Execute Script</button>
             </div>
         </div>
@@ -199,7 +205,7 @@
             </h4>
             <div>
                 <button type="button"
-                        data-bind="enable: $root.isUser(), click: $root.runAction"
+                        data-bind="enable: $root.hasActionsRunPermission(), click: $root.runAction"
                         class="btn">Send command</button>
             </div>
         </div>
@@ -210,8 +216,10 @@
         <span data-bind="text: label"></span>
         <span class="badge">filament sensor</span>
         <a href="#"
-           data-bind="visible: $root.isUser(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable Filament Sensor' : 'Enable Filament Sensor'}"
+           data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable Filament Sensor' : 'Enable Filament Sensor'}"
            class="fa enclosure-link"></a>
+        <span data-bind="visible: !$root.hasAutomationsEnablePermission(), css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Enabled' : 'Disabled'}"
+              class="fa muted"></span>
     </h4>
 </div>
 <div data-bind="foreach: $root.tab_automations()">
@@ -219,7 +227,9 @@
         <span data-bind="text: label"></span>
         <span class="badge">automation</span>
         <a href="#"
-           data-bind="visible: $root.isUser(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
+           data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
            class="fa enclosure-link"></a>
+        <span data-bind="visible: !$root.hasAutomationsEnablePermission(), css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Enabled' : 'Disabled'}"
+              class="fa muted"></span>
     </h4>
 </div>
