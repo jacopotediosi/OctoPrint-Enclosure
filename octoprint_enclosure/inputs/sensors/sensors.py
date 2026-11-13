@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
+from octoprint_enclosure.inputs.config import InputType
+
 from .base import Sensor, SensorError, SensorInputConfig
 from .dummy import DummySensor
 from .registry import SENSORS
@@ -69,20 +71,23 @@ class Sensors:
         self._sensors = {}
         self._lock = threading.Lock()
 
-    def load(self, sensor_inputs_settings: Iterable[dict]) -> None:
+    def load(self, inputs_settings: Iterable[dict]) -> None:
         """Load the sensors of some inputs from their settings.
 
         An input whose settings didn't change keeps its sensor as it is, with its state.
 
         Args:
-            sensor_inputs_settings (Iterable[dict]): The settings of the inputs with a temperature sensor.
+            inputs_settings (Iterable[dict]): The settings of the inputs.
 
         """
         sensors: dict[int, Sensor] = {}
 
-        for sensor_input_settings in sensor_inputs_settings:
+        for input_settings in inputs_settings:
+            if input_settings["input_type"] != InputType.TEMPERATURE_SENSOR.value:
+                continue
+
             try:
-                input_config = SensorInputConfig.from_settings(sensor_input_settings)
+                input_config = SensorInputConfig.from_settings(input_settings)
             except ValueError as error:
                 self._logger.warning("Invalid settings for an input with a temperature sensor: %s", error)
                 continue
@@ -94,7 +99,7 @@ class Sensors:
                     f"Unsupported sensor type: {input_config.temp_sensor_type!r}",
                 )
             else:
-                sensor = self._create_sensor(sensor_class, input_config, sensor_input_settings)
+                sensor = self._create_sensor(sensor_class, input_config, input_settings)
 
             sensors[input_config.index_id] = sensor
 

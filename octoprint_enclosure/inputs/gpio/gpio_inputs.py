@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.inputs.config import InputConfig
+from octoprint_enclosure.inputs.config import InputConfig, InputType
 
 from .edge import Edge
 from .gpio_input import GpioInput, GpioInputError
@@ -56,25 +56,28 @@ class GpioInputs:
         self._logger = logger.getChild("GpioInputs")
         self._gpio_inputs = {}
 
-    def load(self, gpio_inputs_settings: Iterable[dict]) -> None:
+    def load(self, inputs_settings: Iterable[dict]) -> None:
         """Load some GPIO inputs from their settings.
 
         An input whose settings didn't change is kept as it is.
 
         Args:
-            gpio_inputs_settings (Iterable[dict]): The settings of the GPIO inputs.
+            inputs_settings (Iterable[dict]): The settings of the inputs.
 
         """
         gpio_inputs: dict[int, GpioInput | _InvalidGpioInput] = {}
 
-        for gpio_input_settings in gpio_inputs_settings:
+        for input_settings in inputs_settings:
+            if input_settings["input_type"] != InputType.GPIO.value:
+                continue
+
             try:
-                input_config = InputConfig.from_settings(gpio_input_settings)
+                input_config = InputConfig.from_settings(input_settings)
             except ValueError as error:
                 self._logger.warning("Invalid settings for a GPIO input: %s", error)
                 continue
 
-            gpio_inputs[input_config.index_id] = self._create_gpio_input(input_config.index_id, gpio_input_settings)
+            gpio_inputs[input_config.index_id] = self._create_gpio_input(input_config.index_id, input_settings)
 
         self._gpio_inputs = gpio_inputs
 

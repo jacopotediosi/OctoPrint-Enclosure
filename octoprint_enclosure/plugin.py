@@ -25,7 +25,7 @@ from .engine import ControlLoop, OutputExecutor, Scheduler
 from .frontend import Frontend
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
-from .inputs import GpioInputs, InputType, SensorError, SensorPoller, Sensors
+from .inputs import GpioInputs, SensorError, SensorPoller, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
 from .outputs import Outputs, ThermostatDeviceType, ThermostatOutput
@@ -46,10 +46,6 @@ class EnclosurePlugin(
 ):
     """The OctoPrint plugin that monitors and controls a printer enclosure."""
 
-    rpi_inputs = []
-    rpi_outputs = []
-    actions = []
-    automations = []
     failing_sensors = set()
     development_mode = False
 
@@ -168,18 +164,18 @@ class EnclosurePlugin(
     def on_after_startup(self):
         self._mqtt.load_helpers()
 
-        self.rpi_inputs = self._enclosure_settings.rpi_inputs
-        self.rpi_outputs = self._enclosure_settings.rpi_outputs
-        self.actions = self._enclosure_settings.actions
-        self.automations = self._enclosure_settings.automations
+        rpi_inputs = self._enclosure_settings.rpi_inputs
+        rpi_outputs = self._enclosure_settings.rpi_outputs
+        actions = self._enclosure_settings.actions
+        automations = self._enclosure_settings.automations
 
-        self._sensor_poller.load(self.get_sensor_inputs_settings())
-        self._gpio_inputs.load(self.get_gpio_inputs_settings())
-        self._output_executor.load_outputs(self.rpi_outputs, wait=True)
+        self._sensor_poller.load(rpi_inputs)
+        self._gpio_inputs.load(rpi_inputs)
+        self._output_executor.load_outputs(rpi_outputs, wait=True)
         if self.development_mode:
             self.link_dummy_sensors()
-        self._actions.load(self.actions)
-        self._automations.load(self.automations)
+        self._actions.load(actions)
+        self._automations.load(automations)
         self.warn_missing_linked_sensors()
         self.warn_missing_thermostat_targets()
 
@@ -230,12 +226,6 @@ class EnclosurePlugin(
 
     def is_blueprint_csrf_protected(self):
         return True
-
-    def get_sensor_inputs_settings(self):
-        return [item for item in self.rpi_inputs if item["input_type"] == InputType.TEMPERATURE_SENSOR.value]
-
-    def get_gpio_inputs_settings(self):
-        return [item for item in self.rpi_inputs if item["input_type"] == InputType.GPIO.value]
 
     def get_sensor_inputs(self):
         return [sensor.config for sensor in self._sensors.get_all().values()]
@@ -384,39 +374,39 @@ class EnclosurePlugin(
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
 
         # Read from the saved settings
-        self.rpi_inputs = self._enclosure_settings.rpi_inputs
-        self._logger.debug("New rpi_inputs: %s", self.rpi_inputs)
-        self.rpi_outputs = self._enclosure_settings.rpi_outputs
-        self._logger.debug("New rpi_outputs: %s", self.rpi_outputs)
-        self.actions = self._enclosure_settings.actions
-        self._logger.debug("New actions: %s", self.actions)
-        self.automations = self._enclosure_settings.automations
-        self._logger.debug("New automations: %s", self.automations)
+        rpi_inputs = self._enclosure_settings.rpi_inputs
+        self._logger.debug("New rpi_inputs: %s", rpi_inputs)
+        rpi_outputs = self._enclosure_settings.rpi_outputs
+        self._logger.debug("New rpi_outputs: %s", rpi_outputs)
+        actions = self._enclosure_settings.actions
+        self._logger.debug("New actions: %s", actions)
+        automations = self._enclosure_settings.automations
+        self._logger.debug("New automations: %s", automations)
 
         # Release the pins of the inputs
         self._gpio_inputs.clear()
         self._sensors.clear()
 
         # Update the sensor poller
-        self._sensor_poller.load(self.get_sensor_inputs_settings())
+        self._sensor_poller.load(rpi_inputs)
 
         # Update outputs
-        self._output_executor.load_outputs(self.rpi_outputs, wait=True)
+        self._output_executor.load_outputs(rpi_outputs, wait=True)
 
         # Link outputs to dummy sensors
         if self.development_mode:
             self.link_dummy_sensors()
 
         # Update actions
-        self._actions.load(self.actions)
+        self._actions.load(actions)
 
         # Update automations
-        self._automations.load(self.automations)
+        self._automations.load(automations)
         self.warn_missing_linked_sensors()
         self.warn_missing_thermostat_targets()
 
         # Reload the GPIO inputs and set up the pins of the inputs
-        self._gpio_inputs.load(self.get_gpio_inputs_settings())
+        self._gpio_inputs.load(rpi_inputs)
         self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
         self._sensors.setup_pins()
 

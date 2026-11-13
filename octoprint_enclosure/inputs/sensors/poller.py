@@ -83,14 +83,14 @@ class SensorPoller:
         self._stale = set()
         self._lock = threading.Lock()
 
-    def load(self, sensor_inputs_settings: Iterable[dict]) -> None:
+    def load(self, inputs_settings: Iterable[dict]) -> None:
         """Load the sensors of some inputs from their settings.
 
         Args:
-            sensor_inputs_settings (Iterable[dict]): The settings of the inputs with a temperature sensor.
+            inputs_settings (Iterable[dict]): The settings of the inputs.
 
         """
-        self._sensors.load(sensor_inputs_settings)
+        self._sensors.load(inputs_settings)
         sensors = self._sensors.get_all()
 
         with self._lock:
