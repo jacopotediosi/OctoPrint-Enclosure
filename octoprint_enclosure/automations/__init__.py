@@ -1,6 +1,6 @@
 from .automations import Automations
 from .base import Automation, AutomationError
-from .events import AutomationEvent, GpioEdgeEvent, OctoprintEvent, ReadingsEvent
+from .events import AutomationEvent, GpioEdgeEvent, OctoprintEvent, ReadingEvent
 from .filament import FilamentAutomation
 from .pwm_temperature_linked import PwmTemperatureLinkedAutomation
 from .reactions import OutputControlReaction, OutputSetState, Reaction, RunActionReaction
@@ -21,7 +21,7 @@ __all__ = [
     "OutputSetState",
     "PwmTemperatureLinkedAutomation",
     "Reaction",
-    "ReadingsEvent",
+    "ReadingEvent",
     "RuleAutomation",
     "RunActionReaction",
     "TemperatureTrigger",

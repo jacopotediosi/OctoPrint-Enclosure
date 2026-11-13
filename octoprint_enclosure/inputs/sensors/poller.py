@@ -20,7 +20,7 @@ READING_MAX_AGE_SECONDS = 30
 
 
 @dataclass(frozen=True)
-class ReadingOutcome:
+class _ReadingOutcome:
     """The outcome of reading a sensor."""
 
     reading: Reading | None
@@ -43,7 +43,7 @@ class _SensorState(Enum):
     """The last reading gave an error."""
 
     STUCK = "stuck"
-    """The sensor stopped answering: its last reading is too old."""
+    """The sensor worked and then stopped answering: its last reading is too old."""
 
 
 class SensorPoller:
@@ -64,7 +64,7 @@ class SensorPoller:
     _started: bool
     """Whether the sensor poller has been started."""
 
-    _outcomes: dict[int, ReadingOutcome]
+    _outcomes: dict[int, _ReadingOutcome]
     """The outcome of the last reading of each sensor, by the id of its input."""
 
     _states: dict[int, _SensorState]
@@ -197,8 +197,7 @@ class SensorPoller:
         with self._lock:
             now = time.monotonic()
             for index_id, outcome in self._outcomes.items():
-                state = self._states[index_id]
-                if state is _SensorState.STUCK or now - outcome.time <= READING_MAX_AGE_SECONDS:
+                if self._states[index_id] is not _SensorState.WORKING or now - outcome.time <= READING_MAX_AGE_SECONDS:
                     continue
 
                 self._states[index_id] = _SensorState.STUCK
@@ -207,8 +206,7 @@ class SensorPoller:
                     index_id,
                     now - outcome.time,
                 )
-                if state is _SensorState.WORKING:
-                    stopped_working.append(index_id)
+                stopped_working.append(index_id)
 
         # Call the failure callback
         for index_id in stopped_working:
@@ -253,10 +251,10 @@ class SensorPoller:
             reading = sensor.read()
         except Exception as error:  # noqa: BLE001 - the error is kept in the outcome of the reading
             self._logger.debug("Couldn't read the sensor of input %s: %s", index_id, error)
-            outcome = ReadingOutcome(None, error, time.monotonic())
+            outcome = _ReadingOutcome(None, error, time.monotonic())
         else:
             self._logger.debug("Read the sensor of input %s: %s", index_id, reading)
-            outcome = ReadingOutcome(reading, None, time.monotonic())
+            outcome = _ReadingOutcome(reading, None, time.monotonic())
 
         # Save the outcome and the state of the sensor
         with self._lock:

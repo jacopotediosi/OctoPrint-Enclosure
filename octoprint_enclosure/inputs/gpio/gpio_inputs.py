@@ -68,7 +68,7 @@ class GpioInputs:
         gpio_inputs: dict[int, GpioInput | _InvalidGpioInput] = {}
 
         for input_settings in inputs_settings:
-            if input_settings["input_type"] != InputType.GPIO.value:
+            if input_settings.get("input_type") != InputType.GPIO.value:
                 continue
 
             try:

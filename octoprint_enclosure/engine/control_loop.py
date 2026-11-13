@@ -21,13 +21,13 @@ from octoprint_enclosure.automations import (
     OutputControlReaction,
     OutputSetState,
     PwmTemperatureLinkedAutomation,
-    ReadingsEvent,
+    ReadingEvent,
     RuleAutomation,
     RunActionReaction,
     TemperatureTrigger,
     ToggleTimerAutomation,
 )
-from octoprint_enclosure.inputs import GpioInputError
+from octoprint_enclosure.inputs import GpioInputError, Reading
 from octoprint_enclosure.notifications import NotificationType
 from octoprint_enclosure.outputs import (
     Output,
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from octoprint_enclosure.actions import Action, Actions
     from octoprint_enclosure.automations import Automations, Reaction
     from octoprint_enclosure.frontend import Frontend
-    from octoprint_enclosure.inputs import GpioInputs, Reading, SensorPoller, Sensors
+    from octoprint_enclosure.inputs import GpioInputs, SensorPoller, Sensors
     from octoprint_enclosure.integrations import Mqtt
     from octoprint_enclosure.notifications import Notifications
     from octoprint_enclosure.outputs import Outputs
@@ -409,21 +409,21 @@ class ControlLoop:
         elif isinstance(message, _NewReading):
             # Get the reading of the sensor
             try:
-                readings = {message.index_id: self._sensor_poller.get_reading(message.index_id)}
+                reading = self._sensor_poller.get_reading(message.index_id)
             except LookupError:
-                readings = {}
+                reading = Reading()
+            readings = {message.index_id: reading}
 
             # Take decisions
             self._decide_thermostats(readings, message.index_id)
-            self._decide_temperature_rules(ReadingsEvent(readings, message.index_id))
+            self._decide_temperature_rules(ReadingEvent(message.index_id, reading))
             self._decide_pwm_linked_temperature(readings, message.index_id)
 
             # Update readings in the UI
             self._frontend.update_inputs()
 
             # Publish the reading on MQTT
-            reading = readings.get(message.index_id)
-            if reading is not None and (reading.temperature is not None or reading.humidity is not None):
+            if reading.temperature is not None or reading.humidity is not None:
                 with contextlib.suppress(LookupError):
                     label = self._sensors.get(message.index_id).config.label
                     temperature_unit = self._settings.temperature_unit
@@ -620,7 +620,7 @@ class ControlLoop:
             self._waiting_temperature.clear()
             self._printer.resume_print()
 
-    def _decide_temperature_rules(self, event: ReadingsEvent) -> None:
+    def _decide_temperature_rules(self, event: ReadingEvent) -> None:
         for automation in self._automations.get_triggered(event):
             if isinstance(automation, RuleAutomation) and isinstance(automation.trigger, TemperatureTrigger):
                 self._react_to_temperature(automation, automation.trigger.config.alarm_set_temp)

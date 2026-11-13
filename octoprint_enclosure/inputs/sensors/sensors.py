@@ -83,7 +83,7 @@ class Sensors:
         sensors: dict[int, Sensor] = {}
 
         for input_settings in inputs_settings:
-            if input_settings["input_type"] != InputType.TEMPERATURE_SENSOR.value:
+            if input_settings.get("input_type") != InputType.TEMPERATURE_SENSOR.value:
                 continue
 
             try:

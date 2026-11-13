@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.automations.events import ReadingsEvent
+from octoprint_enclosure.automations.events import ReadingEvent
 from octoprint_enclosure.settings import REQUIRED, BaseConfig, SensorInputId
 
 from .base import Trigger
@@ -49,11 +49,10 @@ class TemperatureTrigger(Trigger[TemperatureTriggerConfig]):
 
     @override
     def matches(self, event: AutomationEvent) -> bool:
-        if not isinstance(event, ReadingsEvent) or event.index_id != self.config.linked_temp_sensor:
+        if not isinstance(event, ReadingEvent) or event.index_id != self.config.linked_temp_sensor:
             return False
 
-        reading = event.readings.get(self.config.linked_temp_sensor)
-        temperature = None if reading is None else reading.temperature
+        temperature = event.reading.temperature
         if temperature is None:
             return False
 

@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from octoprint_enclosure.inputs import Reading
 
 
@@ -26,14 +24,14 @@ class GpioEdgeEvent(AutomationEvent):
 
 
 @dataclass(frozen=True)
-class ReadingsEvent(AutomationEvent):
+class ReadingEvent(AutomationEvent):
     """A sensor has a new reading."""
 
-    readings: Mapping[int, Reading]
-    """The latest reading of the sensor that has the new reading, by the id of its input."""
-
     index_id: int
-    """The id of the input of the sensor that has the new reading."""
+    """The id of the input of the sensor."""
+
+    reading: Reading
+    """The new reading, with all its values None if it failed."""
 
 
 @dataclass(frozen=True)
