@@ -7,7 +7,7 @@ from typing_extensions import override
 
 from octoprint_enclosure.automations.events import GpioEdgeEvent
 from octoprint_enclosure.inputs import Edge
-from octoprint_enclosure.settings import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import REQUIRED, BaseConfig, GpioInputId
 
 from .base import Trigger
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class GpioInputTriggerConfig(BaseConfig):
     """The configuration of an automation trigger on the edges of a GPIO input."""
 
-    input: int = REQUIRED
+    input: GpioInputId = REQUIRED
     """The id of the GPIO input."""
 
     edge: Edge = REQUIRED

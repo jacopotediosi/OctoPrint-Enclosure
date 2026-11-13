@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeVar
+from dataclasses import fields
+from typing import TYPE_CHECKING, Any, TypeVar
+
+from octoprint_enclosure.outputs import Output, OutputError
+from octoprint_enclosure.settings import ActionId, GpioInputId, OutputId, SensorInputId
 
 from .base import Automation, AutomationConfig, AutomationError
 from .registry import AUTOMATIONS
@@ -10,7 +14,9 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Iterable
 
-    from octoprint_enclosure.inputs import Edge
+    from octoprint_enclosure.actions import Actions
+    from octoprint_enclosure.inputs import Edge, GpioInputs, Sensors
+    from octoprint_enclosure.outputs import Outputs
 
     from .events import AutomationEvent
 
@@ -78,6 +84,57 @@ class Automations:
             automations[automation_config.index_id] = automation
 
         self._automations = automations
+
+    def check_links(self, sensors: Sensors, gpio_inputs: GpioInputs, outputs: Outputs, actions: Actions) -> None:
+        """Check the links of the automations to the other entries, and log a warning for each problem.
+
+        E.g., a problem is a link to an entry that doesn't exist, or an output turned on without a value its setpoint
+        needs.
+
+        Args:
+            sensors (Sensors): The sensors inputs.
+            gpio_inputs (GpioInputs): The GPIO inputs.
+            outputs (Outputs): The outputs.
+            actions (Actions): The actions.
+
+        """
+        # The name and the known ids of the entries of each type an automation can be linked to
+        known_ids: dict[Any, tuple[str, set[int]]] = {
+            SensorInputId: ("sensor input", sensors.get_ids()),
+            GpioInputId: ("GPIO input", gpio_inputs.get_ids()),
+            OutputId: ("output", outputs.get_ids()),
+            ActionId: ("action", actions.get_ids()),
+        }
+
+        for index_id, automation in self._automations.items():
+            # A link to an entry that doesn't exist
+            for id_type, (name, ids) in known_ids.items():
+                linked_ids = {
+                    linked_id for config in automation.configs for linked_id in config.get_linked_ids(id_type)
+                }
+                for linked_id in sorted(linked_ids - ids):
+                    self._logger.warning(
+                        "Automation %s is linked to %s %s, which doesn't exist",
+                        index_id,
+                        name,
+                        linked_id,
+                    )
+
+            # An output turned on without a value its setpoint needs
+            for output_id, setpoint_config in automation.get_output_setpoints():
+                try:
+                    output = outputs.get(output_id, Output)
+                except OutputError:
+                    continue
+
+                for field in fields(output.setpoint_class):
+                    if getattr(setpoint_config, field.name) is None:
+                        self._logger.warning(
+                            "Automation %s turns on output %s without a %s",
+                            index_id,
+                            output_id,
+                            field.name,
+                        )
 
     def get(self, index_id: int, automation_class: type[_AutomationT]) -> _AutomationT:
         """Get an automation.

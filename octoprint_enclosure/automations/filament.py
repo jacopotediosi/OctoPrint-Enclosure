@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import REQUIRED
+from octoprint_enclosure.settings import REQUIRED, ActionId
 
 from .base import Automation, AutomationConfig
 from .events import GpioEdgeEvent
@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
+    from octoprint_enclosure.settings import BaseConfig
+
 MIN_PRESENCE_SECONDS = 90
 """The seconds the filament has to be present before its end counts."""
 
@@ -25,7 +27,7 @@ MIN_PRESENCE_SECONDS = 90
 class FilamentConfig(AutomationConfig):
     """The configuration of an automation that runs an action when a sensor detects the end of the filament."""
 
-    action: int = REQUIRED
+    action: ActionId = REQUIRED
     """The id of the action run when the filament ends."""
 
 
@@ -59,6 +61,12 @@ class FilamentAutomation(Automation[FilamentConfig]):
     def trigger(self) -> GpioInputTrigger:
         """The GPIO input of the filament sensor, with the edge that means that the filament is missing."""
         return self._trigger
+
+    @property
+    @override
+    def configs(self) -> list[BaseConfig]:
+        """The configurations the automation is made of."""
+        return [*super().configs, self.trigger.config]
 
     @override
     def has_same_config(self, other: Automation) -> bool:

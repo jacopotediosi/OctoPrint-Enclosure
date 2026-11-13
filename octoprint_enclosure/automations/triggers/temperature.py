@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from octoprint_enclosure.automations.events import ReadingsEvent
-from octoprint_enclosure.settings import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import REQUIRED, BaseConfig, SensorInputId
 
 from .base import Trigger
 
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 class TemperatureTriggerConfig(BaseConfig):
     """The configuration of an automation trigger on the temperature read by a sensor."""
 
-    linked_temp_sensor: int = REQUIRED
+    linked_temp_sensor: SensorInputId = REQUIRED
     """The id of the input of the linked sensor."""
 
     alarm_set_temp: float = REQUIRED

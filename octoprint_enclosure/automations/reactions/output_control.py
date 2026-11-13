@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from octoprint_enclosure.outputs import OutputSetpointConfig
-from octoprint_enclosure.settings import REQUIRED
+from octoprint_enclosure.settings import REQUIRED, OutputId
 
 from .base import Reaction
 
@@ -21,7 +21,7 @@ class OutputSetState(Enum):
 class OutputControlConfig(OutputSetpointConfig):
     """The configuration of an automation reaction that controls an output."""
 
-    controlled_io: int = REQUIRED
+    controlled_io: OutputId = REQUIRED
     """The id of the output to control."""
 
     controlled_io_set_state: OutputSetState = REQUIRED

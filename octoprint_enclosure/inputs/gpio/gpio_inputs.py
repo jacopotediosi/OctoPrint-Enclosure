@@ -111,6 +111,15 @@ class GpioInputs:
         """
         return [gpio_input for _, gpio_input in self._get_valid_gpio_inputs()]
 
+    def get_ids(self) -> set[int]:
+        """Get the ids of the GPIO inputs.
+
+        Returns:
+            set[int]: The id of each GPIO input.
+
+        """
+        return set(self._gpio_inputs)
+
     def setup_pins(self, edges: Mapping[int, Collection[Edge]]) -> None:
         """Set up the pins of the inputs, and start detecting edges on them.
 

@@ -9,13 +9,16 @@ from octoprint_enclosure.utils import parse_hhmm, seconds_until_next
 
 from .base import Automation, AutomationConfig
 from .conditions import conditions_from_settings
-from .reactions import REACTIONS
+from .reactions import REACTIONS, OutputControlReaction, OutputSetState
 from .triggers import TRIGGERS
 
 if TYPE_CHECKING:
     import logging
 
     from typing_extensions import Self
+
+    from octoprint_enclosure.outputs import OutputSetpointConfig
+    from octoprint_enclosure.settings import BaseConfig, OutputId
 
     from .conditions import Condition
     from .reactions.base import Reaction
@@ -102,6 +105,21 @@ class RuleAutomation(Automation[RuleConfig]):
     def trigger(self) -> Trigger:
         """What starts the rule."""
         return self._trigger
+
+    @property
+    @override
+    def configs(self) -> list[BaseConfig]:
+        """The configurations the rule is made of."""
+        return [*super().configs, self.trigger.config, *(reaction.config for reaction in self.reactions)]
+
+    @override
+    def get_output_setpoints(self) -> list[tuple[OutputId, OutputSetpointConfig]]:
+        return [
+            (reaction.config.controlled_io, reaction.config)
+            for reaction in self.reactions
+            if isinstance(reaction, OutputControlReaction)
+            and reaction.config.controlled_io_set_state is not OutputSetState.OFF
+        ]
 
     @override
     def has_same_config(self, other: Automation) -> bool:

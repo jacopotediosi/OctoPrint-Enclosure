@@ -116,6 +116,16 @@ class Sensors:
         with self._lock:
             return dict(self._sensors)
 
+    def get_ids(self) -> set[int]:
+        """Get the ids of the sensor inputs.
+
+        Returns:
+            set[int]: The id of each sensor input.
+
+        """
+        with self._lock:
+            return set(self._sensors)
+
     def get(self, index_id: int) -> Sensor:
         """Get the sensor of an input.
 

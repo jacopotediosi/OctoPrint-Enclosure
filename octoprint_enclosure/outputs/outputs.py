@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import BaseConfig
+from octoprint_enclosure.settings import BaseConfig, SensorInputId
 
 from .base import Output, OutputError
 from .config import OutputConfig
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from octoprint_enclosure.hardware import GpioBackend, I2cBackend
+    from octoprint_enclosure.inputs import Sensors
 
 _OutputT = TypeVar("_OutputT", bound=Output)
 
@@ -141,6 +142,24 @@ class Outputs:
 
         self._outputs = outputs
 
+    def check_links(self, sensors: Sensors) -> None:
+        """Check the links of the outputs to the sensor inputs, and log a warning for each one that doesn't exist.
+
+        Args:
+            sensors (Sensors): The sensors of the inputs.
+
+        """
+        sensor_ids = sensors.get_ids()
+
+        for index_id, output in self._outputs.items():
+            for sensor_id in output.config.get_linked_ids(SensorInputId):
+                if sensor_id not in sensor_ids:
+                    self._logger.warning(
+                        "Output %s is linked to sensor input %s, which doesn't exist",
+                        index_id,
+                        sensor_id,
+                    )
+
     def get(self, index_id: int, output_class: type[_OutputT]) -> _OutputT:
         """Get an output.
 
@@ -176,6 +195,15 @@ class Outputs:
 
         """
         return [output for output in self._outputs.values() if isinstance(output, output_class)]
+
+    def get_ids(self) -> set[int]:
+        """Get the ids of the outputs.
+
+        Returns:
+            set[int]: The id of each output.
+
+        """
+        return set(self._outputs)
 
     def run_enc_command(self, index_id: int, command: str) -> str | None:
         """Apply an ENC command to an output.

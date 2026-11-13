@@ -12,15 +12,7 @@ from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
 
 from .actions import Actions
 from .api import Api
-from .automations import (
-    Automations,
-    OutputControlReaction,
-    OutputSetState,
-    PwmTemperatureLinkedAutomation,
-    RuleAutomation,
-    TemperatureTrigger,
-    ToggleTimerAutomation,
-)
+from .automations import Automations, RuleAutomation, TemperatureTrigger
 from .engine import ControlLoop, OutputExecutor, Scheduler
 from .frontend import Frontend
 from .gcode_commands import EncDevHandler, EncHandler
@@ -176,8 +168,8 @@ class EnclosurePlugin(
             self.link_dummy_sensors()
         self._actions.load(actions)
         self._automations.load(automations)
-        self.warn_missing_linked_sensors()
-        self.warn_missing_thermostat_targets()
+        self._outputs.check_links(self._sensors)
+        self._automations.check_links(self._sensors, self._gpio_inputs, self._outputs, self._actions)
 
         self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
         self._sensors.setup_pins()
@@ -229,58 +221,6 @@ class EnclosurePlugin(
 
     def get_sensor_inputs(self):
         return [sensor.config for sensor in self._sensors.get_all().values()]
-
-    def warn_missing_linked_sensors(self):
-        sensor_ids = set(self._sensors.get_all())
-        for thermostat_output in self._outputs.get_all(ThermostatOutput):
-            config = thermostat_output.config
-            if config.linked_temp_sensor not in sensor_ids:
-                self._logger.warning(
-                    "Output %s is linked to sensor %s, which doesn't exist",
-                    config.index_id,
-                    config.linked_temp_sensor,
-                )
-
-        linked_sensors = [
-            (rule.config.index_id, rule.trigger.config.linked_temp_sensor)
-            for rule in self._automations.get_all(RuleAutomation, include_disabled=True)
-            if isinstance(rule.trigger, TemperatureTrigger)
-        ]
-        linked_sensors += [
-            (automation.config.index_id, automation.config.linked_temp_sensor)
-            for automation in self._automations.get_all(PwmTemperatureLinkedAutomation, include_disabled=True)
-        ]
-
-        for automation_id, sensor_id in linked_sensors:
-            if sensor_id not in sensor_ids:
-                self._logger.warning(
-                    "Automation %s is linked to sensor %s, which doesn't exist",
-                    automation_id,
-                    sensor_id,
-                )
-
-    def warn_missing_thermostat_targets(self):
-        thermostat_ids = {thermostat.config.index_id for thermostat in self._outputs.get_all(ThermostatOutput)}
-
-        # The automation id, the output id and the target, each time an automation turns an output on
-        turned_on = []
-        for rule in self._automations.get_all(RuleAutomation, include_disabled=True):
-            for reaction in rule.reactions:
-                if not isinstance(reaction, OutputControlReaction):
-                    continue
-                if reaction.config.controlled_io_set_state is not OutputSetState.OFF:
-                    turned_on.append((rule.config.index_id, reaction.config.controlled_io, reaction.config.target))
-        for toggle_timer in self._automations.get_all(ToggleTimerAutomation, include_disabled=True):
-            config = toggle_timer.config
-            turned_on.append((config.index_id, config.output, config.target))
-
-        for automation_id, output_id, target in turned_on:
-            if output_id in thermostat_ids and target is None:
-                self._logger.warning(
-                    "Automation %s turns on thermostat %s without a target",
-                    automation_id,
-                    output_id,
-                )
 
     def link_dummy_sensors(self):
         for thermostat in self._outputs.get_all(ThermostatOutput):
@@ -402,11 +342,15 @@ class EnclosurePlugin(
 
         # Update automations
         self._automations.load(automations)
-        self.warn_missing_linked_sensors()
-        self.warn_missing_thermostat_targets()
 
-        # Reload the GPIO inputs and set up the pins of the inputs
+        # Reload the GPIO inputs
         self._gpio_inputs.load(rpi_inputs)
+
+        # Check the links between the entries
+        self._outputs.check_links(self._sensors)
+        self._automations.check_links(self._sensors, self._gpio_inputs, self._outputs, self._actions)
+
+        # Set up the pins of the inputs
         self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
         self._sensors.setup_pins()
 

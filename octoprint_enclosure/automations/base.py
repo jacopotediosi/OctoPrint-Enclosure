@@ -13,6 +13,9 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
+    from octoprint_enclosure.outputs import OutputSetpointConfig
+    from octoprint_enclosure.settings import OutputId
+
     from .conditions import Condition
     from .triggers.base import Trigger
 
@@ -79,6 +82,20 @@ class Automation(Generic[_ConfigT]):
     def trigger(self) -> Trigger | None:
         """What starts the automation, or None if no trigger does."""
         return None
+
+    @property
+    def configs(self) -> list[BaseConfig]:
+        """The configurations the automation is made of."""
+        return [self.config, *(condition.config for condition in self.conditions)]
+
+    def get_output_setpoints(self) -> list[tuple[OutputId, OutputSetpointConfig]]:
+        """Get the outputs the automation turns on, each with the setpoint it reads from its settings.
+
+        Returns:
+            list[tuple[OutputId, OutputSetpointConfig]]: The id of each output, with its setpoint.
+
+        """
+        return []
 
     def has_same_config(self, other: Automation) -> bool:
         """Check whether another automation has the same configuration.

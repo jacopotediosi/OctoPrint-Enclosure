@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from typing_extensions import override
+
 from octoprint_enclosure.outputs import OutputSetpointConfig
-from octoprint_enclosure.settings import REQUIRED
+from octoprint_enclosure.settings import REQUIRED, OutputId
 
 from .base import Automation, AutomationConfig
 
@@ -19,7 +21,7 @@ if TYPE_CHECKING:
 class ToggleTimerConfig(AutomationConfig, OutputSetpointConfig):
     """The configuration of an automation that turns an output on and off in turn."""
 
-    output: int = REQUIRED
+    output: OutputId = REQUIRED
     """The id of the output to control."""
 
     toggle_timer_on: float = REQUIRED
@@ -68,6 +70,10 @@ class ToggleTimerAutomation(Automation[ToggleTimerConfig]):
     def is_running(self) -> bool:
         """Whether the output is being turned on and off in turn."""
         return self._running
+
+    @override
+    def get_output_setpoints(self) -> list[tuple[OutputId, OutputSetpointConfig]]:
+        return [(self.config.output, self.config)]
 
     def start(self) -> None:
         """Start turning the output on and off in turn."""

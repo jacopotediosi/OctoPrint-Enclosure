@@ -135,6 +135,15 @@ class Actions:
         """
         return [action for action in self._actions.values() if isinstance(action, action_class)]
 
+    def get_ids(self) -> set[int]:
+        """Get the ids of the actions.
+
+        Returns:
+            set[int]: The id of each action.
+
+        """
+        return set(self._actions)
+
     def run(self, index_id: int, action_class: type[Action] = Action) -> Action:
         """Run an action.
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import MISSING, dataclass, fields
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, FrozenSet, NewType, Optional, get_type_hints
+from typing import TYPE_CHECKING, Any, Callable, FrozenSet, NewType, Optional, TypeVar, get_type_hints
 
 from octoprint_enclosure.utils import Rgb, parse_bool, parse_float, parse_hex, parse_hex_color
 
@@ -11,6 +11,20 @@ if TYPE_CHECKING:
 
 HexInt = NewType("HexInt", int)
 """An integer saved in hexadecimal, such as an I2C address: "76" and "0x76" are both read as 118."""
+
+SensorInputId = NewType("SensorInputId", int)
+"""The id of an input with a temperature sensor."""
+
+GpioInputId = NewType("GpioInputId", int)
+"""The id of a GPIO input."""
+
+OutputId = NewType("OutputId", int)
+"""The id of an output."""
+
+ActionId = NewType("ActionId", int)
+"""The id of an action."""
+
+_IdT = TypeVar("_IdT", bound=int)
 
 
 class _Required:
@@ -41,6 +55,10 @@ _PARSERS: dict[Any, Callable[[Any], Any]] = {
     HexInt: parse_hex,
     Rgb: parse_hex_color,
     FrozenSet[str]: _parse_str_set,
+    SensorInputId: int,
+    GpioInputId: int,
+    OutputId: int,
+    ActionId: int,
 }
 """How to read a saved value, for each type a field of a configuration can have."""
 
@@ -106,3 +124,24 @@ class BaseConfig:
                 raise ValueError(msg) from error
 
         return cls(**values)
+
+    def get_linked_ids(self, id_type: type[_IdT]) -> list[_IdT]:
+        """Get the ids of a certain type that the configuration is linked to.
+
+        Args:
+            id_type (type[_IdT]): The type of the ids, e.g. OutputId.
+
+        Returns:
+            list[_IdT]: The value of each field of that type.
+
+        Examples:
+            >>> from octoprint_enclosure.automations.reactions.output_control import OutputControlConfig
+            >>> config = OutputControlConfig.from_settings({"controlled_io": 3, "controlled_io_set_state": "on"})
+            >>> config.get_linked_ids(OutputId)
+            [3]
+            >>> config.get_linked_ids(ActionId)
+            []
+
+        """
+        type_hints = get_type_hints(type(self))
+        return [getattr(self, field.name) for field in fields(self) if type_hints[field.name] is id_type]

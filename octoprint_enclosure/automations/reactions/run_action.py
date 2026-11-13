@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from octoprint_enclosure.settings import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import REQUIRED, ActionId, BaseConfig
 
 from .base import Reaction
 
@@ -11,7 +11,7 @@ from .base import Reaction
 class RunActionConfig(BaseConfig):
     """The configuration of an automation reaction that runs an action."""
 
-    action: int = REQUIRED
+    action: ActionId = REQUIRED
     """The id of the action."""
 
 

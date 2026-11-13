@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import REQUIRED, BaseConfig, SensorInputId
 from octoprint_enclosure.utils import MeasurementType
 
 from .base import Output
@@ -37,7 +37,7 @@ class ThermostatDeviceType(Enum):
 class ThermostatConfig(SwitchConfig):
     """The configuration of a thermostat."""
 
-    linked_temp_sensor: int = REQUIRED
+    linked_temp_sensor: SensorInputId = REQUIRED
     """The id of the input of the sensor that reads the temperature or the humidity."""
 
     temp_ctr_type: ThermostatDeviceType = REQUIRED
