@@ -174,10 +174,16 @@ class GpioInputs:
     def _handle_edge(self, channel: int) -> None:
         try:
             self._logger.debug("GPIO event triggered on channel %s", channel)
-            level = self._gpio.input(channel)
             for index_id, gpio_input in self._get_valid_gpio_inputs():
-                if gpio_input.config.gpio_pin == channel:
-                    self._on_edge(index_id, level)
+                if gpio_input.config.gpio_pin != channel:
+                    continue
+
+                level = gpio_input.read_pin_level()
+                if level is None:
+                    self._logger.error("The edge on input %s was ignored: its pin can't be read", index_id)
+                    continue
+
+                self._on_edge(index_id, level)
         except Exception:
             self._logger.exception("Error handling an edge on pin %s", channel)
 
