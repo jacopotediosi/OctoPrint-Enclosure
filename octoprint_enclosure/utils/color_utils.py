@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from typing import NamedTuple
 
-_HEX_COLOR_PATTERN = re.compile(r"#[0-9a-fA-F]{6}")
+HEX_COLOR_PATTERN = re.compile(r"#[0-9a-fA-F]{6}")
+"""A color in the "#rrggbb" format."""
 
 
 class Rgb(NamedTuple):
@@ -35,7 +36,7 @@ def parse_hex_color(value: str) -> Rgb:
         ValueError: 'rgb(10,20,30)' is not a color in the #rrggbb format
 
     """
-    if _HEX_COLOR_PATTERN.fullmatch(value) is None:
+    if HEX_COLOR_PATTERN.fullmatch(value) is None:
         msg = f"{value!r} is not a color in the #rrggbb format"
         raise ValueError(msg)
     return Rgb(*(int(value[start : start + 2], 16) for start in (1, 3, 5)))

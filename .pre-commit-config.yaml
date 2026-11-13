@@ -38,3 +38,19 @@ repos:
       - id: codespell
         additional_dependencies:
         - tomli
+
+  - repo: local
+    hooks:
+      - id: build-openapi
+        name: build openapi
+        entry: python -m dev_tools.generate_openapi
+        language: python
+        additional_dependencies:
+        - bme680
+        - gpiozero
+        - OctoPrint>=2.0.0rc1
+        - RPi.bme280
+        - smbus2
+        - spidev
+        files: ^(octoprint_enclosure/.*\.py|octoprint_enclosure/api/openapi\.json|pyproject\.toml|dev_tools/generate_openapi\.py)$
+        pass_filenames: false

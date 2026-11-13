@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from octoprint_enclosure.automations import Automation, AutomationError
+from octoprint_enclosure.automations.registry import AUTOMATIONS
 from octoprint_enclosure.permissions import PluginPermission
 
 from .base import BaseApi
 from .bodies import Body
-from .responses import ErrorResponse, ItemResponse, error_response, item_response, list_response
+from .responses import ItemResponse, error_response, item_response, list_response
 from .routes import route
 
 if TYPE_CHECKING:
@@ -23,6 +24,8 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class AutomationResponse(ItemResponse):
     """An automation."""
+
+    type: str = field(metadata={"enum": list(AUTOMATIONS)})
 
     enabled: bool
     """Whether the automation is enabled."""
@@ -66,6 +69,11 @@ class AutomationResponse(ItemResponse):
 class AutomationBody(Body):
     """What to change in an automation."""
 
+    examples = {
+        "Enable an automation": {"enabled": True},
+        "Disable an automation": {"enabled": False},
+    }
+
     enabled: bool
     """Whether the automation is enabled."""
 
@@ -91,14 +99,15 @@ class AutomationsApi(BaseApi):
 
     @route("GET", "/automations", permission=PluginPermission.STATUS, responses={200: [AutomationResponse]})
     def get_automations(self) -> Response:
-        """List the automations."""
+        """List the automations, ordered by id."""
         return list_response(AutomationResponse.from_automations(self._automations))
 
     @route(
         "GET",
         "/automations/<int:automation_id>",
         permission=PluginPermission.STATUS,
-        responses={200: AutomationResponse, 404: ErrorResponse},
+        responses={200: AutomationResponse},
+        errors={404: "No automation is set up with that id."},
     )
     def get_automation(self, automation_id: int) -> Response:
         """Get an automation."""
@@ -114,7 +123,8 @@ class AutomationsApi(BaseApi):
         "/automations/<int:automation_id>",
         permission=PluginPermission.AUTOMATIONS_ENABLE,
         body=AutomationBody,
-        responses={200: AutomationResponse, 404: ErrorResponse},
+        responses={200: AutomationResponse},
+        errors={404: "No automation is set up with that id."},
     )
     def set_automation(self, automation_id: int, body: AutomationBody) -> Response:
         """Enable or disable an automation."""

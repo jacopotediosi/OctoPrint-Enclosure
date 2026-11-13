@@ -9,7 +9,7 @@ from flask import request
 from werkzeug.exceptions import BadRequest
 
 from .bodies import BodyError
-from .responses import ErrorResponse, error_response
+from .responses import error_response
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -28,8 +28,8 @@ class Route:
     method: str
     """The HTTP method."""
 
-    rule: str
-    """The path of the route, with its parameters as Flask writes them."""
+    path: str
+    """The path of the route, with its parameters as Flask writes them, e.g. `/outputs/<int:output_id>`."""
 
     permission: PluginPermission
     """The permission the requests need."""
@@ -38,8 +38,11 @@ class Route:
     """The body of the requests, or None if the route takes none."""
 
     responses: Mapping[int, object]
-    """What the route answers, by HTTP status code: a response class, a list with one for a JSON list of it, or None
-    for an empty response."""
+    """The successful responses, by HTTP status code. Each value is the body: a response class, a list with a
+    response class for a JSON list, `dict` for any JSON object, or None for no body."""
+
+    errors: Mapping[int, str]
+    """Why the route refuses a request, by HTTP status code. The body of the answer is always an `ErrorResponse`."""
 
     function: Callable[..., Response]
     """The method that handles the requests."""
@@ -51,23 +54,26 @@ ROUTES: list[Route] = []
 
 def route(
     method: str,
-    rule: str,
+    path: str,
     *,
     permission: PluginPermission,
     body: type[Body] | None = None,
     responses: Mapping[int, object],
+    errors: Mapping[int, str] | None = None,
 ) -> Callable[[Callable[..., Response]], Callable[..., Response]]:
     """Make a method an API route.
 
     Args:
         method (str): The HTTP method.
-        rule (str): The path of the route, with its parameters as Flask writes them.
+        path (str): The path of the route, with its parameters as Flask writes them, e.g. `/outputs/<int:output_id>`.
         permission (PluginPermission): The permission the requests need.
         body (type[Body] | None): The body of the requests, read from their JSON and passed to the method as `body`,
             or None if the route takes none.
-        responses (Mapping[int, object]): What the route answers, by HTTP status code: a response class, a list with
-            one for a JSON list of it, or None for an empty response. The answers to a missing permission and to a
-            body that is not valid don't need to be listed.
+        responses (Mapping[int, object]): The successful responses, by HTTP status code. Each value is the body: a
+            response class, a list with a response class for a JSON list, `dict` for any JSON object, or None for no
+            body.
+        errors (Mapping[int, str] | None): Why the method refuses a request, by HTTP status code, or None if it
+            refuses none. A missing permission and a body that is not valid don't need to be listed.
 
     Returns:
         Callable[[Callable[..., Response]], Callable[..., Response]]: The decorator of the method.
@@ -97,12 +103,15 @@ def route(
 
             return function(*args, **kwargs, body=parsed_body)
 
-        all_responses = {**responses, 403: ErrorResponse}
+        all_errors = {403: "The user doesn't have the permission."}
         if body is not None:
-            all_responses.update({400: ErrorResponse, 415: ErrorResponse, 422: ErrorResponse})
+            all_errors[400] = "The body is not valid JSON."
+            all_errors[415] = "The Content-Type is not application/json."
+            all_errors[422] = "The body is not a JSON object, or its attributes are unknown, missing or not valid."
+        all_errors.update(errors or {})
 
-        ROUTES.append(Route(method, rule, permission, body, all_responses, function))
+        ROUTES.append(Route(method, path, permission, body, responses, all_errors, function))
 
-        return octoprint.plugin.BlueprintPlugin.route(rule, methods=[method])(wrapper)
+        return octoprint.plugin.BlueprintPlugin.route(path, methods=[method])(wrapper)
 
     return decorator

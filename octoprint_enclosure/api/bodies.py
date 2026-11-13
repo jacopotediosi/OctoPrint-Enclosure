@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import MISSING, dataclass, fields
-from typing import TYPE_CHECKING, Any, NewType, Optional, get_type_hints
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, NewType, Optional, get_type_hints
 
-from octoprint_enclosure.utils import Rgb, is_number, parse_hex_color
+from octoprint_enclosure.utils import HEX_COLOR_PATTERN, Rgb, is_number, parse_hex_color
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from typing_extensions import Self
 
@@ -55,18 +55,37 @@ def _parse_hex_color(value: object) -> Rgb:
     return parse_hex_color(value)
 
 
-_JSON_TYPES: dict[Any, tuple[str, Callable[[object], object]]] = {
-    bool: ("bool", _parse_bool),
-    Optional[float]: ("number or null", _parse_number_or_null),
-    Percent: ("percent", _parse_percent),
-    Rgb: ("hex color", _parse_hex_color),
+class JsonType(NamedTuple):
+    """How a field of a body reads a JSON value."""
+
+    name: str
+    """The name of the type."""
+
+    parse: Callable[[object], object]
+    """The function that reads the value."""
+
+    schema: Mapping[str, object]
+    """The JSON Schema of the values that are valid."""
+
+
+JSON_TYPES: dict[Any, JsonType] = {
+    bool: JsonType("bool", _parse_bool, {"type": "boolean"}),
+    Optional[float]: JsonType("number or null", _parse_number_or_null, {"type": ["number", "null"]}),
+    Percent: JsonType("percent", _parse_percent, {"type": "number", "minimum": 0, "maximum": 100}),
+    Rgb: JsonType("hex color", _parse_hex_color, {"type": "string", "pattern": f"^{HEX_COLOR_PATTERN.pattern}$"}),
 }
-"""How to name and read a JSON value, for each type a field of a body can have."""
+"""How to read a JSON value, for each type a field of a body can have."""
 
 
 @dataclass(frozen=True)
 class Body:
     """The body of a request: each field reads the JSON attribute with its name."""
+
+    exactly_one_attribute: ClassVar[bool] = False
+    """Whether a request must send exactly one of the attributes of the body."""
+
+    examples: ClassVar[dict] = {}
+    """Some requests the body accepts, as JSON, by what each one does, for documentation purposes."""
 
     @classmethod
     def from_json(cls, data: object) -> Self:
@@ -80,7 +99,8 @@ class Body:
 
         Raises:
             BodyError: If the JSON is not an object, has attributes the body doesn't know, lacks an attribute the body
-                needs, or has a value that is not valid for its field or for the body.
+                needs, has a value that is not valid for its field, or doesn't have exactly one attribute when the
+                body takes exactly one.
 
         Examples:
             >>> @dataclass(frozen=True)
@@ -108,11 +128,11 @@ class Body:
         for name in names:
             if name not in data:
                 continue
-            description, parse = _JSON_TYPES[type_hints[name]]
+            json_type = JSON_TYPES[type_hints[name]]
             try:
-                values[name] = parse(data[name])
+                values[name] = json_type.parse(data[name])
             except (TypeError, ValueError):
-                invalid.append(f"'{name}' is not {description}")
+                invalid.append(f"'{name}' is not {json_type.name}")
 
         errors = []
         if unknown:
@@ -124,10 +144,11 @@ class Body:
 
         body = None
         if not missing and not invalid:
-            try:
+            if cls.exactly_one_attribute and len(values) != 1:
+                attributes = ", ".join(f"'{name}'" for name in names)
+                errors.append(f"Exactly one of these attributes is needed: {attributes}.")
+            else:
                 body = cls(**values)
-            except ValueError as error:
-                errors.append(str(error))
 
         if body is None or errors:
             raise BodyError(*errors)

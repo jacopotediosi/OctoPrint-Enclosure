@@ -25,6 +25,11 @@ class PluginPermission(Enum):
     AUTOMATIONS_ENABLE = "AUTOMATIONS_ENABLE"
     """Enable and disable the automations."""
 
+    @property
+    def octoprint_key(self) -> str:
+        """The key OctoPrint gives to the permission."""
+        return f"PLUGIN_ENCLOSURE_{self.value}"
+
     def to_octoprint(self) -> OctoPrintPermission:
         """Get the permission as OctoPrint registered it.
 
@@ -32,7 +37,7 @@ class PluginPermission(Enum):
             OctoPrintPermission: The OctoPrint permission.
 
         """
-        return getattr(Permissions, f"PLUGIN_ENCLOSURE_{self.value}")
+        return getattr(Permissions, self.octoprint_key)
 
 
 def get_additional_permissions() -> list[dict]:
@@ -43,7 +48,7 @@ def get_additional_permissions() -> list[dict]:
             groups that have it by default, and whether it is dangerous.
 
     """
-    status = f"PLUGIN_ENCLOSURE_{PluginPermission.STATUS.value}"
+    status = PluginPermission.STATUS.octoprint_key
     return [
         {
             "key": PluginPermission.STATUS.value,

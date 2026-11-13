@@ -36,6 +36,14 @@ tasks:
         cmds:
           - python -m build --wheel
 
+    build-openapi:
+        desc: Builds the OpenAPI documentation
+        preconditions:
+          - sh: python -c "import octoprint"
+            msg: "OctoPrint not found. Run this task within the OctoPrint venv."
+        cmds:
+          - python dev_tools/generate_openapi.py
+
     ### Translation related
 
     babel-new:

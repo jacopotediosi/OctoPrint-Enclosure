@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from flask import make_response
 
 from octoprint_enclosure.actions import Action, ActionError
+from octoprint_enclosure.actions.registry import ACTIONS
 from octoprint_enclosure.permissions import PluginPermission
 
 from .base import BaseApi
-from .responses import ErrorResponse, ItemResponse, error_response, item_response, list_response
+from .responses import ItemResponse, error_response, item_response, list_response
 from .routes import route
 
 if TYPE_CHECKING:
@@ -22,6 +23,8 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class ActionResponse(ItemResponse):
     """An action, e.g. a G-code or shell script."""
+
+    type: str = field(metadata={"enum": list(ACTIONS)})
 
     @classmethod
     def from_action(cls, action: Action) -> ActionResponse:
@@ -55,14 +58,15 @@ class ActionsApi(BaseApi):
 
     @route("GET", "/actions", permission=PluginPermission.STATUS, responses={200: [ActionResponse]})
     def get_actions(self) -> Response:
-        """List the actions."""
+        """List the actions, ordered by id."""
         return list_response(ActionResponse.from_action(action) for action in self._actions.get_all(Action))
 
     @route(
         "GET",
         "/actions/<int:action_id>",
         permission=PluginPermission.STATUS,
-        responses={200: ActionResponse, 404: ErrorResponse},
+        responses={200: ActionResponse},
+        errors={404: "No action is set up with that id."},
     )
     def get_action(self, action_id: int) -> Response:
         """Get an action."""
@@ -77,7 +81,11 @@ class ActionsApi(BaseApi):
         "POST",
         "/actions/<int:action_id>/run",
         permission=PluginPermission.ACTIONS_RUN,
-        responses={204: None, 404: ErrorResponse, 409: ErrorResponse},
+        responses={204: None},
+        errors={
+            404: "No action is set up with that id.",
+            409: "The action can't be run because of a configuration error.",
+        },
     )
     def run_action(self, action_id: int) -> Response:
         """Run an action."""

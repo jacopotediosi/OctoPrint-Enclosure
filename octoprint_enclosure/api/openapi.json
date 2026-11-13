@@ -1,0 +1,1221 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OctoPrint-Enclosure API",
+    "description": "The API is located at `<OctoPrint URL>/plugin/enclosure`.\n\nA failed request answers with an error status code and the body `{\"errors\": [string]}`, with one message for each problem found.\n\n## Permissions\n\nEach endpoint needs a permission of the plugin. OctoPrint gives the permissions to groups and users (OctoPrint Settings > Access Control), and a request has the permissions of its user, e.g. the user of its API key.\n\n| Permission | Key | Description | Default groups |\n|---|---|---|---|\n| Status | `PLUGIN_ENCLOSURE_STATUS` | Allows to see inputs, outputs, actions and automations, with their state. | `admins`, `users`, `readonly` |\n| Control outputs | `PLUGIN_ENCLOSURE_OUTPUTS_CONTROL` | Allows to turn outputs on and off, and to set their duty cycle, color or target. Includes the \"Status\" permission. | `admins`, `users` |\n| Run actions | `PLUGIN_ENCLOSURE_ACTIONS_RUN` | Allows to run actions, e.g. G-code or shell scripts. Includes the \"Status\" permission. | `admins`, `users` |\n| Enable and disable automations | `PLUGIN_ENCLOSURE_AUTOMATIONS_ENABLE` | Allows to enable and disable automations. Includes the \"Status\" permission. | `admins`, `users` |\n\n## Push messages\n\nThe plugin also sends its state over the OctoPrint push websocket, as plugin messages of the plugin `enclosure`, to the users with the Status permission. A message has one of these attributes:\n\n- `inputs`: the same list as `GET /inputs`\n- `outputs`: the same list as `GET /outputs`\n- `automations`: the same list as `GET /automations`",
+    "version": "4.13.2"
+  },
+  "servers": [
+    {
+      "url": "{octoprint}/plugin/enclosure",
+      "variables": {
+        "octoprint": {
+          "default": "http://127.0.0.1:5000",
+          "description": "The URL of OctoPrint."
+        }
+      }
+    }
+  ],
+  "tags": [
+    {
+      "name": "Inputs",
+      "description": "The HTTP API of the inputs."
+    },
+    {
+      "name": "Outputs",
+      "description": "The HTTP API of the outputs."
+    },
+    {
+      "name": "Actions",
+      "description": "The HTTP API of the actions."
+    },
+    {
+      "name": "Automations",
+      "description": "The HTTP API of the automations."
+    },
+    {
+      "name": "Documentation",
+      "description": "The documentation of the API."
+    }
+  ],
+  "paths": {
+    "/inputs": {
+      "get": {
+        "tags": [
+          "Inputs"
+        ],
+        "summary": "List the inputs, ordered by id, with their state.",
+        "description": "Needs the \"Status\" permission.",
+        "operationId": "get_inputs",
+        "security": [
+          {
+            "apiKey": [
+              "PLUGIN_ENCLOSURE_STATUS"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A JSON list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InputResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user doesn't have the permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/inputs/{input_id}": {
+      "get": {
+        "tags": [
+          "Inputs"
+        ],
+        "summary": "Get an input, with its state.",
+        "description": "Needs the \"Status\" permission.",
+        "operationId": "get_input",
+        "security": [
+          {
+            "apiKey": [
+              "PLUGIN_ENCLOSURE_STATUS"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "input_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An input, and its state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user doesn't have the permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No input is set up with that id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/outputs": {
+      "get": {
+        "tags": [
+          "Outputs"
+        ],
+        "summary": "List the outputs that are set up, ordered by id, with their state.",
+        "description": "Needs the \"Status\" permission.",
+        "operationId": "get_outputs",
+        "security": [
+          {
+            "apiKey": [
+              "PLUGIN_ENCLOSURE_STATUS"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A JSON list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OutputResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user doesn't have the permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/outputs/{output_id}": {
+      "get": {
+        "tags": [
+          "Outputs"
+        ],
+        "summary": "Get an output, with its state.",
+        "description": "Needs the \"Status\" permission.",
+        "operationId": "get_output",
+        "security": [
+          {
+            "apiKey": [
+              "PLUGIN_ENCLOSURE_STATUS"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "output_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An output, and its state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutputResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user doesn't have the permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No output is set up with that id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Outputs"
+        ],
+        "summary": "Control an output.",
+        "description": "The attribute to send depends on the type of the output:\n\n- `on`: false turns any output off; true turns on only an output that is only on or off.\n- `duty_cycle`: for a PWM output.\n- `color`: for an output that shows a color.\n- `target`: for a thermostat; null turns it off.\n\nNeeds the \"Control outputs\" permission.",
+        "operationId": "set_output",
+        "security": [
+          {
+            "apiKey": [
+              "PLUGIN_ENCLOSURE_OUTPUTS_CONTROL"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "output_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutputBody"
+              },
+              "examples": {
+                "turn_a_relay_on": {
+                  "summary": "Turn a relay on",
+                  "value": {
+                    "on": true
+                  }
+                },
+                "turn_any_output_off": {
+                  "summary": "Turn any output off",
+                  "value": {
+                    "on": false
+                  }
+                },
+                "set_the_duty_cycle_of_a_pwm_output": {
+                  "summary": "Set the duty cycle of a PWM output",
+                  "value": {
+                    "duty_cycle": 40
+                  }
+                },
+                "set_the_color_of_a_led_strip": {
+                  "summary": "Set the color of a LED strip",
+                  "value": {
+                    "color": "#ff8800"
+                  }
+                },
+                "set_the_target_of_a_thermostat": {
+                  "summary": "Set the target of a thermostat",
+                  "value": {
+                    "target": 30
+                  }
+                },
+                "turn_a_thermostat_off": {
+                  "summary": "Turn a thermostat off",
+                  "value": {
+                    "target": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An output, and its state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutputResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not valid JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user doesn't have the permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No output is set up with that id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The Content-Type is not application/json.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The body is not a JSON object, or its attributes are unknown, missing, not valid, or not valid for the type of the output.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/actions": {
+      "get": {
+        "tags": [
+          "Actions"
+        ],
+        "summary": "List the actions, ordered by id.",
+        "description": "Needs the \"Status\" permission.",
+        "operationId": "get_actions",
+        "security": [
+          {
+            "apiKey": [
+              "PLUGIN_ENCLOSURE_STATUS"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A JSON list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ActionResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user doesn't have the permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/actions/{action_id}": {
+      "get": {
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Get an action.",
+        "description": "Needs the \"Status\" permission.",
+        "operationId": "get_action",
+        "security": [
+          {
+            "apiKey": [
+              "PLUGIN_ENCLOSURE_STATUS"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An action, e.g. a G-code or shell script.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user doesn't have the permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No action is set up with that id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/actions/{action_id}/run": {
+      "post": {
+        "tags": [
+          "Actions"
+        ],
+        "summary": "Run an action.",
+        "description": "Needs the \"Run actions\" permission.",
+        "operationId": "run_action",
+        "security": [
+          {
+            "apiKey": [
+              "PLUGIN_ENCLOSURE_ACTIONS_RUN"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "action_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No content."
+          },
+          "403": {
+            "description": "The user doesn't have the permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No action is set up with that id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The action can't be run because of a configuration error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/automations": {
+      "get": {
+        "tags": [
+          "Automations"
+        ],
+        "summary": "List the automations, ordered by id.",
+        "description": "Needs the \"Status\" permission.",
+        "operationId": "get_automations",
+        "security": [
+          {
+            "apiKey": [
+              "PLUGIN_ENCLOSURE_STATUS"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A JSON list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AutomationResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user doesn't have the permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/automations/{automation_id}": {
+      "get": {
+        "tags": [
+          "Automations"
+        ],
+        "summary": "Get an automation.",
+        "description": "Needs the \"Status\" permission.",
+        "operationId": "get_automation",
+        "security": [
+          {
+            "apiKey": [
+              "PLUGIN_ENCLOSURE_STATUS"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "automation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An automation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user doesn't have the permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No automation is set up with that id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Automations"
+        ],
+        "summary": "Enable or disable an automation.",
+        "description": "Needs the \"Enable and disable automations\" permission.",
+        "operationId": "set_automation",
+        "security": [
+          {
+            "apiKey": [
+              "PLUGIN_ENCLOSURE_AUTOMATIONS_ENABLE"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "automation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutomationBody"
+              },
+              "examples": {
+                "enable_an_automation": {
+                  "summary": "Enable an automation",
+                  "value": {
+                    "enabled": true
+                  }
+                },
+                "disable_an_automation": {
+                  "summary": "Disable an automation",
+                  "value": {
+                    "enabled": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An automation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not valid JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user doesn't have the permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No automation is set up with that id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The Content-Type is not application/json.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The body is not a JSON object, or its attributes are unknown, missing or not valid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "tags": [
+          "Documentation"
+        ],
+        "summary": "Get the OpenAPI documentation of the API.",
+        "description": "Needs the \"Status\" permission.",
+        "operationId": "get_openapi",
+        "security": [
+          {
+            "apiKey": [
+              "PLUGIN_ENCLOSURE_STATUS"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A JSON object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user doesn't have the permission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SensorInputResponse": {
+        "type": "object",
+        "description": "An input with a temperature sensor, and its last reading.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "The id of the item, unique among the items of its kind."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "temperature_sensor"
+            ],
+            "description": "The type of the item."
+          },
+          "label": {
+            "type": "string",
+            "description": "The label given to the item."
+          },
+          "temperature": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "examples": [
+              21.5
+            ],
+            "description": "The temperature in Celsius, or null if the sensor has none."
+          },
+          "humidity": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "examples": [
+              40.2
+            ],
+            "description": "The relative humidity in percent, or null if the sensor has none."
+          },
+          "air_quality": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "The air quality index, or null if the sensor has none."
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label",
+          "temperature",
+          "humidity",
+          "air_quality"
+        ]
+      },
+      "GpioInputResponse": {
+        "type": "object",
+        "description": "An input on a GPIO pin, and its state.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "The id of the item, unique among the items of its kind."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "gpio"
+            ],
+            "description": "The type of the item."
+          },
+          "label": {
+            "type": "string",
+            "description": "The label given to the item."
+          },
+          "active": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the input is active, or null if its pin can't be read."
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label",
+          "active"
+        ]
+      },
+      "InputResponse": {
+        "description": "An input, and its state.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SensorInputResponse"
+          },
+          {
+            "$ref": "#/components/schemas/GpioInputResponse"
+          }
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "Why a request failed.",
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The problems found in the request, one message each."
+          }
+        },
+        "required": [
+          "errors"
+        ]
+      },
+      "RegularOutputResponse": {
+        "type": "object",
+        "description": "An output that is only on or off, like a relay.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "The id of the item, unique among the items of its kind."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "regular"
+            ],
+            "description": "The type of the item."
+          },
+          "label": {
+            "type": "string",
+            "description": "The label given to the item."
+          },
+          "on": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the output is on, or null if it can't be read."
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label",
+          "on"
+        ]
+      },
+      "PwmOutputResponse": {
+        "type": "object",
+        "description": "A PWM output.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "The id of the item, unique among the items of its kind."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "pwm"
+            ],
+            "description": "The type of the item."
+          },
+          "label": {
+            "type": "string",
+            "description": "The label given to the item."
+          },
+          "on": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the output is on, or null if it can't be read."
+          },
+          "duty_cycle": {
+            "type": "number",
+            "examples": [
+              40
+            ],
+            "description": "The duty cycle, from 0 to 100."
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label",
+          "on",
+          "duty_cycle"
+        ]
+      },
+      "ColorOutputResponse": {
+        "type": "object",
+        "description": "An output that shows a color, like a LED strip.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "The id of the item, unique among the items of its kind."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "neopixel_indirect",
+              "neopixel_direct",
+              "ledstrip"
+            ],
+            "description": "The type of the item."
+          },
+          "label": {
+            "type": "string",
+            "description": "The label given to the item."
+          },
+          "on": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the output is on, or null if it can't be read."
+          },
+          "color": {
+            "type": "string",
+            "examples": [
+              "#ff8800"
+            ],
+            "description": "The color, as \"#rrggbb\"."
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label",
+          "on",
+          "color"
+        ]
+      },
+      "ThermostatOutputResponse": {
+        "type": "object",
+        "description": "A thermostat. It is on when its device, like a heater, is on.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "The id of the item, unique among the items of its kind."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "temp_hum_control"
+            ],
+            "description": "The type of the item."
+          },
+          "label": {
+            "type": "string",
+            "description": "The label given to the item."
+          },
+          "on": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the output is on, or null if it can't be read."
+          },
+          "target": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "examples": [
+              30
+            ],
+            "description": "The target temperature in Celsius, or the target relative humidity in percent, or null if the thermostat is off."
+          },
+          "measurement": {
+            "type": "string",
+            "enum": [
+              "temperature",
+              "humidity"
+            ],
+            "description": "What the thermostat keeps at its target: \"temperature\" or \"humidity\"."
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label",
+          "on",
+          "target",
+          "measurement"
+        ]
+      },
+      "OutputResponse": {
+        "description": "An output, and its state.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RegularOutputResponse"
+          },
+          {
+            "$ref": "#/components/schemas/PwmOutputResponse"
+          },
+          {
+            "$ref": "#/components/schemas/ColorOutputResponse"
+          },
+          {
+            "$ref": "#/components/schemas/ThermostatOutputResponse"
+          }
+        ]
+      },
+      "OutputBody": {
+        "type": "object",
+        "description": "What to change in an output, with exactly one attribute.",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "Whether the output is on. False turns any output off, true turns on only an output that is only on or off."
+          },
+          "duty_cycle": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "The duty cycle of a PWM output, from 0 to 100."
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "description": "The color of an output that shows a color, as \"#rrggbb\"."
+          },
+          "target": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "The target of a thermostat, as a temperature in Celsius or a relative humidity in percent, or null to turn the thermostat off."
+          }
+        },
+        "additionalProperties": false,
+        "minProperties": 1,
+        "maxProperties": 1
+      },
+      "ActionResponse": {
+        "type": "object",
+        "description": "An action, e.g. a G-code or shell script.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "The id of the item, unique among the items of its kind."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "gcode_output",
+              "shell_output",
+              "printer"
+            ],
+            "description": "The type of the item."
+          },
+          "label": {
+            "type": "string",
+            "description": "The label given to the item."
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label"
+        ]
+      },
+      "AutomationResponse": {
+        "type": "object",
+        "description": "An automation.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "The id of the item, unique among the items of its kind."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "rule",
+              "filament",
+              "pwm_temperature_linked",
+              "toggle_timer"
+            ],
+            "description": "The type of the item."
+          },
+          "label": {
+            "type": "string",
+            "description": "The label given to the item."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the automation is enabled."
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label",
+          "enabled"
+        ]
+      },
+      "AutomationBody": {
+        "type": "object",
+        "description": "What to change in an automation.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the automation is enabled."
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Api-Key",
+        "description": "An OctoPrint API key. The request has the permissions of the user of the key."
+      }
+    }
+  }
+}

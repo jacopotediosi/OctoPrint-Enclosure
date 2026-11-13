@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.inputs import GpioInputError, Reading
+from octoprint_enclosure.inputs import GpioInputError, InputType, Reading
 from octoprint_enclosure.permissions import PluginPermission
 
 from .base import BaseApi
-from .responses import ErrorResponse, ItemResponse, error_response, item_response, list_response
+from .responses import ItemResponse, error_response, item_response, list_response
 from .routes import route
 
 if TYPE_CHECKING:
@@ -58,10 +58,12 @@ class InputResponse(ItemResponse):
 class SensorInputResponse(InputResponse):
     """An input with a temperature sensor, and its last reading."""
 
-    temperature: float | None
+    type: str = field(metadata={"enum": [InputType.TEMPERATURE_SENSOR.value]})
+
+    temperature: float | None = field(metadata={"examples": [21.5]})
     """The temperature in Celsius, or null if the sensor has none."""
 
-    humidity: float | None
+    humidity: float | None = field(metadata={"examples": [40.2]})
     """The relative humidity in percent, or null if the sensor has none."""
 
     air_quality: float | None
@@ -93,6 +95,8 @@ class SensorInputResponse(InputResponse):
 @dataclass(frozen=True)
 class GpioInputResponse(InputResponse):
     """An input on a GPIO pin, and its state."""
+
+    type: str = field(metadata={"enum": [InputType.GPIO.value]})
 
     active: bool | None
     """Whether the input is active, or null if its pin can't be read."""
@@ -139,7 +143,7 @@ class InputsApi(BaseApi):
 
     @route("GET", "/inputs", permission=PluginPermission.STATUS, responses={200: [InputResponse]})
     def get_inputs(self) -> Response:
-        """List the inputs, with their state."""
+        """List the inputs, ordered by id, with their state."""
         readings = self._sensor_poller.get_readings()
         return list_response(InputResponse.from_inputs(self._sensors, self._gpio_inputs, readings, self._logger))
 
@@ -147,7 +151,8 @@ class InputsApi(BaseApi):
         "GET",
         "/inputs/<int:input_id>",
         permission=PluginPermission.STATUS,
-        responses={200: InputResponse, 404: ErrorResponse},
+        responses={200: InputResponse},
+        errors={404: "No input is set up with that id."},
     )
     def get_input(self, input_id: int) -> Response:
         """Get an input, with its state."""

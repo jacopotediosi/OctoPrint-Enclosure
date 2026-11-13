@@ -238,7 +238,7 @@ You can also add mechanical buttons to pause, resume and change filaments near y
 
 If you want to enable notifications check the following [issue](https://github.com/vitormhenrique/OctoPrint-Enclosure/issues/36)
 
-You can control outputs using a simple [API](https://github.com/vitormhenrique/OctoPrint-Enclosure/wiki/API-Control)
+You can read the state and control outputs, actions and automations using a simple API. It is described by an [OpenAPI document](octoprint_enclosure/api/openapi.json), that the plugin also serves at `<OctoPrint URL>/plugin/enclosure/openapi.json` and that any OpenAPI viewer can show.
 
 Or use [g-code](https://github.com/vitormhenrique/OctoPrint-Enclosure/wiki/G-CODE-Control) commands
 

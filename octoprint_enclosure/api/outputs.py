@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from typing import TYPE_CHECKING, Optional
 
 from octoprint_enclosure.outputs import (
@@ -14,12 +14,13 @@ from octoprint_enclosure.outputs import (
     RegularSetpoint,
     ThermostatOutput,
 )
+from octoprint_enclosure.outputs.registry import OUTPUTS
 from octoprint_enclosure.permissions import PluginPermission
-from octoprint_enclosure.utils import Rgb, format_hex_color
+from octoprint_enclosure.utils import MeasurementType, Rgb, format_hex_color
 
 from .base import BaseApi
 from .bodies import UNSET, Body, Percent
-from .responses import ErrorResponse, ItemResponse, error_response, item_response, list_response
+from .responses import ItemResponse, error_response, item_response, list_response
 from .routes import route
 
 if TYPE_CHECKING:
@@ -31,6 +32,10 @@ if TYPE_CHECKING:
     from octoprint_enclosure.engine import ControlLoop, OutputExecutor
     from octoprint_enclosure.outputs import Outputs, Thermostat
     from octoprint_enclosure.plugin_context import PluginContext
+
+
+def _output_types(output_class: type[Output]) -> list[str]:
+    return [output_type.value for output_type, registered in OUTPUTS.items() if issubclass(registered, output_class)]
 
 
 @dataclass(frozen=True)
@@ -115,12 +120,16 @@ class OutputResponse(ItemResponse):
 class RegularOutputResponse(OutputResponse):
     """An output that is only on or off, like a relay."""
 
+    type: str = field(metadata={"enum": _output_types(RegularOutput)})
+
 
 @dataclass(frozen=True)
 class PwmOutputResponse(OutputResponse):
     """A PWM output."""
 
-    duty_cycle: float
+    type: str = field(metadata={"enum": _output_types(PwmOutput)})
+
+    duty_cycle: float = field(metadata={"examples": [40]})
     """The duty cycle, from 0 to 100."""
 
 
@@ -128,7 +137,9 @@ class PwmOutputResponse(OutputResponse):
 class ColorOutputResponse(OutputResponse):
     """An output that shows a color, like a LED strip."""
 
-    color: str
+    type: str = field(metadata={"enum": _output_types(ColorOutput)})
+
+    color: str = field(metadata={"examples": ["#ff8800"]})
     """The color, as "#rrggbb"."""
 
 
@@ -136,17 +147,30 @@ class ColorOutputResponse(OutputResponse):
 class ThermostatOutputResponse(OutputResponse):
     """A thermostat. It is on when its device, like a heater, is on."""
 
-    target: float | None
+    type: str = field(metadata={"enum": _output_types(ThermostatOutput)})
+
+    target: float | None = field(metadata={"examples": [30]})
     """The target temperature in Celsius, or the target relative humidity in percent, or null if the thermostat is
     off."""
 
-    measurement: str
+    measurement: str = field(metadata={"enum": [measurement.value for measurement in MeasurementType]})
     """What the thermostat keeps at its target: "temperature" or "humidity"."""
 
 
 @dataclass(frozen=True)
 class OutputBody(Body):
     """What to change in an output, with exactly one attribute."""
+
+    exactly_one_attribute = True
+
+    examples = {
+        "Turn a relay on": {"on": True},
+        "Turn any output off": {"on": False},
+        "Set the duty cycle of a PWM output": {"duty_cycle": 40},
+        "Set the color of a LED strip": {"color": "#ff8800"},
+        "Set the target of a thermostat": {"target": 30},
+        "Turn a thermostat off": {"target": None},
+    }
 
     on: bool = UNSET
     """Whether the output is on. False turns any output off, true turns on only an output that is only on or off."""
@@ -160,18 +184,6 @@ class OutputBody(Body):
     target: Optional[float] = UNSET  # noqa: UP045 - Body.from_json evaluates, and float | None fails on Python < 3.10
     """The target of a thermostat, as a temperature in Celsius or a relative humidity in percent, or null to turn
     the thermostat off."""
-
-    def __post_init__(self) -> None:
-        """Check that the body has exactly one attribute.
-
-        Raises:
-            ValueError: If the body has no attribute, or more than one.
-
-        """
-        names = [field.name for field in fields(self)]
-        if sum(getattr(self, name) is not UNSET for name in names) != 1:
-            msg = "Exactly one of these attributes is needed: " + ", ".join(f"'{name}'" for name in names) + "."
-            raise ValueError(msg)
 
 
 class OutputsApi(BaseApi):
@@ -195,7 +207,7 @@ class OutputsApi(BaseApi):
 
     @route("GET", "/outputs", permission=PluginPermission.STATUS, responses={200: [OutputResponse]})
     def get_outputs(self) -> Response:
-        """List the outputs that are set up, with their state."""
+        """List the outputs that are set up, ordered by id, with their state."""
         thermostats = self._control_loop.get_thermostats()
         return list_response(OutputResponse.from_outputs(self._outputs, thermostats, self._logger))
 
@@ -203,7 +215,8 @@ class OutputsApi(BaseApi):
         "GET",
         "/outputs/<int:output_id>",
         permission=PluginPermission.STATUS,
-        responses={200: OutputResponse, 404: ErrorResponse},
+        responses={200: OutputResponse},
+        errors={404: "No output is set up with that id."},
     )
     def get_output(self, output_id: int) -> Response:
         """Get an output, with its state."""
@@ -217,10 +230,23 @@ class OutputsApi(BaseApi):
         "/outputs/<int:output_id>",
         permission=PluginPermission.OUTPUTS_CONTROL,
         body=OutputBody,
-        responses={200: OutputResponse, 404: ErrorResponse},
+        responses={200: OutputResponse},
+        errors={
+            404: "No output is set up with that id.",
+            422: "The body is not a JSON object, or its attributes are unknown, missing, not valid, or not valid for "
+            "the type of the output.",
+        },
     )
     def set_output(self, output_id: int, body: OutputBody) -> Response:
-        """Control an output."""
+        """Control an output.
+
+        The attribute to send depends on the type of the output:
+
+        - `on`: false turns any output off; true turns on only an output that is only on or off.
+        - `duty_cycle`: for a PWM output.
+        - `color`: for an output that shows a color.
+        - `target`: for a thermostat; null turns it off.
+        """
         try:
             output = self._outputs.get(output_id, Output)
         except OutputError:
