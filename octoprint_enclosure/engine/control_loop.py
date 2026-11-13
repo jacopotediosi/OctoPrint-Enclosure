@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import queue
 import threading
 import time
@@ -47,7 +48,8 @@ if TYPE_CHECKING:
     from octoprint_enclosure.actions import Action, Actions
     from octoprint_enclosure.automations import Automations, Reaction
     from octoprint_enclosure.frontend import Frontend
-    from octoprint_enclosure.inputs import GpioInputs, Reading, SensorPoller
+    from octoprint_enclosure.inputs import GpioInputs, Reading, SensorPoller, Sensors
+    from octoprint_enclosure.integrations import Mqtt
     from octoprint_enclosure.notifications import Notifications
     from octoprint_enclosure.outputs import Outputs
     from octoprint_enclosure.settings import Settings
@@ -78,6 +80,14 @@ class _Stop(_Message):
 @dataclass(frozen=True)
 class _NewReading(_Message):
     """A sensor has a new reading."""
+
+    index_id: int
+    """The id of the input of the sensor."""
+
+
+@dataclass(frozen=True)
+class _SensorFailed(_Message):
+    """A sensor stopped working."""
 
     index_id: int
     """The id of the input of the sensor."""
@@ -165,6 +175,7 @@ class ControlLoop:
     automations want the same output, who wins never depends on timing.
     """
 
+    _sensors: Sensors
     _gpio_inputs: GpioInputs
     _sensor_poller: SensorPoller
     _outputs: Outputs
@@ -173,6 +184,7 @@ class ControlLoop:
     _output_executor: OutputExecutor
     _scheduler: Scheduler
     _notifications: Notifications
+    _mqtt: Mqtt
     _printer: PrinterInterface
     _frontend: Frontend
     _settings: Settings
@@ -194,6 +206,7 @@ class ControlLoop:
 
     def __init__(
         self,
+        sensors: Sensors,
         gpio_inputs: GpioInputs,
         sensor_poller: SensorPoller,
         outputs: Outputs,
@@ -202,6 +215,7 @@ class ControlLoop:
         output_executor: OutputExecutor,
         scheduler: Scheduler,
         notifications: Notifications,
+        mqtt: Mqtt,
         printer: PrinterInterface,
         frontend: Frontend,
         settings: Settings,
@@ -210,6 +224,7 @@ class ControlLoop:
         """Set up the loop, with its thread ready to start.
 
         Args:
+            sensors (Sensors): The temperature sensors.
             gpio_inputs (GpioInputs): The GPIO inputs.
             sensor_poller (SensorPoller): The poller of the temperature sensors.
             outputs (Outputs): The outputs.
@@ -218,12 +233,14 @@ class ControlLoop:
             output_executor (OutputExecutor): The executor of the commands to the outputs.
             scheduler (Scheduler): The scheduler.
             notifications (Notifications): The notifications.
+            mqtt (Mqtt): The MQTT broker.
             printer (PrinterInterface): The OctoPrint printer interface.
             frontend (Frontend): The frontend handler.
             settings (Settings): The plugin settings.
             logger (logging.Logger): The logger to write to.
 
         """
+        self._sensors = sensors
         self._gpio_inputs = gpio_inputs
         self._sensor_poller = sensor_poller
         self._outputs = outputs
@@ -232,6 +249,7 @@ class ControlLoop:
         self._output_executor = output_executor
         self._scheduler = scheduler
         self._notifications = notifications
+        self._mqtt = mqtt
         self._printer = printer
         self._frontend = frontend
         self._settings = settings
@@ -265,6 +283,15 @@ class ControlLoop:
 
         """
         self._put(_NewReading(index_id))
+
+    def evaluate_sensor_failure(self, index_id: int) -> None:
+        """Take the decisions regarding a sensor that stopped working.
+
+        Args:
+            index_id (int): The id of the input of the sensor.
+
+        """
+        self._put(_SensorFailed(index_id))
 
     def evaluate_gpio_input_edge(self, input_id: int, level: int) -> None:
         """Take the decisions regarding an edge on a GPIO input.
@@ -380,10 +407,42 @@ class ControlLoop:
         if isinstance(message, _Tick):
             self._decide_continuous()
         elif isinstance(message, _NewReading):
-            readings = self._sensor_poller.get_readings()
+            # Get the reading of the sensor
+            try:
+                readings = {message.index_id: self._sensor_poller.get_reading(message.index_id)}
+            except LookupError:
+                readings = {}
+
+            # Take decisions
             self._decide_thermostats(readings, message.index_id)
             self._decide_temperature_rules(ReadingsEvent(readings, message.index_id))
             self._decide_pwm_linked_temperature(readings, message.index_id)
+
+            # Update readings in the UI
+            self._frontend.update_inputs()
+
+            # Publish the reading on MQTT
+            reading = readings.get(message.index_id)
+            if reading is not None and (reading.temperature is not None or reading.humidity is not None):
+                with contextlib.suppress(LookupError):
+                    label = self._sensors.get(message.index_id).config.label
+                    temperature_unit = self._settings.temperature_unit
+                    temperature = (
+                        None if reading.temperature is None else temperature_unit.from_celsius(reading.temperature)
+                    )
+                    self._mqtt.publish_sensor_reading(label, temperature, reading.humidity)
+        elif isinstance(message, _SensorFailed):
+            # Notify if a temperature alarm reads the sensor
+            for rule in self._automations.get_all(RuleAutomation):
+                trigger = rule.trigger
+                if isinstance(trigger, TemperatureTrigger) and trigger.config.linked_temp_sensor == message.index_id:
+                    with contextlib.suppress(LookupError):
+                        label = self._sensors.get(message.index_id).config.label
+                        self._notifications.send(
+                            NotificationType.TEMPERATURE_ACTION,
+                            f"Temperature alarm: sensor {label} can't be read",
+                        )
+                    break
         elif isinstance(message, GpioEdgeEvent):
             self._decide_gpio_input_edge(message)
         elif isinstance(message, OctoprintEvent):
@@ -630,12 +689,8 @@ class ControlLoop:
                         self._stop_pwm_linked_temperature(automation)
                     continue
 
-                # With a new reading, decide only the curves linked to its sensor, and the ones that start now
-                if (
-                    sensor_id is not None
-                    and automation.config.linked_temp_sensor != sensor_id
-                    and automation.is_running
-                ):
+                # With a new reading, decide the curves linked to its sensor
+                if sensor_id is not None and automation.config.linked_temp_sensor != sensor_id:
                     continue
 
                 # Get the automation output

@@ -30,7 +30,7 @@ class ReadingsEvent(AutomationEvent):
     """A sensor has a new reading."""
 
     readings: Mapping[int, Reading]
-    """The latest reading of every sensor, by the id of its input."""
+    """The latest reading of the sensor that has the new reading, by the id of its input."""
 
     index_id: int
     """The id of the input of the sensor that has the new reading."""

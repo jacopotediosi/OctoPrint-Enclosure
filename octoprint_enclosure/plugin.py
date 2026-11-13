@@ -1,4 +1,3 @@
-import contextlib
 import logging
 import sys
 from datetime import timedelta
@@ -12,12 +11,12 @@ from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
 
 from .actions import Actions
 from .api import Api
-from .automations import Automations, RuleAutomation, TemperatureTrigger
+from .automations import Automations
 from .engine import ControlLoop, OutputExecutor, Scheduler
 from .frontend import Frontend
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
-from .inputs import GpioInputs, SensorError, SensorPoller, Sensors
+from .inputs import GpioInputs, SensorPoller, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
 from .outputs import Outputs, ThermostatDeviceType, ThermostatOutput
@@ -38,7 +37,6 @@ class EnclosurePlugin(
 ):
     """The OctoPrint plugin that monitors and controls a printer enclosure."""
 
-    failing_sensors = set()
     development_mode = False
 
     def initialize(self):
@@ -80,7 +78,7 @@ class EnclosurePlugin(
         self._gpio_inputs = GpioInputs(self._gpio, self.handle_gpio_input, self._logger)
         self._outputs = Outputs(self._gpio, self._i2c, self._logger)
         self._automations = Automations(self._logger)
-        self._sensor_poller = SensorPoller(self._sensors, self.handle_sensor_reading, self._logger)
+        self._sensor_poller = SensorPoller(self._sensors, self._logger)
         self._frontend = Frontend(
             self._plugin_manager,
             self._identifier,
@@ -103,6 +101,7 @@ class EnclosurePlugin(
         self._scheduler = Scheduler(self._logger)
         self._output_executor = OutputExecutor(self._outputs, self._frontend, self._logger)
         self._control_loop = ControlLoop(
+            self._sensors,
             self._gpio_inputs,
             self._sensor_poller,
             self._outputs,
@@ -111,6 +110,7 @@ class EnclosurePlugin(
             self._output_executor,
             self._scheduler,
             self._notifications,
+            self._mqtt,
             self._printer,
             self._frontend,
             self._enclosure_settings,
@@ -174,7 +174,7 @@ class EnclosurePlugin(
         self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
         self._sensors.setup_pins()
 
-        self._sensor_poller.start()
+        self._sensor_poller.start(self._control_loop.evaluate_reading, self._control_loop.evaluate_sensor_failure)
         self._control_loop.start()
 
     # ~~ ShutdownPlugin mixin
@@ -239,53 +239,6 @@ class EnclosurePlugin(
         """Read every sensor now, then take the decisions on the readings."""
         self._sensor_poller.read_all()
         self._control_loop.evaluate()
-
-    def handle_sensor_reading(self, index_id, outcome):
-        try:
-            sensor = self._sensors.get(index_id)
-        except LookupError:
-            return
-
-        if outcome.error is not None:
-            self.handle_sensor_failure(sensor.config, outcome.error)
-        else:
-            self.handle_sensor_recovery(sensor.config)
-            with contextlib.suppress(LookupError):
-                reading = self._sensor_poller.get_reading(index_id)
-                temperature_unit = self._enclosure_settings.temperature_unit
-                temperature = (
-                    None if reading.temperature is None else temperature_unit.from_celsius(reading.temperature)
-                )
-                self._mqtt.publish_sensor_reading(sensor.config.label, temperature, reading.humidity)
-
-        self._frontend.update_inputs()
-        self._control_loop.evaluate_reading(index_id)
-
-    def handle_sensor_failure(self, sensor, error):
-        if sensor.index_id in self.failing_sensors:
-            self._logger.debug("Sensor %s still can't be read: %s", sensor.label, error)
-            return
-
-        self.failing_sensors.add(sensor.index_id)
-        self._logger.error(
-            "Sensor %s can't be read: %s",
-            sensor.label,
-            error,
-            exc_info=not isinstance(error, SensorError),
-        )
-
-        for rule in self._automations.get_all(RuleAutomation):
-            trigger = rule.trigger
-            if isinstance(trigger, TemperatureTrigger) and trigger.config.linked_temp_sensor == sensor.index_id:
-                self._notifications.send(
-                    NotificationType.TEMPERATURE_ACTION,
-                    f"Temperature alarm: sensor {sensor.label} can't be read",
-                )
-
-    def handle_sensor_recovery(self, sensor):
-        if sensor.index_id in self.failing_sensors:
-            self.failing_sensors.remove(sensor.index_id)
-            self._logger.info("Sensor %s has started working again", sensor.label)
 
     def handle_gpio_input(self, input_id, level):
         self._control_loop.evaluate_gpio_input_edge(input_id, level)
