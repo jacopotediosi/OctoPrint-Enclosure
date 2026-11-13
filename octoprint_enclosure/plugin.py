@@ -141,7 +141,7 @@ class EnclosurePlugin(
         )
 
         # Init G-code command handlers
-        self._enc_handler = EncHandler(self._plugin_context, self.handle_temperature_command)
+        self._enc_handler = EncHandler(self._plugin_context)
         self._encdev_handler = EncDevHandler(
             self._plugin_context,
             development_mode=self.development_mode,
@@ -242,12 +242,6 @@ class EnclosurePlugin(
 
     def handle_gpio_input(self, input_id, level):
         self._control_loop.evaluate_gpio_input_edge(input_id, level)
-
-    def handle_temperature_command(self, index_id, temperature, wait):
-        self._control_loop.set_thermostat_target(index_id, temperature)
-        if wait and self._printer.is_printing():
-            self._printer.pause_print()
-            self._control_loop.wait_for_temperature(index_id)
 
     # ~~ EventPlugin mixin
     def on_event(self, event, payload):

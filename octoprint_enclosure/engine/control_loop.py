@@ -340,12 +340,16 @@ class ControlLoop:
         return dict(self._thermostats)
 
     def wait_for_temperature(self, index_id: int) -> None:
-        """Resume the paused print once a thermostat reaches its target.
+        """Pause the print, if one is running, until a thermostat reaches its target.
 
         Args:
             index_id (int): The id of the thermostat the print waits for.
 
         """
+        if not self._printer.is_printing():
+            return
+
+        self._printer.pause_print()
         self._put(_WaitForTemperature(index_id))
 
     def set_automation_enabled(self, index_id: int, *, enabled: bool, wait: bool = False) -> None:

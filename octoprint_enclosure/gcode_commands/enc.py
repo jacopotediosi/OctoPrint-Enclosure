@@ -7,11 +7,10 @@ from octoprint_enclosure.utils import MeasurementType, get_gcode_param, parse_fl
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable
 
     from octoprint.util.comm import MachineCom
 
-    from octoprint_enclosure.engine import OutputExecutor
+    from octoprint_enclosure.engine import ControlLoop, OutputExecutor
     from octoprint_enclosure.outputs import Outputs
     from octoprint_enclosure.plugin_context import PluginContext
     from octoprint_enclosure.settings import Settings
@@ -23,32 +22,21 @@ class EncHandler:
     _settings: Settings
     _outputs: Outputs
     _output_executor: OutputExecutor
+    _control_loop: ControlLoop
     _logger: logging.Logger
 
-    _set_temperature: Callable[[int, float | None, bool], None]
-    """The function called to set the target of a thermostat, with the id of the output, the target (in Celsius for a
-    temperature, or None to turn the thermostat off) and whether the print has to pause until the target is
-    reached."""
-
-    def __init__(
-        self,
-        plugin_context: PluginContext,
-        set_temperature: Callable[[int, float | None, bool], None],
-    ) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         """Set up the handler.
 
         Args:
             plugin_context (PluginContext): The plugin context.
-            set_temperature (Callable[[int, float | None, bool], None]): The function called to set the target of a
-                thermostat, with the id of the output, the target (in Celsius for a temperature, or None to turn the
-                thermostat off) and whether the print has to pause until the target is reached.
 
         """
         self._settings = plugin_context.settings
         self._outputs = plugin_context.outputs
         self._output_executor = plugin_context.output_executor
+        self._control_loop = plugin_context.control_loop
         self._logger = plugin_context.logger.getChild("EncHandler")
-        self._set_temperature = set_temperature
 
     def handle(self, comm_instance: MachineCom, cmd: str) -> None:
         """Run a G-code line, if it is an ENC command.
@@ -87,7 +75,9 @@ class EncHandler:
             if target is not None and output.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE:
                 target = self._settings.temperature_unit.to_celsius(target)
 
-            self._set_temperature(index_id, target, wait)
+            self._control_loop.set_thermostat_target(index_id, target)
+            if wait:
+                self._control_loop.wait_for_temperature(index_id)
 
             comm_instance._log(f"Setting thermostat output {index_id} to value {value}")
         else:
