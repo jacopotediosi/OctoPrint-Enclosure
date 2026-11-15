@@ -175,20 +175,24 @@ class Automations:
             if isinstance(automation, automation_class) and (include_disabled or automation.enabled)
         ]
 
-    def get_triggered(self, event: AutomationEvent) -> list[Automation]:
-        """Get the automations that an event starts.
+    def get_triggered(self, event: AutomationEvent, automation_class: type[_AutomationT]) -> list[_AutomationT]:
+        """Get the automations having a certain class that an event starts.
 
         Args:
             event (AutomationEvent): What happened.
+            automation_class (type[_AutomationT]): The class the automations must be an instance of.
 
         Returns:
-            list[Automation]: The automations.
+            list[_AutomationT]: The automations.
 
         """
         return [
             automation
             for automation in self._automations.values()
-            if automation.enabled and automation.trigger is not None and automation.trigger.matches(event)
+            if isinstance(automation, automation_class)
+            and automation.enabled
+            and automation.trigger is not None
+            and automation.trigger.matches(event)
         ]
 
     def get_gpio_input_edges(self) -> dict[int, set[Edge]]:

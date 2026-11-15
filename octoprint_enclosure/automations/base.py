@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from octoprint_enclosure.settings import OutputId
 
     from .conditions import Condition
+    from .conditions_state import ConditionsState
     from .triggers.base import Trigger
 
 
@@ -117,17 +118,17 @@ class Automation(Generic[_ConfigT]):
             )
         )
 
-    def conditions_satisfied(self, *, printing: bool) -> bool:
+    def conditions_satisfied(self, conditions_state: ConditionsState) -> bool:
         """Check whether every condition of the automation is satisfied.
 
         Args:
-            printing (bool): Whether a print job is running.
+            conditions_state (ConditionsState): The current state of the things that the automation conditions check.
 
         Returns:
             bool: Whether every condition is satisfied.
 
         """
-        return all(condition.is_satisfied(printing=printing) for condition in self.conditions)
+        return all(condition.is_satisfied(conditions_state) for condition in self.conditions)
 
     @classmethod
     def from_settings(cls, settings: dict, logger: logging.Logger) -> Self:

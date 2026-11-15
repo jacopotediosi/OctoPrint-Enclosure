@@ -8,6 +8,8 @@ from octoprint_enclosure.settings import BaseConfig
 if TYPE_CHECKING:
     from typing_extensions import Self
 
+    from octoprint_enclosure.automations.conditions_state import ConditionsState
+
 _ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
 
 
@@ -46,11 +48,11 @@ class Condition(ABC, Generic[_ConfigT]):
         return cls(cls.config_class.from_settings(settings))
 
     @abstractmethod
-    def is_satisfied(self, *, printing: bool) -> bool:
+    def is_satisfied(self, conditions_state: ConditionsState) -> bool:
         """Check whether the automation condition is satisfied.
 
         Args:
-            printing (bool): Whether a print job is running.
+            conditions_state (ConditionsState): The current state of the things that the automation conditions check.
 
         Returns:
             bool: Whether the automation condition is satisfied.

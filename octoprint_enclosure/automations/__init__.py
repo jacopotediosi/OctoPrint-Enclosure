@@ -1,5 +1,6 @@
 from .automations import Automations
 from .base import Automation, AutomationError
+from .conditions_state import ConditionsState
 from .events import AutomationEvent, GpioEdgeEvent, OctoprintEvent, ReadingEvent
 from .filament import FilamentAutomation
 from .pwm_temperature_linked import PwmTemperatureLinkedAutomation
@@ -13,6 +14,7 @@ __all__ = [
     "AutomationError",
     "AutomationEvent",
     "Automations",
+    "ConditionsState",
     "FilamentAutomation",
     "GpioEdgeEvent",
     "GpioInputTrigger",

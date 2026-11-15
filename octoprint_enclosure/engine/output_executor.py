@@ -220,8 +220,8 @@ class OutputExecutor:
                 self._logger.debug("Can't write on output %s: %s", index_id, error)
             except Exception:
                 self._logger.exception("Error writing on output %s", index_id)
-            else:
-                self._queue_update_ui_outputs()
+
+            self._queue_update_ui_outputs()
 
         self._submit(switch_thermostat, wait=wait)
 

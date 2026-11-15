@@ -77,7 +77,7 @@ class EncHandler:
 
             self._control_loop.set_thermostat_target(index_id, target)
             if wait:
-                self._control_loop.wait_for_temperature(index_id)
+                self._control_loop.pause_print_until_thermostat_target(index_id)
 
             comm_instance._log(f"Setting thermostat output {index_id} to value {value}")
         else:

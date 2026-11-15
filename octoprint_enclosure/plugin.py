@@ -238,7 +238,7 @@ class EnclosurePlugin(
     def check_enclosure_temp(self):
         """Read every sensor now, then take the decisions on the readings."""
         self._sensor_poller.read_all()
-        self._control_loop.evaluate()
+        self._control_loop.evaluate_all()
 
     def handle_gpio_input(self, input_id, level):
         self._control_loop.evaluate_gpio_input_edge(input_id, level)
@@ -302,7 +302,7 @@ class EnclosurePlugin(
         self._sensors.setup_pins()
 
         # Take the decisions again on the new settings
-        self._control_loop.evaluate_settings()
+        self._control_loop.evaluate_new_settings()
 
         # Update UI in every client
         self._control_loop.update_ui()
