@@ -17,6 +17,7 @@ PWM1_PINS = (13, 19)
 
 
 def main() -> None:
+    """Set the color given in the arguments on the NeoPixels."""
     pin, count, brightness, red, green, blue, dma = (int(arg) for arg in sys.argv[1:])
 
     channel = 1 if pin in PWM1_PINS else 0

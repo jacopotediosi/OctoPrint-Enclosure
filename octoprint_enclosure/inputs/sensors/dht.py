@@ -32,7 +32,7 @@ class _DhtSensor(PinSensor[DhtConfig]):
         command = [sys.executable, str(WORKER_PATH), self._model, str(self.config.gpio_pin)]
 
         # Read the sensor
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603 - no shell, and the only value from the settings is an integer
             command,
             capture_output=True,
             encoding="utf-8",

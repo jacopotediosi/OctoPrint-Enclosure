@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, ClassVar, Optional
 
 from octoprint_enclosure.outputs import (
     ColorOutput,
@@ -148,7 +148,7 @@ class OutputBody(Body):
 
     exactly_one_attribute = True
 
-    examples = {
+    examples: ClassVar[dict] = {
         "Turn a relay on": {"on": True},
         "Turn any output off": {"on": False},
         "Set the duty cycle of a PWM output": {"duty_cycle": 40},
@@ -231,7 +231,7 @@ class OutputsApi(BaseApi):
         - `duty_cycle`: for a PWM output.
         - `color`: for an output that shows a color.
         - `target`: for a thermostat; null turns it off.
-        """
+        """  # noqa: DOC201 - the OpenAPI documentation is built from this docstring
         try:
             output = self._outputs.get(output_id, Output)
         except OutputError:

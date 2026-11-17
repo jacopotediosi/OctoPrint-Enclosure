@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from octoprint_enclosure.automations import Automation, AutomationError
 from octoprint_enclosure.automations.registry import AUTOMATIONS
@@ -69,7 +69,7 @@ class AutomationResponse(ItemResponse):
 class AutomationBody(Body):
     """What to change in an automation."""
 
-    examples = {
+    examples: ClassVar[dict] = {
         "Enable an automation": {"enabled": True},
         "Disable an automation": {"enabled": False},
     }

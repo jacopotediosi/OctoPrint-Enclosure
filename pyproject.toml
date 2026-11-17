@@ -64,35 +64,33 @@ line-length = 120
 fix = true
 
 [tool.ruff.lint]
-select = [
+preview = true
+explicit-preview-rules = true
+extend-select = [
     "ALL",
+    "D420", # incorrect-section-order (preview)
+    "DOC102", # docstring-extraneous-parameter (preview)
+    "DOC201", # docstring-missing-returns (preview)
+    "DOC202", # docstring-extraneous-returns (preview)
+    "DOC402", # docstring-missing-yields (preview)
+    "DOC403", # docstring-extraneous-yields (preview)
+    "DOC501", # docstring-missing-exception (preview)
 ]
-# TODO: reduce the ignore list
 ignore = [
-    "ANN001", # missing-type-function-argument
-    "ANN002", # missing-type-args
-    "ANN003", # missing-type-kwargs
-    "ANN201", # missing-return-type-undocumented-public-function
-    "ARG002", # unused-method-argument
     "C901", # complex-structure
     "CPY001", # missing-copyright-notice
     "D100", # undocumented-public-module
-    "D102", # undocumented-public-method
-    "D103", # undocumented-public-function
     "D104", # undocumented-public-package
-    "DTZ007", # call-datetime-strptime-without-zone
     "PERF203", # try-except-in-loop
     "PLR0912", # too-many-branches
     "PLR0913", # too-many-arguments
     "PLR0915", # too-many-statements
     "PLR0917", # too-many-positional-arguments
     "PLR2004", # magic-value-comparison
-    "RUF012", # mutable-class-default
-    "S602", # subprocess-popen-with-shell-equals-true
-    "S603", # subprocess-without-shell-equals-true
-    "S607", # start-process-with-partial-path
-    "SLF001", # private-member-access
 ]
+
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["octoprint_enclosure.utils.Rgb"]
@@ -104,6 +102,9 @@ runtime-evaluated-base-classes = ["octoprint_enclosure.settings.BaseConfig"]
 "dev_tools/*" = [
     "INP001", # implicit-namespace-package
 ]
+
+[tool.ruff.lint.pydoclint]
+ignore-one-line-docstrings = true
 
 [tool.djlint]
 ignore = [

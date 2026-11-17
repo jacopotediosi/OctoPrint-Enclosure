@@ -472,15 +472,15 @@ def _convert_auto_startup_shutdown_to_automations(rpi_outputs: list[dict], autom
     """
 
     def add_rule(
-        rpi_output,
-        events,
-        state,
+        rpi_output: dict,
+        events: list[str],
+        state: str,
         *,
-        enabled,
-        show_in_tab=False,
-        time=0,
-        printing=None,
-        setpoint=None,
+        enabled: bool,
+        show_in_tab: bool = False,
+        time: object = 0,
+        printing: bool | None = None,
+        setpoint: dict | None = None,
     ) -> None:
         # Delay or time of day: startup_time and shutdown_time held seconds, or HH:MM
         time_of_day = parse_hhmm(str(time))

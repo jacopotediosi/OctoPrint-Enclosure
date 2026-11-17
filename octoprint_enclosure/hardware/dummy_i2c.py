@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from typing_extensions import override
+
 from .i2c_backend import I2cBus
 
 if TYPE_CHECKING:
@@ -37,10 +39,12 @@ class SMBus(I2cBus):
     def __exit__(self, *exc_info: object) -> None:
         """Close the bus at the end of the with statement."""
 
+    @override
     def write_i2c_block_data(self, i2c_addr: int, register: int, data: Sequence[int]) -> None:
         for offset, value in enumerate(data):
             _registers[(self.bus, i2c_addr, register + offset)] = value
 
+    @override
     def read_i2c_block_data(self, i2c_addr: int, register: int, length: int) -> list[int]:
         return [_registers.get((self.bus, i2c_addr, register + offset), 0) for offset in range(length)]
 

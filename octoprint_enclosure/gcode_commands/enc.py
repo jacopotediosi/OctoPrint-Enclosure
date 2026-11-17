@@ -8,7 +8,7 @@ from octoprint_enclosure.utils import MeasurementType, get_gcode_param, parse_fl
 if TYPE_CHECKING:
     import logging
 
-    from octoprint.util.comm import MachineCom
+    from octoprint.printer import PrinterInterface
 
     from octoprint_enclosure.engine import ControlLoop, OutputExecutor
     from octoprint_enclosure.outputs import Outputs
@@ -20,6 +20,7 @@ class EncHandler:
     """Handles the ENC G-code commands."""
 
     _settings: Settings
+    _printer: PrinterInterface
     _outputs: Outputs
     _output_executor: OutputExecutor
     _control_loop: ControlLoop
@@ -33,16 +34,16 @@ class EncHandler:
 
         """
         self._settings = plugin_context.settings
+        self._printer = plugin_context.printer
         self._outputs = plugin_context.outputs
         self._output_executor = plugin_context.output_executor
         self._control_loop = plugin_context.control_loop
         self._logger = plugin_context.logger.getChild("EncHandler")
 
-    def handle(self, comm_instance: MachineCom, cmd: str) -> None:
+    def handle(self, cmd: str) -> None:
         """Run a G-code line, if it is an ENC command.
 
         Args:
-            comm_instance (MachineCom): The connection to the printer, whose terminal the replies are written to.
             cmd (str): The G-code line.
 
         """
@@ -79,9 +80,9 @@ class EncHandler:
             if wait:
                 self._control_loop.pause_print_until_thermostat_target(index_id)
 
-            comm_instance._log(f"Setting thermostat output {index_id} to value {value}")
+            self._printer.log_lines(f"Setting thermostat output {index_id} to value {value}")
         else:
             reply = self._output_executor.run_enc_command(index_id, cmd, wait=True)
 
             if reply is not None:
-                comm_instance._log(reply)
+                self._printer.log_lines(reply)

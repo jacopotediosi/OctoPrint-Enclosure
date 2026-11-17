@@ -76,7 +76,7 @@ class NeopixelDirectOutput(ColorOutput[NeopixelDirectConfig]):
             command = ["sudo", "-n", *command]
 
         self._logger.debug("Running the NeoPixel worker: %s", command)
-        with subprocess.Popen(
+        with subprocess.Popen(  # noqa: S603 - no shell, and every value from the settings is an integer
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

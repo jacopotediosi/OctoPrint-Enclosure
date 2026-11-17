@@ -22,6 +22,7 @@ EMPTY_ATTEMPT_DELAY_SECONDS = 1
 
 
 def main() -> None:
+    """Read the DHT sensor given in the arguments and print its reading."""
     model, pin = sys.argv[1], int(sys.argv[2])
     dht_device = MODELS[model](Pin(pin))
     error = "no data"

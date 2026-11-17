@@ -62,7 +62,7 @@ class RegularOutput(Output[RegularConfig, RegularSetpoint]):
     def _is_on(self) -> bool:
         return self._switch.is_on()
 
-    def turn_on(self, setpoint: RegularSetpoint) -> None:
+    def turn_on(self, setpoint: RegularSetpoint) -> None:  # noqa: ARG002 - every output is turned on with a setpoint
         """Turn the output on.
 
         Args:

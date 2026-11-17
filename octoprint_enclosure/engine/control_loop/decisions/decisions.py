@@ -213,7 +213,7 @@ class Decisions:
 
         handler(message)
 
-    def _handle_started(self, message: Started) -> None:
+    def _handle_started(self, _message: Started) -> None:
         self._thermostats.load()
 
         self._conditions_state.print_job_running = bool(self._printer.is_printing() or self._printer.is_paused())
@@ -247,7 +247,7 @@ class Decisions:
     def _handle_sensor_failed(self, message: SensorFailed) -> None:
         self._automation_rule_decision.notify_sensor_failure(message.sensor_id)
 
-    def _handle_settings_loaded(self, message: SettingsLoaded) -> None:
+    def _handle_settings_loaded(self, _message: SettingsLoaded) -> None:
         self._thermostats.load()
         self._decide()
         self._output_executor.update_ui_outputs()
@@ -276,7 +276,7 @@ class Decisions:
                 f"Print job finished: {file_name} printed in {elapsed_time}",
             )
 
-    def _handle_tick(self, message: Tick) -> None:
+    def _handle_tick(self, _message: Tick) -> None:
         self._decide()
 
     def _handle_set_thermostat_target(self, message: SetThermostatTarget) -> None:
@@ -308,7 +308,7 @@ class Decisions:
     def _handle_switch_toggle_timer_output(self, message: SwitchToggleTimerOutput) -> None:
         self._toggle_timer_decision.switch_output(message, self._conditions_state)
 
-    def _handle_update_ui(self, message: UpdateUi) -> None:
+    def _handle_update_ui(self, _message: UpdateUi) -> None:
         self._frontend.update_inputs()
         self._frontend.update_automations()
         self._output_executor.update_ui_outputs()

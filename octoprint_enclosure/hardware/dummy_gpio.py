@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from typing_extensions import override
+
 from .gpio_backend import GpioPwm
 
 if TYPE_CHECKING:
@@ -69,13 +71,16 @@ class PWM(GpioPwm):
         self.running = False
         _pin_state.pwms[channel] = self
 
+    @override
     def start(self, dutycycle: float) -> None:
         self.duty_cycle = dutycycle
         self.running = True
 
-    def ChangeDutyCycle(self, dutycycle: float) -> None:  # noqa: N802 - same name as RPi.GPIO.PWM.ChangeDutyCycle
+    @override
+    def ChangeDutyCycle(self, dutycycle: float) -> None:
         self.duty_cycle = dutycycle
 
+    @override
     def stop(self) -> None:
         self.running = False
 
@@ -102,18 +107,24 @@ def _as_list(channel: Channel) -> list[int]:
 
 
 def setwarnings(gpio_warnings: bool) -> None:  # noqa: FBT001 - same signature as RPi.GPIO.setwarnings
-    pass
+    """Enable or disable the warnings. In dummy gpio this does nothing, as dummy pins give no warnings."""
 
 
 def setmode(mode: PinNumbering) -> None:
+    """Set the pin numbering, BOARD or BCM."""
     _pin_state.mode = mode
 
 
 def getmode() -> PinNumbering | None:
+    """Get the pin numbering, BOARD or BCM, or None if it isn't set."""
     return _pin_state.mode
 
 
 def setup(channel: Channel, direction: Direction, pull_up_down: int = PUD_OFF, initial: int = -1) -> None:
+    """Set up a pin, or some pins, as input or output.
+
+    An input can have a pull resistor, and an output an initial level.
+    """
     for pin in _as_list(channel):
         if direction == OUT:
             _pin_state.levels[pin] = _pin_state.levels.get(pin, LOW) if initial == -1 else (HIGH if initial else LOW)
@@ -122,6 +133,7 @@ def setup(channel: Channel, direction: Direction, pull_up_down: int = PUD_OFF, i
 
 
 def output(channel: Channel, value: Level | list[Level] | tuple[Level, ...]) -> None:
+    """Set the level of an output pin, or of some pins."""
     pins = _as_list(channel)
     values = list(value) if isinstance(value, (list, tuple)) else [value] * len(pins)
     for pin, pin_value in zip(pins, values):
@@ -129,10 +141,12 @@ def output(channel: Channel, value: Level | list[Level] | tuple[Level, ...]) -> 
 
 
 def input(channel: int) -> int:  # noqa: A001 - same name as RPi.GPIO.input
+    """Read the level of a pin, 1 if high or 0 if low."""
     return _pin_state.levels.get(channel, LOW)
 
 
 def cleanup(channel: Channel | None = None) -> None:
+    """Reset a pin, or some pins, or every pin set up so far."""
     if channel is None:
         _pin_state.reset()
         return
@@ -150,11 +164,16 @@ def add_event_detect(
     callback: Callable[[int], object] | None = None,
     bouncetime: int | None = None,  # noqa: ARG001 - same signature as RPi.GPIO.add_event_detect
 ) -> None:
+    """Start detecting an edge on a pin, RISING, FALLING or BOTH.
+
+    A function, if given, is called with the pin at every edge.
+    """
     _pin_state.event_edges[channel] = edge
     _pin_state.event_callbacks[channel] = callback
 
 
 def remove_event_detect(channel: int) -> None:
+    """Stop detecting the edges on a pin."""
     _pin_state.event_edges.pop(channel, None)
     _pin_state.event_callbacks.pop(channel, None)
 

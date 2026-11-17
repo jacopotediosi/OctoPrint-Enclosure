@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import contextlib
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from subprocess import run
 
 from typing_extensions import override
 
@@ -28,10 +26,6 @@ class Ds18b20Sensor(PinSensor[Ds18b20Config]):
 
     @override
     def read(self) -> Reading:
-        with contextlib.suppress(OSError):
-            run(["modprobe", "w1-gpio"], check=False)
-            run(["modprobe", "w1-therm"], check=False)
-
         lines = self._read_lines()
         while lines[0].strip()[-3:] != "YES":
             time.sleep(0.2)

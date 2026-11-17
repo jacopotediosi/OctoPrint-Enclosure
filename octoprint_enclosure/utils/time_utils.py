@@ -22,7 +22,7 @@ def parse_hhmm(value: str) -> time | None:
 
     """
     try:
-        return datetime.strptime(value, HHMM_FORMAT).time()
+        return datetime.strptime(value, HHMM_FORMAT).time()  # noqa: DTZ007 - only the time of day is kept
     except ValueError:
         return None
 

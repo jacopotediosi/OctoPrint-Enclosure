@@ -42,7 +42,7 @@ class ShellAction(Action[ShellConfig]):
         command = self.config.shell_script
 
         try:
-            with subprocess.Popen(
+            with subprocess.Popen(  # noqa: S602 - the script can be set only by who can change the OctoPrint settings
                 command,
                 shell=True,
                 stdout=subprocess.PIPE,

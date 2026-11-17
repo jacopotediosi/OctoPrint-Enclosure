@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 import logging
 import sys
+from typing import TYPE_CHECKING, Any
 
 import octoprint.plugin
 import smbus2
 from octoprint.events import all_events
 from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
+from typing_extensions import override
 
 from .actions import Actions
 from .api import Api
@@ -22,6 +26,9 @@ from .plugin_context import PluginContext
 from .settings import Settings
 from .settings.migrations import migrate_settings
 
+if TYPE_CHECKING:
+    from flask import Blueprint
+
 
 class EnclosurePlugin(
     octoprint.plugin.AssetPlugin,
@@ -38,7 +45,8 @@ class EnclosurePlugin(
     ### Initialization
     ##########
 
-    def initialize(self):
+    @override
+    def initialize(self) -> None:
         # Logging formatter
         logging_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
@@ -151,7 +159,8 @@ class EnclosurePlugin(
     ### AssetPlugin mixin
     ##########
 
-    def get_assets(self):
+    @override
+    def get_assets(self) -> dict:
         return {
             "js": ["js/enclosure.js"],
             "css": ["css/enclosure.css"],
@@ -161,27 +170,32 @@ class EnclosurePlugin(
     ### BlueprintPlugin mixin
     ##########
 
-    def is_blueprint_protected(self):
+    @override
+    def is_blueprint_protected(self) -> bool:
         return False
 
-    def is_blueprint_csrf_protected(self):
+    @override
+    def is_blueprint_csrf_protected(self) -> bool:
         return True
 
-    def get_blueprint(self):
+    @override
+    def get_blueprint(self) -> Blueprint:
         return self._api.get_blueprint()
 
     ##########
     ### EventHandlerPlugin mixin
     ##########
 
-    def on_event(self, event, payload):
+    @override
+    def on_event(self, event: str, payload: dict | None) -> None:
         self._control_loop.evaluate_octoprint_event(event, payload)
 
     ##########
     ### SettingsPlugin mixin
     ##########
 
-    def get_settings_defaults(self):
+    @override
+    def get_settings_defaults(self) -> dict:
         return {
             "rpi_inputs": [],
             "rpi_outputs": [],
@@ -196,16 +210,20 @@ class EnclosurePlugin(
             "development_mode": False,
         }
 
-    def get_settings_restricted_paths(self):
+    @override
+    def get_settings_restricted_paths(self) -> dict:
         return {"admin": [["notification_api_key"]]}
 
-    def get_settings_version(self):
+    @override
+    def get_settings_version(self) -> int:
         return 11
 
-    def on_settings_migrate(self, target, current=None):
+    @override
+    def on_settings_migrate(self, target: int, current: int | None = None) -> None:
         migrate_settings(target, current, self._settings, self._logger)
 
-    def on_settings_save(self, data):
+    @override
+    def on_settings_save(self, data: dict) -> None:
         # Save the settings
         octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
 
@@ -222,7 +240,8 @@ class EnclosurePlugin(
     ### ShutdownPlugin mixin
     ##########
 
-    def on_shutdown(self):
+    @override
+    def on_shutdown(self) -> None:
         try:
             self._control_loop.stop()
         except Exception:
@@ -247,7 +266,8 @@ class EnclosurePlugin(
     ### StartupPlugin mixin
     ##########
 
-    def on_after_startup(self):
+    @override
+    def on_after_startup(self) -> None:
         self._mqtt.load_helpers()
 
         self._apply_settings()
@@ -259,7 +279,8 @@ class EnclosurePlugin(
     ### TemplatePlugin mixin
     ##########
 
-    def get_template_configs(self):
+    @override
+    def get_template_configs(self) -> list[dict]:
         return [
             {"type": "settings", "custom_bindings": True},
             {
@@ -284,7 +305,8 @@ class EnclosurePlugin(
             },
         ]
 
-    def get_template_vars(self):
+    @override
+    def get_template_vars(self) -> dict:
         gpio_import_error = gpio.get_import_error()
         return {
             "development_mode": self._development_mode,
@@ -293,23 +315,88 @@ class EnclosurePlugin(
             "octoprint_events": sorted(all_events()),
         }
 
-    def is_template_autoescaped(self):
+    @override
+    def is_template_autoescaped(self) -> bool:
         return True
 
     ##########
     ### Hooks
     ##########
 
-    def hook_access_permissions(self):
+    def hook_access_permissions(self) -> list[dict]:
+        """Tell OctoPrint the permissions of the plugin.
+
+        Returns:
+            list[dict]: The permissions of the plugin.
+
+        """
         return get_additional_permissions()
 
-    def hook_atcommand_queuing(self, comm_instance, phase, command, parameters, tags=None, *args, **kwargs):
-        self._encdev_handler.handle(comm_instance, command, parameters)
+    def hook_atcommand_queuing(
+        self,
+        _comm_instance: Any,  # noqa: ANN401 - connection type varies across OctoPrint versions
+        _phase: str,
+        command: str,
+        parameters: str,
+        *_args: Any,
+        **_kwargs: Any,
+    ) -> None:
+        """Run an @ command queued for the printer.
 
-    def hook_gcode_queuing(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
-        self._enc_handler.handle(comm_instance, cmd)
+        Args:
+            _comm_instance (Any): The connection to the printer.
+            _phase (str): The phase of the queue the command is in.
+            command (str): The name of the @ command, without the @.
+            parameters (str): The parameters of the @ command.
+            *_args: Further positional arguments OctoPrint may pass.
+            **_kwargs: Further keyword arguments OctoPrint may pass.
 
-    def hook_temperatures_received(self, comm_instance, parsed_temperatures, *args, **kwargs):
+        """
+        self._encdev_handler.handle(command, parameters)
+
+    def hook_gcode_queuing(
+        self,
+        _comm_instance: Any,  # noqa: ANN401 - connection type varies across OctoPrint versions
+        _phase: str,
+        cmd: str,
+        _cmd_type: str | None,
+        _gcode: str | None,
+        *_args: Any,
+        **_kwargs: Any,
+    ) -> None:
+        """Run a G-code line queued for the printer.
+
+        Args:
+            _comm_instance (Any): The connection to the printer.
+            _phase (str): The phase of the queue the line is in.
+            cmd (str): The G-code line.
+            _cmd_type (str | None): The type of the line, or None if it has none.
+            _gcode (str | None): The G-code of the line, e.g. "M105", or None if it has none.
+            *_args: Further positional arguments OctoPrint may pass.
+            **_kwargs: Further keyword arguments OctoPrint may pass.
+
+        """
+        self._enc_handler.handle(cmd)
+
+    def hook_temperatures_received(
+        self,
+        _comm_instance: Any,  # noqa: ANN401 - connection type varies across OctoPrint versions
+        parsed_temperatures: dict,
+        *_args: Any,
+        **_kwargs: Any,
+    ) -> dict:
+        """Add the readings of the sensors to the temperatures OctoPrint shows in its graph.
+
+        Args:
+            _comm_instance (Any): The connection to the printer.
+            parsed_temperatures (dict): The temperatures to report, by name.
+            *_args: Further positional arguments OctoPrint may pass.
+            **_kwargs: Further keyword arguments OctoPrint may pass.
+
+        Returns:
+            dict: The temperatures to report, with the readings of the sensors shown in the graph.
+
+        """
         readings = self._sensor_poller.get_readings()
         for sensor in self._sensors.get_all().values():
             config = sensor.config
@@ -323,7 +410,13 @@ class EnclosurePlugin(
 
         return parsed_temperatures
 
-    def hook_softwareupdate_check_config(self):
+    def hook_softwareupdate_check_config(self) -> dict:
+        """Tell the Software Update plugin where to look for new releases.
+
+        Returns:
+            dict: The update configuration, by plugin identifier.
+
+        """
         return {
             "enclosure": {
                 "displayName": "Enclosure Plugin",

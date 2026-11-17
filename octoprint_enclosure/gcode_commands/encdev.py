@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable
 
-    from octoprint.util.comm import MachineCom
+    from octoprint.printer import PrinterInterface
 
     from octoprint_enclosure.engine import ControlLoop
     from octoprint_enclosure.inputs import GpioInputs, SensorPoller, Sensors
@@ -51,6 +51,7 @@ class _Command:
 class EncDevHandler:
     """Handles the @ENCDEV G-code commands."""
 
+    _printer: PrinterInterface
     _sensors: Sensors
     _gpio_inputs: GpioInputs
     _sensor_poller: SensorPoller
@@ -70,6 +71,7 @@ class EncDevHandler:
             plugin_context (PluginContext): The plugin context.
 
         """
+        self._printer = plugin_context.printer
         self._sensors = plugin_context.sensors
         self._gpio_inputs = plugin_context.gpio_inputs
         self._sensor_poller = plugin_context.sensor_poller
@@ -110,11 +112,10 @@ class EncDevHandler:
             ),
         )
 
-    def handle(self, comm_instance: MachineCom, command: str, parameters: str) -> None:
+    def handle(self, command: str, parameters: str) -> None:
         """Run an @ENCDEV command.
 
         Args:
-            comm_instance (MachineCom): The connection to the printer.
             command (str): The name of the @ command, without the @.
             parameters (str): The parameters of the @ command.
 
@@ -122,39 +123,37 @@ class EncDevHandler:
         if command.upper() != "ENCDEV":
             return
 
-        send_reply = comm_instance._log
-
         if not self._development_mode:
-            send_reply("@ENCDEV commands are available only in development mode")
+            self._printer.log_lines("@ENCDEV commands are available only in development mode")
             return
 
         line = " ".join(parameters.upper().split())
         for encdev_command in self._commands:
             match = re.fullmatch(encdev_command.pattern, line)
             if match:
-                action = functools.partial(encdev_command.method, send_reply, *match.groups())
+                action = functools.partial(encdev_command.method, *match.groups())
 
                 # Run outside the printer communication thread
-                threading.Thread(target=self._run, args=(action, line, send_reply), name="EncDev", daemon=True).start()
+                threading.Thread(target=self._run, args=(action, line), name="EncDev", daemon=True).start()
 
                 return
 
-        self._send_usage_reply(send_reply)
+        self._send_usage_reply()
 
-    def _run(self, action: Callable[[], None], line: str, send_reply: Callable[[str], None]) -> None:
+    def _run(self, action: Callable[[], None], line: str) -> None:
         try:
             action()
         except _CommandError as error:
-            send_reply(str(error))
+            self._printer.log_lines(str(error))
         except Exception:
             self._logger.exception("Error running @ENCDEV %s", line)
-            send_reply("@ENCDEV failed, see plugin logs")
+            self._printer.log_lines("@ENCDEV failed, see plugin logs")
 
     ##########
     ### Status command
     ##########
 
-    def _status(self, send_reply: Callable[[str], None]) -> None:
+    def _status(self) -> None:
         # Pins
         pin_labels = self._get_pin_labels()
         edges = {dummy_gpio.RISING: "rising", dummy_gpio.FALLING: "falling", dummy_gpio.BOTH: "both"}
@@ -166,21 +165,21 @@ class EncDevHandler:
             if status.pwm is not None:
                 pwm_state = "running" if status.pwm.running else "stopped"
                 line += f", PWM {pwm_state} at {status.pwm.duty_cycle}% and {status.pwm.frequency} Hz"
-            send_reply(line)
+            self._printer.log_lines(line)
 
         # I2C registers
         for (bus, address, register), value in sorted(dummy_i2c.get_registers().items()):
-            send_reply(f"I2C bus {bus}, address {address:#04x}, register {register}: {value}")
+            self._printer.log_lines(f"I2C bus {bus}, address {address:#04x}, register {register}: {value}")
 
         # Sensors
         for sensor in self._sensors.get_all().values():
-            send_reply(self._describe_sensor(sensor.config))
+            self._printer.log_lines(self._describe_sensor(sensor.config))
 
     ##########
     ### Input command
     ##########
 
-    def _input(self, send_reply: Callable[[str], None], index_id: str, state: str) -> None:
+    def _input(self, index_id: str, state: str) -> None:
         try:
             config = self._gpio_inputs.get(int(index_id)).config
         except GpioInputError as error:
@@ -199,13 +198,13 @@ class EncDevHandler:
         elif state == "INACTIVE":
             dummy_gpio.set_input_level(pin, inactive_level)
 
-        send_reply(f"Input {config.index_id} ({config.label}): {state.lower()}")
+        self._printer.log_lines(f"Input {config.index_id} ({config.label}): {state.lower()}")
 
     ##########
     ### Sensor command
     ##########
 
-    def _set_sensor(self, send_reply: Callable[[str], None], index_id: str, values: str) -> None:
+    def _set_sensor(self, index_id: str, values: str) -> None:
         sensor = self._get_dummy_sensor(int(index_id))
         new_values = {}
         for item in values.split():
@@ -227,15 +226,15 @@ class EncDevHandler:
             simulated.delta = new_values.get(f"{prefix}DELTA", simulated.delta)
         sensor.failing = False
 
-        send_reply(self._describe_sensor(sensor.config))
+        self._printer.log_lines(self._describe_sensor(sensor.config))
 
         self._sensor_poller.read_all()
 
-    def _fail_sensor(self, send_reply: Callable[[str], None], index_id: str) -> None:
+    def _fail_sensor(self, index_id: str) -> None:
         sensor = self._get_dummy_sensor(int(index_id))
         sensor.failing = True
 
-        send_reply(self._describe_sensor(sensor.config))
+        self._printer.log_lines(self._describe_sensor(sensor.config))
 
         self._sensor_poller.read_all()
 
@@ -243,23 +242,23 @@ class EncDevHandler:
     ### Event command
     ##########
 
-    def _event(self, send_reply: Callable[[str], None], name: str) -> None:
+    def _event(self, name: str) -> None:
         event = getattr(Events, name, None)
         if name.startswith("_") or not isinstance(event, str):
             msg = f"No OctoPrint event named {name}"
             raise _CommandError(msg)
 
         self._control_loop.evaluate_octoprint_event(event, dict(EVENT_PAYLOAD))
-        send_reply(f"Event {event} handled")
+        self._printer.log_lines(f"Event {event} handled")
 
     ##########
     ### Helpers
     ##########
 
-    def _send_usage_reply(self, send_reply: Callable[[str], None]) -> None:
-        send_reply("Usage:")
+    def _send_usage_reply(self) -> None:
+        self._printer.log_lines("Usage:")
         for encdev_command in self._commands:
-            send_reply(f"  @ENCDEV {encdev_command.usage}")
+            self._printer.log_lines(f"  @ENCDEV {encdev_command.usage}")
 
     def _describe_sensor(self, config: InputConfig) -> str:
         description = f"Sensor {config.index_id} ({config.label})"
