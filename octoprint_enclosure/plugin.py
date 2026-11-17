@@ -24,17 +24,19 @@ from .settings.migrations import migrate_settings
 
 
 class EnclosurePlugin(
-    octoprint.plugin.StartupPlugin,
-    octoprint.plugin.ShutdownPlugin,
-    octoprint.plugin.TemplatePlugin,
-    octoprint.plugin.SettingsPlugin,
     octoprint.plugin.AssetPlugin,
     octoprint.plugin.BlueprintPlugin,
     octoprint.plugin.EventHandlerPlugin,
+    octoprint.plugin.SettingsPlugin,
+    octoprint.plugin.ShutdownPlugin,
+    octoprint.plugin.StartupPlugin,
+    octoprint.plugin.TemplatePlugin,
 ):
     """The OctoPrint plugin that monitors and controls a printer enclosure."""
 
-    development_mode = False
+    ##########
+    ### Initialization
+    ##########
 
     def initialize(self):
         # Logging formatter
@@ -57,12 +59,12 @@ class EnclosurePlugin(
         # Don't propagate logging
         self._logger.propagate = False
 
-        # Init general plugin components
+        # Init the settings
         self._enclosure_settings = Settings(self._settings)
 
         # Init hardware
-        self.development_mode = self._enclosure_settings.development_mode
-        if self.development_mode:
+        self._development_mode = self._enclosure_settings.development_mode
+        if self._development_mode:
             self._gpio = dummy_gpio
             self._i2c = dummy_i2c
             self._logger.warning("Development mode is enabled: GPIO and I2C (pins, sensors, etc) are simulated")
@@ -70,12 +72,12 @@ class EnclosurePlugin(
             self._gpio = gpio
             self._i2c = smbus2
 
-        # Init inputs, outputs, actions and automations
-        self._sensors = Sensors(self._gpio, self._logger, dummy=self.development_mode)
+        # Init inputs, outputs, automations, frontend and actions
+        self._sensors = Sensors(self._gpio, self._logger, dummy=self._development_mode)
+        self._sensor_poller = SensorPoller(self._sensors, self._logger)
         self._gpio_inputs = GpioInputs(self._gpio, self._logger)
         self._outputs = Outputs(self._gpio, self._i2c, self._sensors, self._logger)
         self._automations = Automations(self._logger)
-        self._sensor_poller = SensorPoller(self._sensors, self._logger)
         self._frontend = Frontend(
             self._plugin_manager,
             self._identifier,
@@ -94,7 +96,7 @@ class EnclosurePlugin(
         # Init integrations
         self._mqtt = Mqtt(self._plugin_manager, self._logger)
 
-        # Init threads
+        # Init the engine
         self._scheduler = Scheduler(self._logger)
         self._output_executor = OutputExecutor(self._outputs, self._frontend, self._logger)
         self._control_loop = ControlLoop(
@@ -118,7 +120,7 @@ class EnclosurePlugin(
         self._plugin_context = PluginContext(
             identifier=self._identifier,
             basefolder=self._basefolder,
-            development_mode=self.development_mode,
+            development_mode=self._development_mode,
             logger=self._logger,
             settings=self._enclosure_settings,
             frontend=self._frontend,
@@ -145,32 +147,81 @@ class EnclosurePlugin(
         # Init API
         self._api = Api(self._plugin_context)
 
-    # ~~ StartupPlugin mixin
-    def on_after_startup(self):
-        self._mqtt.load_helpers()
+    ##########
+    ### AssetPlugin mixin
+    ##########
 
-        rpi_inputs = self._enclosure_settings.rpi_inputs
-        rpi_outputs = self._enclosure_settings.rpi_outputs
-        actions = self._enclosure_settings.actions
-        automations = self._enclosure_settings.automations
+    def get_assets(self):
+        return {
+            "js": ["js/enclosure.js"],
+            "css": ["css/enclosure.css"],
+        }
 
-        self._sensor_poller.load(rpi_inputs)
-        self._gpio_inputs.load(rpi_inputs)
-        self._output_executor.load_outputs(rpi_outputs, wait=True)
-        self._actions.load(actions)
-        self._automations.load(automations)
-        self._automations.check_links(self._sensors, self._gpio_inputs, self._outputs, self._actions)
+    ##########
+    ### BlueprintPlugin mixin
+    ##########
 
-        self._gpio_inputs.setup_pins(
-            self._automations.get_gpio_input_edges(),
-            self._control_loop.evaluate_gpio_input_edge,
-        )
-        self._sensors.setup_pins()
+    def is_blueprint_protected(self):
+        return False
 
-        self._sensor_poller.start(self._control_loop.evaluate_reading, self._control_loop.evaluate_sensor_failure)
-        self._control_loop.start()
+    def is_blueprint_csrf_protected(self):
+        return True
 
-    # ~~ ShutdownPlugin mixin
+    def get_blueprint(self):
+        return self._api.get_blueprint()
+
+    ##########
+    ### EventHandlerPlugin mixin
+    ##########
+
+    def on_event(self, event, payload):
+        self._control_loop.evaluate_octoprint_event(event, payload)
+
+    ##########
+    ### SettingsPlugin mixin
+    ##########
+
+    def get_settings_defaults(self):
+        return {
+            "rpi_inputs": [],
+            "rpi_outputs": [],
+            "actions": [],
+            "automations": [],
+            "temperature_unit": "celsius",
+            "gcode_control": False,
+            "notification_provider": "",
+            "notification_api_key": "",
+            "notification_event_name": "printer_event",
+            "notifications": [{notification_type.value: True for notification_type in NotificationType}],
+            "development_mode": False,
+        }
+
+    def get_settings_restricted_paths(self):
+        return {"admin": [["notification_api_key"]]}
+
+    def get_settings_version(self):
+        return 11
+
+    def on_settings_migrate(self, target, current=None):
+        migrate_settings(target, current, self._settings, self._logger)
+
+    def on_settings_save(self, data):
+        # Save the settings
+        octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
+
+        # Apply the saved settings
+        self._apply_settings()
+
+        # Take the decisions again on the new settings
+        self._control_loop.evaluate_new_settings()
+
+        # Update UI in every client
+        self._control_loop.update_ui()
+
+    ##########
+    ### ShutdownPlugin mixin
+    ##########
+
     def on_shutdown(self):
         try:
             self._control_loop.stop()
@@ -192,104 +243,21 @@ class EnclosurePlugin(
         except Exception:
             self._logger.exception("Error stopping the notifications")
 
-    # ~~ SettingsPlugin mixin
-    def get_settings_version(self):
-        return 11
+    ##########
+    ### StartupPlugin mixin
+    ##########
 
-    def on_settings_migrate(self, target, current=None):
-        migrate_settings(target, current, self._settings, self._logger)
+    def on_after_startup(self):
+        self._mqtt.load_helpers()
 
-    def get_settings_restricted_paths(self):
-        return {"admin": [["notification_api_key"]]}
+        self._apply_settings()
 
-    # ~~ BlueprintPlugin mixin
-    def get_blueprint(self):
-        return self._api.get_blueprint()
+        self._sensor_poller.start(self._control_loop.evaluate_reading, self._control_loop.evaluate_sensor_failure)
+        self._control_loop.start()
 
-    def is_blueprint_protected(self):
-        return False
-
-    def is_blueprint_csrf_protected(self):
-        return True
-
-    # ~~ EventPlugin mixin
-    def on_event(self, event, payload):
-        self._control_loop.evaluate_octoprint_event(event, payload)
-
-    # ~~ SettingsPlugin mixin
-    def on_settings_save(self, data):
-        # Save the settings
-        octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
-
-        # Read from the saved settings
-        rpi_inputs = self._enclosure_settings.rpi_inputs
-        self._logger.debug("New rpi_inputs: %s", rpi_inputs)
-        rpi_outputs = self._enclosure_settings.rpi_outputs
-        self._logger.debug("New rpi_outputs: %s", rpi_outputs)
-        actions = self._enclosure_settings.actions
-        self._logger.debug("New actions: %s", actions)
-        automations = self._enclosure_settings.automations
-        self._logger.debug("New automations: %s", automations)
-
-        # Release the pins of the inputs
-        self._gpio_inputs.clear()
-        self._sensors.clear()
-
-        # Update the sensor poller
-        self._sensor_poller.load(rpi_inputs)
-
-        # Update outputs
-        self._output_executor.load_outputs(rpi_outputs, wait=True)
-
-        # Update actions
-        self._actions.load(actions)
-
-        # Update automations
-        self._automations.load(automations)
-
-        # Reload the GPIO inputs
-        self._gpio_inputs.load(rpi_inputs)
-
-        # Check the links of the automations to the other entries
-        self._automations.check_links(self._sensors, self._gpio_inputs, self._outputs, self._actions)
-
-        # Set up the pins of the inputs
-        self._gpio_inputs.setup_pins(
-            self._automations.get_gpio_input_edges(),
-            self._control_loop.evaluate_gpio_input_edge,
-        )
-        self._sensors.setup_pins()
-
-        # Take the decisions again on the new settings
-        self._control_loop.evaluate_new_settings()
-
-        # Update UI in every client
-        self._control_loop.update_ui()
-
-    def get_settings_defaults(self):
-        return {
-            "rpi_inputs": [],
-            "rpi_outputs": [],
-            "actions": [],
-            "automations": [],
-            "temperature_unit": "celsius",
-            "gcode_control": False,
-            "notification_provider": "",
-            "notification_api_key": "",
-            "notification_event_name": "printer_event",
-            "notifications": [{notification_type.value: True for notification_type in NotificationType}],
-            "development_mode": False,
-        }
-
-    # ~~ TemplatePlugin
-    def get_template_vars(self):
-        gpio_import_error = gpio.get_import_error()
-        return {
-            "development_mode": self.development_mode,
-            "gpio_import_error": str(gpio_import_error) if gpio_import_error is not None else None,
-            "gpio_numbering_is_board": gpio_import_error is None and self._gpio.getmode() == self._gpio.BOARD,
-            "octoprint_events": sorted(all_events()),
-        }
+    ##########
+    ### TemplatePlugin mixin
+    ##########
 
     def get_template_configs(self):
         return [
@@ -316,22 +284,46 @@ class EnclosurePlugin(
             },
         ]
 
+    def get_template_vars(self):
+        gpio_import_error = gpio.get_import_error()
+        return {
+            "development_mode": self._development_mode,
+            "gpio_import_error": str(gpio_import_error) if gpio_import_error is not None else None,
+            "gpio_numbering_is_board": gpio_import_error is None and self._gpio.getmode() == self._gpio.BOARD,
+            "octoprint_events": sorted(all_events()),
+        }
+
     def is_template_autoescaped(self):
         return True
 
-    # ~~ AssetPlugin mixin
-    def get_assets(self):
-        return {
-            "js": ["js/enclosure.js"],
-            "css": ["css/enclosure.css"],
-        }
+    ##########
+    ### Hooks
+    ##########
 
-    # ~~ Access permissions hook
-    def get_additional_permissions(self):
+    def hook_access_permissions(self):
         return get_additional_permissions()
 
-    # ~~ Softwareupdate hook
-    def get_update_information(self):
+    def hook_atcommand_queuing(self, comm_instance, phase, command, parameters, tags=None, *args, **kwargs):
+        self._encdev_handler.handle(comm_instance, command, parameters)
+
+    def hook_gcode_queuing(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
+        self._enc_handler.handle(comm_instance, cmd)
+
+    def hook_temperatures_received(self, comm_instance, parsed_temperatures, *args, **kwargs):
+        readings = self._sensor_poller.get_readings()
+        for sensor in self._sensors.get_all().values():
+            config = sensor.config
+            reading = readings.get(config.index_id)
+            if reading is None:
+                continue
+            if config.show_graph_temp and reading.temperature is not None:
+                parsed_temperatures[config.label] = (reading.temperature, None)
+            if config.show_graph_humidity and reading.humidity is not None:
+                parsed_temperatures[config.label + " Humidity"] = (reading.humidity, None)
+
+        return parsed_temperatures
+
+    def hook_softwareupdate_check_config(self):
         return {
             "enclosure": {
                 "displayName": "Enclosure Plugin",
@@ -346,22 +338,29 @@ class EnclosurePlugin(
             },
         }
 
-    def hook_gcode_queuing(self, comm_instance, phase, cmd, cmd_type, gcode, *args, **kwargs):
-        self._enc_handler.handle(comm_instance, cmd)
+    ##########
+    ### Helpers
+    ##########
 
-    def hook_atcommand_queuing(self, comm_instance, phase, command, parameters, tags=None, *args, **kwargs):
-        self._encdev_handler.handle(comm_instance, command, parameters)
+    def _apply_settings(self) -> None:
+        # Release the pins of the inputs
+        self._gpio_inputs.clear()
+        self._sensors.clear()
 
-    def hook_temperatures_received(self, comm, parsed_temps):
-        readings = self._sensor_poller.get_readings()
-        for sensor in self._sensors.get_all().values():
-            config = sensor.config
-            reading = readings.get(config.index_id)
-            if reading is None:
-                continue
-            if config.show_graph_temp and reading.temperature is not None:
-                parsed_temps[config.label] = (reading.temperature, None)
-            if config.show_graph_humidity and reading.humidity is not None:
-                parsed_temps[config.label + " Humidity"] = (reading.humidity, None)
+        # Load the inputs, the outputs, the actions and the automations
+        inputs_settings = self._enclosure_settings.rpi_inputs
+        self._sensor_poller.load(inputs_settings)
+        self._gpio_inputs.load(inputs_settings)
+        self._output_executor.load_outputs(self._enclosure_settings.rpi_outputs, wait=True)
+        self._actions.load(self._enclosure_settings.actions)
+        self._automations.load(self._enclosure_settings.automations)
 
-        return parsed_temps
+        # Check the links of the automations to the other entries
+        self._automations.check_links(self._sensors, self._gpio_inputs, self._outputs, self._actions)
+
+        # Set up the pins of the inputs
+        self._gpio_inputs.setup_pins(
+            self._automations.get_gpio_input_edges(),
+            self._control_loop.evaluate_gpio_input_edge,
+        )
+        self._sensors.setup_pins()
