@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from typing import Any
+
     from octoprint_enclosure.inputs import Reading
 
 
@@ -40,3 +43,6 @@ class OctoprintEvent(AutomationEvent):
 
     name: str
     """The event, as OctoPrint names it."""
+
+    payload: Mapping[str, Any] | None = None
+    """The data OctoPrint sends with the event, or None if it sends none."""

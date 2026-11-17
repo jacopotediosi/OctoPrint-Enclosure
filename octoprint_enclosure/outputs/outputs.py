@@ -9,6 +9,7 @@ from octoprint_enclosure.settings import BaseConfig, SensorInputId
 from .base import Output, OutputError
 from .config import OutputConfig
 from .registry import OUTPUTS
+from .thermostat import ThermostatDeviceType, ThermostatOutput
 
 if TYPE_CHECKING:
     import logging
@@ -62,22 +63,27 @@ class Outputs:
     _i2c: I2cBackend
     """The I2C backend."""
 
+    _sensors: Sensors
+    """The sensors of the inputs."""
+
     _logger: logging.Logger
 
     _outputs: dict[int, Output]
     """The output with each id."""
 
-    def __init__(self, gpio: GpioBackend, i2c: I2cBackend, logger: logging.Logger) -> None:
+    def __init__(self, gpio: GpioBackend, i2c: I2cBackend, sensors: Sensors, logger: logging.Logger) -> None:
         """Set up the outputs, with none until some settings are loaded.
 
         Args:
             gpio (GpioBackend): The GPIO backend, with the API of RPi.GPIO.
             i2c (I2cBackend): The I2C backend, with the API of smbus2.
+            sensors (Sensors): The sensors of the inputs.
             logger (logging.Logger): The logger to write to.
 
         """
         self._gpio = gpio
         self._i2c = i2c
+        self._sensors = sensors
         self._logger = logger.getChild("Outputs")
         self._outputs = {}
 
@@ -142,23 +148,11 @@ class Outputs:
 
         self._outputs = outputs
 
-    def check_links(self, sensors: Sensors) -> None:
-        """Check the links of the outputs to the sensor inputs, and log a warning for each one that doesn't exist.
+        # Log a warning for each link of an output to a sensor input that doesn't exist
+        self._check_links()
 
-        Args:
-            sensors (Sensors): The sensors of the inputs.
-
-        """
-        sensor_ids = sensors.get_ids()
-
-        for index_id, output in self._outputs.items():
-            for sensor_id in output.config.get_linked_ids(SensorInputId):
-                if sensor_id not in sensor_ids:
-                    self._logger.warning(
-                        "Output %s is linked to sensor input %s, which doesn't exist",
-                        index_id,
-                        sensor_id,
-                    )
+        # Make the readings of the dummy sensors follow the thermostats linked to them
+        self._link_dummy_sensors()
 
     def get(self, index_id: int, output_class: type[_OutputT]) -> _OutputT:
         """Get an output.
@@ -259,6 +253,44 @@ class Outputs:
                 self._gpio.cleanup(pin)
         except Exception:
             self._logger.exception("Error releasing the hardware of output %s", index_id)
+
+    def _check_links(self) -> None:
+        sensor_ids = self._sensors.get_ids()
+
+        for index_id, output in self._outputs.items():
+            for sensor_id in output.config.get_linked_ids(SensorInputId):
+                if sensor_id not in sensor_ids:
+                    self._logger.warning(
+                        "Output %s is linked to sensor input %s, which doesn't exist",
+                        index_id,
+                        sensor_id,
+                    )
+
+    def _link_dummy_sensors(self) -> None:
+        # Unlink every dummy sensor
+        for sensor_id in self._sensors.get_ids():
+            try:
+                dummy = self._sensors.get_dummy(sensor_id)
+            except LookupError:
+                continue
+
+            dummy.is_heater_on = lambda: False
+            dummy.is_cooler_on = lambda: False
+            dummy.is_dehumidifier_on = lambda: False
+
+        # Link each thermostat to its dummy sensor
+        for thermostat in self.get_all(ThermostatOutput):
+            try:
+                dummy = self._sensors.get_dummy(thermostat.config.linked_temp_sensor)
+            except LookupError:
+                continue
+
+            if thermostat.config.temp_ctr_type is ThermostatDeviceType.HEATER:
+                dummy.is_heater_on = thermostat.is_on
+            elif thermostat.config.temp_ctr_type is ThermostatDeviceType.COOLER:
+                dummy.is_cooler_on = thermostat.is_on
+            elif thermostat.config.temp_ctr_type is ThermostatDeviceType.DEHUMIDIFIER:
+                dummy.is_dehumidifier_on = thermostat.is_on
 
     def _get_output_logger(self, output_class: type[Output], index_id: int) -> logging.Logger:
         return self._logger.getChild(f"{output_class.__name__}.{index_id}")

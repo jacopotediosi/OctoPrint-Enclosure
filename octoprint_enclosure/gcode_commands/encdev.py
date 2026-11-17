@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from octoprint.events import Events
 
 from octoprint_enclosure.hardware import dummy_gpio, dummy_i2c
-from octoprint_enclosure.inputs import PullResistor
+from octoprint_enclosure.inputs import GpioInputError, PullResistor
 from octoprint_enclosure.outputs import Output
 
 if TYPE_CHECKING:
@@ -18,11 +18,12 @@ if TYPE_CHECKING:
 
     from octoprint.util.comm import MachineCom
 
-    from octoprint_enclosure.inputs import GpioInputs, Sensors
+    from octoprint_enclosure.engine import ControlLoop
+    from octoprint_enclosure.inputs import GpioInputs, SensorPoller, Sensors
+    from octoprint_enclosure.inputs.config import InputConfig
     from octoprint_enclosure.inputs.sensors.dummy import DummySensor
     from octoprint_enclosure.outputs import Outputs
     from octoprint_enclosure.plugin_context import PluginContext
-    from octoprint_enclosure.settings import Settings
 
 NUMBER_REGEX = r"-?\d+(?:\.\d+)?"
 
@@ -50,50 +51,33 @@ class _Command:
 class EncDevHandler:
     """Handles the @ENCDEV G-code commands."""
 
-    _settings: Settings
     _sensors: Sensors
     _gpio_inputs: GpioInputs
+    _sensor_poller: SensorPoller
     _outputs: Outputs
+    _control_loop: ControlLoop
     _logger: logging.Logger
 
     _development_mode: bool
     """Whether the plugin runs in development mode."""
 
-    _read_sensors_now: Callable[[], None]
-    """The function called to make the plugin read the sensors right away."""
-
-    _handle_event: Callable[[str, dict], None]
-    """The function called with a simulated OctoPrint event and its payload."""
-
     _commands: tuple[_Command, ...]
 
-    def __init__(
-        self,
-        plugin_context: PluginContext,
-        *,
-        development_mode: bool,
-        read_sensors_now: Callable[[], None],
-        handle_event: Callable[[str, dict], None],
-    ) -> None:
+    def __init__(self, plugin_context: PluginContext) -> None:
         """Set up the handler.
 
         Args:
             plugin_context (PluginContext): The plugin context.
-            development_mode (bool): Whether the plugin runs in development mode, the only one the commands are
-                available in.
-            read_sensors_now (Callable[[], None]): The function called to make the plugin read the sensors right away.
-            handle_event (Callable[[str, dict], None]): The function called with a simulated OctoPrint event and its
-                payload.
 
         """
-        self._settings = plugin_context.settings
         self._sensors = plugin_context.sensors
         self._gpio_inputs = plugin_context.gpio_inputs
+        self._sensor_poller = plugin_context.sensor_poller
         self._outputs = plugin_context.outputs
+        self._control_loop = plugin_context.control_loop
         self._logger = plugin_context.logger.getChild("EncDevHandler")
-        self._development_mode = development_mode
-        self._read_sensors_now = read_sensors_now
-        self._handle_event = handle_event
+
+        self._development_mode = plugin_context.development_mode
 
         self._commands = (
             _Command(
@@ -189,18 +173,22 @@ class EncDevHandler:
             send_reply(f"I2C bus {bus}, address {address:#04x}, register {register}: {value}")
 
         # Sensors
-        for config in self._settings.rpi_inputs:
-            if config["input_type"] == "temperature_sensor":
-                send_reply(self._describe_sensor(config))
+        for sensor in self._sensors.get_all().values():
+            send_reply(self._describe_sensor(sensor.config))
 
     ##########
     ### Input command
     ##########
 
     def _input(self, send_reply: Callable[[str], None], index_id: str, state: str) -> None:
-        config = self._get_input_config(index_id, "gpio")
-        pin = int(config["gpio_pin"])
-        active_level = dummy_gpio.LOW if config["input_pull_resistor"] == PullResistor.UP.value else dummy_gpio.HIGH
+        try:
+            config = self._gpio_inputs.get(int(index_id)).config
+        except GpioInputError as error:
+            msg = f"Can't use GPIO input {index_id}: {error}"
+            raise _CommandError(msg) from error
+
+        pin = config.gpio_pin
+        active_level = dummy_gpio.LOW if config.input_pull_resistor is PullResistor.UP else dummy_gpio.HIGH
         inactive_level = dummy_gpio.LOW if active_level == dummy_gpio.HIGH else dummy_gpio.HIGH
 
         if state == "PRESS":
@@ -211,15 +199,14 @@ class EncDevHandler:
         elif state == "INACTIVE":
             dummy_gpio.set_input_level(pin, inactive_level)
 
-        send_reply(f"Input {config['index_id']} ({config['label']}): {state.lower()}")
+        send_reply(f"Input {config.index_id} ({config.label}): {state.lower()}")
 
     ##########
     ### Sensor command
     ##########
 
     def _set_sensor(self, send_reply: Callable[[str], None], index_id: str, values: str) -> None:
-        config = self._get_input_config(index_id, "temperature_sensor")
-        sensor = self._get_dummy_sensor(config)
+        sensor = self._get_dummy_sensor(int(index_id))
         new_values = {}
         for item in values.split():
             key, _, value = item.partition("=")
@@ -240,16 +227,17 @@ class EncDevHandler:
             simulated.delta = new_values.get(f"{prefix}DELTA", simulated.delta)
         sensor.failing = False
 
-        send_reply(self._describe_sensor(config))
-        self._read_sensors_now()
+        send_reply(self._describe_sensor(sensor.config))
+
+        self._sensor_poller.read_all()
 
     def _fail_sensor(self, send_reply: Callable[[str], None], index_id: str) -> None:
-        config = self._get_input_config(index_id, "temperature_sensor")
+        sensor = self._get_dummy_sensor(int(index_id))
+        sensor.failing = True
 
-        self._get_dummy_sensor(config).failing = True
+        send_reply(self._describe_sensor(sensor.config))
 
-        send_reply(self._describe_sensor(config))
-        self._read_sensors_now()
+        self._sensor_poller.read_all()
 
     ##########
     ### Event command
@@ -261,7 +249,7 @@ class EncDevHandler:
             msg = f"No OctoPrint event named {name}"
             raise _CommandError(msg)
 
-        self._handle_event(event, dict(EVENT_PAYLOAD))
+        self._control_loop.evaluate_octoprint_event(event, dict(EVENT_PAYLOAD))
         send_reply(f"Event {event} handled")
 
     ##########
@@ -273,12 +261,12 @@ class EncDevHandler:
         for encdev_command in self._commands:
             send_reply(f"  @ENCDEV {encdev_command.usage}")
 
-    def _describe_sensor(self, config: dict) -> str:
-        description = f"Sensor {config['index_id']} ({config['label']})"
+    def _describe_sensor(self, config: InputConfig) -> str:
+        description = f"Sensor {config.index_id} ({config.label})"
 
         try:
-            sensor = self._get_dummy_sensor(config)
-        except _CommandError:
+            sensor = self._sensors.get_dummy(config.index_id)
+        except LookupError:
             return f"{description}: not set up"
 
         state = " ".join(
@@ -291,9 +279,9 @@ class EncDevHandler:
 
         return f"{description}: {state}"
 
-    def _get_dummy_sensor(self, config: dict) -> DummySensor:
+    def _get_dummy_sensor(self, index_id: int) -> DummySensor:
         try:
-            return self._sensors.get_dummy(config["index_id"])
+            return self._sensors.get_dummy(index_id)
         except LookupError as error:
             raise _CommandError(str(error)) from error
 
@@ -311,19 +299,3 @@ class EncDevHandler:
                 labels.setdefault(pin, []).append(f"Output {output.config.index_id} ({output.config.label})")
 
         return {pin: ", ".join(pin_labels) for pin, pin_labels in labels.items()}
-
-    def _get_input_config(self, index_id: str, input_type: str) -> dict:
-        config = next(
-            (
-                config
-                for config in self._settings.rpi_inputs
-                if str(config["index_id"]) == index_id and config["input_type"] == input_type
-            ),
-            None,
-        )
-        if config is None:
-            kind = {"gpio": "GPIO input", "temperature_sensor": "temperature sensor"}[input_type]
-            msg = f"No {kind} with id {index_id}"
-            raise _CommandError(msg)
-
-        return config

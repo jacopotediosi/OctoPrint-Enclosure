@@ -1,12 +1,9 @@
 import logging
 import sys
-from datetime import timedelta
-from pathlib import Path
 
 import octoprint.plugin
-import octoprint.util
 import smbus2
-from octoprint.events import Events, all_events
+from octoprint.events import all_events
 from octoprint.logging.handlers import CleaningTimedRotatingFileHandler
 
 from .actions import Actions
@@ -19,7 +16,7 @@ from .hardware import dummy_gpio, dummy_i2c, gpio
 from .inputs import GpioInputs, SensorPoller, Sensors
 from .integrations import Mqtt
 from .notifications import Notifications, NotificationType
-from .outputs import Outputs, ThermostatDeviceType, ThermostatOutput
+from .outputs import Outputs
 from .permissions import get_additional_permissions
 from .plugin_context import PluginContext
 from .settings import Settings
@@ -75,8 +72,8 @@ class EnclosurePlugin(
 
         # Init inputs, outputs, actions and automations
         self._sensors = Sensors(self._gpio, self._logger, dummy=self.development_mode)
-        self._gpio_inputs = GpioInputs(self._gpio, self.handle_gpio_input, self._logger)
-        self._outputs = Outputs(self._gpio, self._i2c, self._logger)
+        self._gpio_inputs = GpioInputs(self._gpio, self._logger)
+        self._outputs = Outputs(self._gpio, self._i2c, self._sensors, self._logger)
         self._automations = Automations(self._logger)
         self._sensor_poller = SensorPoller(self._sensors, self._logger)
         self._frontend = Frontend(
@@ -121,6 +118,7 @@ class EnclosurePlugin(
         self._plugin_context = PluginContext(
             identifier=self._identifier,
             basefolder=self._basefolder,
+            development_mode=self.development_mode,
             logger=self._logger,
             settings=self._enclosure_settings,
             frontend=self._frontend,
@@ -142,12 +140,7 @@ class EnclosurePlugin(
 
         # Init G-code command handlers
         self._enc_handler = EncHandler(self._plugin_context)
-        self._encdev_handler = EncDevHandler(
-            self._plugin_context,
-            development_mode=self.development_mode,
-            read_sensors_now=self.check_enclosure_temp,
-            handle_event=self.on_event,
-        )
+        self._encdev_handler = EncDevHandler(self._plugin_context)
 
         # Init API
         self._api = Api(self._plugin_context)
@@ -164,14 +157,14 @@ class EnclosurePlugin(
         self._sensor_poller.load(rpi_inputs)
         self._gpio_inputs.load(rpi_inputs)
         self._output_executor.load_outputs(rpi_outputs, wait=True)
-        if self.development_mode:
-            self.link_dummy_sensors()
         self._actions.load(actions)
         self._automations.load(automations)
-        self._outputs.check_links(self._sensors)
         self._automations.check_links(self._sensors, self._gpio_inputs, self._outputs, self._actions)
 
-        self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
+        self._gpio_inputs.setup_pins(
+            self._automations.get_gpio_input_edges(),
+            self._control_loop.evaluate_gpio_input_edge,
+        )
         self._sensors.setup_pins()
 
         self._sensor_poller.start(self._control_loop.evaluate_reading, self._control_loop.evaluate_sensor_failure)
@@ -219,41 +212,9 @@ class EnclosurePlugin(
     def is_blueprint_csrf_protected(self):
         return True
 
-    def get_sensor_inputs(self):
-        return [sensor.config for sensor in self._sensors.get_all().values()]
-
-    def link_dummy_sensors(self):
-        for thermostat in self._outputs.get_all(ThermostatOutput):
-            try:
-                dummy = self._sensors.get_dummy(thermostat.config.linked_temp_sensor)
-            except LookupError:
-                continue
-            if thermostat.config.temp_ctr_type is ThermostatDeviceType.HEATER:
-                dummy.is_heater_on = thermostat.is_on
-            elif thermostat.config.temp_ctr_type is ThermostatDeviceType.COOLER:
-                dummy.is_cooler_on = thermostat.is_on
-            elif thermostat.config.temp_ctr_type is ThermostatDeviceType.DEHUMIDIFIER:
-                dummy.is_dehumidifier_on = thermostat.is_on
-
-    def check_enclosure_temp(self):
-        """Read every sensor now, then take the decisions on the readings."""
-        self._sensor_poller.read_all()
-        self._control_loop.evaluate_all()
-
-    def handle_gpio_input(self, input_id, level):
-        self._control_loop.evaluate_gpio_input_edge(input_id, level)
-
     # ~~ EventPlugin mixin
     def on_event(self, event, payload):
-        self._control_loop.evaluate_octoprint_event(event)
-
-        if event == Events.PRINT_DONE:
-            file_name = Path(payload["path"]).name
-            elapsed_time = octoprint.util.get_formatted_timedelta(timedelta(seconds=payload["time"]))
-            self._notifications.send(
-                NotificationType.PRINT_FINISH,
-                f"Print job finished: {file_name} printed in {elapsed_time}",
-            )
+        self._control_loop.evaluate_octoprint_event(event, payload)
 
     # ~~ SettingsPlugin mixin
     def on_settings_save(self, data):
@@ -280,10 +241,6 @@ class EnclosurePlugin(
         # Update outputs
         self._output_executor.load_outputs(rpi_outputs, wait=True)
 
-        # Link outputs to dummy sensors
-        if self.development_mode:
-            self.link_dummy_sensors()
-
         # Update actions
         self._actions.load(actions)
 
@@ -293,12 +250,14 @@ class EnclosurePlugin(
         # Reload the GPIO inputs
         self._gpio_inputs.load(rpi_inputs)
 
-        # Check the links between the entries
-        self._outputs.check_links(self._sensors)
+        # Check the links of the automations to the other entries
         self._automations.check_links(self._sensors, self._gpio_inputs, self._outputs, self._actions)
 
         # Set up the pins of the inputs
-        self._gpio_inputs.setup_pins(self._automations.get_gpio_input_edges())
+        self._gpio_inputs.setup_pins(
+            self._automations.get_gpio_input_edges(),
+            self._control_loop.evaluate_gpio_input_edge,
+        )
         self._sensors.setup_pins()
 
         # Take the decisions again on the new settings
@@ -393,15 +352,16 @@ class EnclosurePlugin(
     def hook_atcommand_queuing(self, comm_instance, phase, command, parameters, tags=None, *args, **kwargs):
         self._encdev_handler.handle(comm_instance, command, parameters)
 
-    def get_graph_data(self, comm, parsed_temps):
+    def hook_temperatures_received(self, comm, parsed_temps):
         readings = self._sensor_poller.get_readings()
-        for sensor in self.get_sensor_inputs():
-            reading = readings.get(sensor.index_id)
+        for sensor in self._sensors.get_all().values():
+            config = sensor.config
+            reading = readings.get(config.index_id)
             if reading is None:
                 continue
-            if sensor.show_graph_temp and reading.temperature is not None:
-                parsed_temps[sensor.label] = (reading.temperature, None)
-            if sensor.show_graph_humidity and reading.humidity is not None:
-                parsed_temps[sensor.label + " Humidity"] = (reading.humidity, None)
+            if config.show_graph_temp and reading.temperature is not None:
+                parsed_temps[config.label] = (reading.temperature, None)
+            if config.show_graph_humidity and reading.humidity is not None:
+                parsed_temps[config.label + " Humidity"] = (reading.humidity, None)
 
         return parsed_temps

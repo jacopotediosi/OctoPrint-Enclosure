@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+from functools import partial
 from typing import TYPE_CHECKING
 
 from octoprint_enclosure.inputs.config import InputConfig, InputType
@@ -33,26 +34,20 @@ class GpioInputs:
     _gpio: GpioBackend
     """The GPIO backend."""
 
-    _on_edge: Callable[[int, int], object]
-    """The function called when an edge is detected, with the id of the input and the level of its pin."""
-
     _logger: logging.Logger
 
     _gpio_inputs: dict[int, GpioInput | _InvalidGpioInput]
     """The GPIO input with each id."""
 
-    def __init__(self, gpio: GpioBackend, on_edge: Callable[[int, int], object], logger: logging.Logger) -> None:
+    def __init__(self, gpio: GpioBackend, logger: logging.Logger) -> None:
         """Set up the GPIO inputs, with none until some settings are loaded.
 
         Args:
             gpio (GpioBackend): The GPIO backend, with the API of RPi.GPIO.
-            on_edge (Callable[[int, int], object]): The function called when an edge is detected on the pin of an
-                input, with the id of the input and the level of the pin, 1 if high or 0 if low.
             logger (logging.Logger): The logger to write to.
 
         """
         self._gpio = gpio
-        self._on_edge = on_edge
         self._logger = logger.getChild("GpioInputs")
         self._gpio_inputs = {}
 
@@ -120,12 +115,14 @@ class GpioInputs:
         """
         return set(self._gpio_inputs)
 
-    def setup_pins(self, edges: Mapping[int, Collection[Edge]]) -> None:
+    def setup_pins(self, edges: Mapping[int, Collection[Edge]], on_edge: Callable[[int, int], object]) -> None:
         """Set up the pins of the inputs, and start detecting edges on them.
 
         Args:
             edges (Mapping[int, Collection[Edge]]): The edges to detect on each input, by the id of the input. The edges
                 of an input not listed aren't detected.
+            on_edge (Callable[[int, int], object]): The function called when an edge is detected on the pin of an
+                input, with the id of the input and the level of the pin, 1 if high or 0 if low.
 
         """
         pin_edges: dict[int, set[Edge]] = {}
@@ -150,7 +147,8 @@ class GpioInputs:
                 }
                 gpio_edge = gpio_edges[frozenset(detected_edges)]
                 self._logger.info("Adding GPIO event detect on pin %s with edge: %s", pin, gpio_edge)
-                self._gpio.add_event_detect(pin, gpio_edge, callback=self._handle_edge, bouncetime=BOUNCE_TIME_MS)
+                callback = partial(self._handle_edge, on_edge)
+                self._gpio.add_event_detect(pin, gpio_edge, callback=callback, bouncetime=BOUNCE_TIME_MS)
             except Exception:
                 self._logger.exception("Error detecting the edges of pin %s", pin)
 
@@ -171,7 +169,7 @@ class GpioInputs:
             if isinstance(gpio_input, GpioInput)
         ]
 
-    def _handle_edge(self, channel: int) -> None:
+    def _handle_edge(self, on_edge: Callable[[int, int], object], channel: int) -> None:
         try:
             self._logger.debug("GPIO event triggered on channel %s", channel)
             for index_id, gpio_input in self._get_valid_gpio_inputs():
@@ -183,7 +181,7 @@ class GpioInputs:
                     self._logger.error("The edge on input %s was ignored: its pin can't be read", index_id)
                     continue
 
-                self._on_edge(index_id, level)
+                on_edge(index_id, level)
         except Exception:
             self._logger.exception("Error handling an edge on pin %s", channel)
 

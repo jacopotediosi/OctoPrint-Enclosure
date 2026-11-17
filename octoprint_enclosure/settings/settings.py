@@ -124,10 +124,18 @@ class Settings:
     ### Notifications
     ##########
 
-    @property
-    def notifications(self) -> list[dict]:
-        """Which notifications are enabled."""
-        return self._settings.get(["notifications"])
+    def is_notification_enabled(self, notification_type: str) -> bool:
+        """Tell whether a type of notification is enabled.
+
+        Args:
+            notification_type (str): The type of notification.
+
+        Returns:
+            bool: Whether the notifications of that type are enabled.
+
+        """
+        notifications = self._settings.get(["notifications"]) or []
+        return any(notification.get(notification_type) for notification in notifications)
 
     @property
     def notification_provider(self) -> str:

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import replace
+from datetime import timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import octoprint.util
 from octoprint.events import Events
 
 from octoprint_enclosure.automations import (
@@ -28,6 +31,7 @@ from octoprint_enclosure.engine.control_loop.messages import (
     WaitForThermostatTarget,
 )
 from octoprint_enclosure.inputs import Reading
+from octoprint_enclosure.notifications import NotificationType
 
 from .automation_rules import AutomationRuleDecision
 from .filament_sensors import FilamentSensorDecision
@@ -69,6 +73,7 @@ class Decisions:
     _sensor_poller: SensorPoller
     _automations: Automations
     _output_executor: OutputExecutor
+    _notifications: Notifications
     _mqtt: Mqtt
     _printer: PrinterInterface
     _frontend: Frontend
@@ -135,6 +140,7 @@ class Decisions:
         self._sensor_poller = sensor_poller
         self._automations = automations
         self._output_executor = output_executor
+        self._notifications = notifications
         self._mqtt = mqtt
         self._printer = printer
         self._frontend = frontend
@@ -260,6 +266,15 @@ class Decisions:
 
         # React to the event
         self._react(event)
+
+        # Notify the end of the print
+        if event.name == Events.PRINT_DONE and event.payload is not None:
+            file_name = Path(event.payload["path"]).name
+            elapsed_time = octoprint.util.get_formatted_timedelta(timedelta(seconds=event.payload["time"]))
+            self._notifications.send(
+                NotificationType.PRINT_FINISH,
+                f"Print job finished: {file_name} printed in {elapsed_time}",
+            )
 
     def _handle_tick(self, message: Tick) -> None:
         self._decide()

@@ -25,6 +25,8 @@ from .thermostats import Thermostats
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Mapping
+    from typing import Any
 
     from octoprint.printer import PrinterInterface
 
@@ -168,14 +170,15 @@ class ControlLoop:
         """
         self._put(GpioEdgeEvent(input_id, level))
 
-    def evaluate_octoprint_event(self, event_name: str) -> None:
+    def evaluate_octoprint_event(self, event_name: str, payload: Mapping[str, Any] | None) -> None:
         """Take the decisions regarding an event of OctoPrint.
 
         Args:
             event_name (str): The name of the event, as OctoPrint names it.
+            payload (Mapping[str, Any] | None): The data OctoPrint sends with the event, or None if it sends none.
 
         """
-        self._put(OctoprintEvent(event_name))
+        self._put(OctoprintEvent(event_name, payload))
 
     def evaluate_new_settings(self) -> None:
         """Take the decisions again after new settings were loaded."""

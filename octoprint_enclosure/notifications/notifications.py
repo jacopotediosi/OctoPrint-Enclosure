@@ -50,9 +50,8 @@ class Notifications:
         if provider is None:
             return
 
-        for notification in self._settings.notifications:
-            if notification[notification_type.value]:
-                provider.send(message)
+        if self._settings.is_notification_enabled(notification_type.value):
+            provider.send(message)
 
     def stop(self) -> None:
         """Deliver the notifications pending, then stop delivering."""

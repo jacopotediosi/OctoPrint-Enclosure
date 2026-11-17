@@ -27,6 +27,7 @@ class PluginContext:
     # Plugin general components
     identifier: str
     basefolder: str
+    development_mode: bool
     logger: logging.Logger
     settings: Settings
     frontend: Frontend
