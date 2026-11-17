@@ -80,9 +80,6 @@ ignore = [
     "D102", # undocumented-public-method
     "D103", # undocumented-public-function
     "D104", # undocumented-public-package
-    "D203", # incorrect-blank-line-before-class
-    "D213", # multi-line-summary-second-line
-    "DTZ005", # call-datetime-now-without-tzinfo
     "DTZ007", # call-datetime-strptime-without-zone
     "PERF203", # try-except-in-loop
     "PLR0912", # too-many-branches

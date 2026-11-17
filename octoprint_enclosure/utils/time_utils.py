@@ -29,9 +29,9 @@ def parse_hhmm(value: str) -> time | None:
 
 def seconds_until_next(time_of_day: time) -> float:
     """Seconds until the next occurrence of a time of day, today or tomorrow."""
-    now = datetime.now()
-    next_occurrence = datetime.combine(now.date(), time_of_day)
+    now = datetime.now().astimezone()
+    next_occurrence = datetime.combine(now.date(), time_of_day).astimezone()
     if next_occurrence < now:
-        next_occurrence += timedelta(days=1)
+        next_occurrence = datetime.combine(now.date() + timedelta(days=1), time_of_day).astimezone()
 
     return (next_occurrence - now).total_seconds()
