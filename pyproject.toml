@@ -43,7 +43,8 @@ develop = [
 
 [dependency-groups]
 typechecking = [
-    "types-RPi.GPIO",
+    "OctoPrint==2.0.0 ; python_version >= '3.9' and python_version < '3.16'",
+    "types-RPi.GPIO ; python_version >= '3.9' and python_version < '3.16'",
 ]
 
 [project.readme]
@@ -105,6 +106,9 @@ runtime-evaluated-base-classes = ["octoprint_enclosure.settings.BaseConfig"]
 
 [tool.ruff.lint.pydoclint]
 ignore-one-line-docstrings = true
+
+[tool.ty.environment]
+python-version = "3.7"
 
 [tool.djlint]
 ignore = [

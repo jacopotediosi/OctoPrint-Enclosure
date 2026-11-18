@@ -13,12 +13,11 @@ repos:
       - id: ruff-check
       - id: ruff-format
 
-  # TODO: enable ty
-  #- repo: https://github.com/astral-sh/ty-pre-commit
-  #  rev: v0.0.84
-  #  hooks:
-  #    - id: ty
-  #      args: [--group=typechecking]
+  - repo: https://github.com/astral-sh/ty-pre-commit
+    rev: v0.0.84
+    hooks:
+      - id: ty
+        args: ["--isolated", "--group=typechecking"]
 
   # TODO: enable standard
   # - repo: https://github.com/standard/standard
@@ -48,7 +47,7 @@ repos:
         additional_dependencies:
         - bme680
         - gpiozero
-        - OctoPrint>=2.0.0rc1
+        - OctoPrint>=2.0.0
         - RPi.bme280
         - smbus2
         - spidev

@@ -28,6 +28,9 @@ from .settings.migrations import migrate_settings
 
 if TYPE_CHECKING:
     from flask import Blueprint
+    from octoprint.plugin import PluginSettings
+    from octoprint.plugin.core import PluginManager
+    from octoprint.printer import PrinterInterface
 
 
 class EnclosurePlugin(
@@ -40,6 +43,15 @@ class EnclosurePlugin(
     octoprint.plugin.TemplatePlugin,
 ):
     """The OctoPrint plugin that monitors and controls a printer enclosure."""
+
+    # Injected by OctoPrint before initialize() runs
+    _identifier: str
+    _basefolder: str
+    _plugin_version: str
+    _logger: logging.Logger
+    _settings: PluginSettings
+    _plugin_manager: PluginManager
+    _printer: PrinterInterface
 
     ##########
     ### Initialization

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import spidev
+import spidev  # ty: ignore[unresolved-import] - spidev is a compiled module without type stubs
 from typing_extensions import override
 
 from octoprint_enclosure.settings import REQUIRED, HexInt
