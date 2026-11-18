@@ -146,7 +146,8 @@ class GpioInputs:
                     frozenset({Edge.RISE, Edge.FALL}): self._gpio.BOTH,
                 }
                 gpio_edge = gpio_edges[frozenset(detected_edges)]
-                self._logger.info("Adding GPIO event detect on pin %s with edge: %s", pin, gpio_edge)
+                edge_names = sorted(edge.value for edge in detected_edges)
+                self._logger.debug("Adding GPIO event detect on pin %s with edges: %s", pin, edge_names)
                 callback = partial(self._handle_edge, on_edge)
                 self._gpio.add_event_detect(pin, gpio_edge, callback=callback, bouncetime=BOUNCE_TIME_MS)
             except Exception:

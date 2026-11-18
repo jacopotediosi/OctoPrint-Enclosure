@@ -69,6 +69,9 @@ class SetThermostatTarget(Message):
     target: float | None
     """The target temperature or humidity, or None to turn the thermostat off."""
 
+    origin: str
+    """Who asks for it, e.g. "API", "ENC", etc."""
+
     done: threading.Event | None = None
     """Set once the target is applied and the device of the thermostat is switched, or None if nobody waits for
     it."""

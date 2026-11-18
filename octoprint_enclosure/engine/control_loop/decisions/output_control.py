@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import fields
 from typing import TYPE_CHECKING
 
@@ -7,8 +8,6 @@ from octoprint_enclosure.automations import OutputSetState
 from octoprint_enclosure.outputs import Output, OutputError, ThermostatOutput
 
 if TYPE_CHECKING:
-    import logging
-
     from octoprint_enclosure.engine.control_loop.thermostats import Thermostats
     from octoprint_enclosure.engine.output_executor import OutputExecutor
     from octoprint_enclosure.outputs import Outputs, OutputSetpointConfig
@@ -49,13 +48,23 @@ class OutputControl:
         self._thermostat_decision = thermostat_decision
         self._logger = logger
 
-    def control(self, index_id: int, state: OutputSetState, setpoint_config: OutputSetpointConfig) -> bool:
+    def control(
+        self,
+        index_id: int,
+        state: OutputSetState,
+        setpoint_config: OutputSetpointConfig,
+        origin: str,
+        *,
+        log_level: int = logging.INFO,
+    ) -> bool:
         """Turn an output on or off, or toggle it.
 
         Args:
             index_id (int): The id of the output.
             state (OutputSetState): What to do with the output.
             setpoint_config (OutputSetpointConfig): The setpoint the output is turned on to.
+            origin (str): Who asks for it, e.g. "automation 40".
+            log_level (int): The level at which the change of the output is logged.
 
         Returns:
             bool: Whether the output has been successfully controlled: False if it is not set up, or if the setpoint to
@@ -76,19 +85,19 @@ class OutputControl:
                 return False
 
             if state is OutputSetState.OFF or (state is OutputSetState.TOGGLE and thermostat.is_on()):
-                thermostat.turn_off()
+                self._thermostat_decision.set_target(index_id, None, origin, log_level=log_level)
             elif None in setpoint_values.values():
                 self._logger.debug("Can't turn on output %s: its setpoint is not set", index_id)
                 return False
             else:
-                thermostat.turn_on(setpoint_class(**setpoint_values))
-
-            self._thermostat_decision.regulate()
+                self._thermostat_decision.set_target(index_id, setpoint_values["target"], origin, log_level=log_level)
         elif state is OutputSetState.ON:
-            self._output_executor.turn_on(index_id, setpoint_class(**setpoint_values))
+            setpoint = setpoint_class(**setpoint_values)
+            self._output_executor.turn_on(index_id, setpoint, origin=origin, log_level=log_level)
         elif state is OutputSetState.OFF:
-            self._output_executor.turn_off(index_id)
+            self._output_executor.turn_off(index_id, origin=origin, log_level=log_level)
         else:
-            self._output_executor.toggle(index_id, setpoint_class(**setpoint_values))
+            setpoint = setpoint_class(**setpoint_values)
+            self._output_executor.toggle(index_id, setpoint, origin=origin, log_level=log_level)
 
         return True

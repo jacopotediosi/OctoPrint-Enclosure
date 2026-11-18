@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from typing_extensions import override
@@ -10,7 +11,6 @@ from octoprint_enclosure.outputs import PwmSetpoint
 from .base import Decision
 
 if TYPE_CHECKING:
-    import logging
     from collections.abc import Mapping
 
     from octoprint_enclosure.automations import AutomationEvent, Automations, ConditionsState
@@ -78,9 +78,21 @@ class PwmCurveDecision(Decision):
             duty_cycle = automation.get_duty_cycle(temperature)
 
             # Write the new duty cycle to the output
-            self._output_executor.turn_on(output_id, PwmSetpoint(duty_cycle))
+            index_id = automation.config.index_id
+            if not automation.is_running:
+                self._logger.info("Automation %s started controlling output %s", index_id, output_id)
+            self._output_executor.turn_on(
+                output_id,
+                PwmSetpoint(duty_cycle),
+                origin=f"automation {index_id}",
+                log_level=logging.DEBUG,
+            )
             automation.start()
 
     def _stop_and_turn_off(self, automation: PwmTemperatureLinkedAutomation) -> None:
-        self._output_executor.turn_off(automation.config.output)
+        index_id = automation.config.index_id
+        output_id = automation.config.output
+
+        self._logger.info("Automation %s stopped controlling output %s: turning it off", index_id, output_id)
+        self._output_executor.turn_off(output_id, origin=f"automation {index_id}", log_level=logging.DEBUG)
         automation.stop()

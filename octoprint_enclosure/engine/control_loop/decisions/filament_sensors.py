@@ -95,8 +95,7 @@ class FilamentSensorDecision(Decision):
                         self._actions.run(automation.config.action)
                     except ActionError as error:
                         self._logger.warning(
-                            "Filament sensor automation %s detected the end of the filament, "
-                            "but its action %s can't run: %s",
+                            "Automation %s can't run action %s: %s",
                             automation.config.index_id,
                             automation.config.action,
                             error,

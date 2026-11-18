@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import queue
 import threading
 from concurrent.futures import Future
@@ -9,7 +10,6 @@ from typing import TYPE_CHECKING, TypeVar
 from octoprint_enclosure.outputs import Output, OutputError, Switchable, ThermostatOutput
 
 if TYPE_CHECKING:
-    import logging
     from collections.abc import Callable, Iterable
     from typing import Any
 
@@ -56,6 +56,9 @@ class OutputExecutor:
     _frontend: Frontend
     _logger: logging.Logger
 
+    _on_states: dict[int, bool | None]
+    """Whether each output is on, by its id, or None if it can't be read."""
+
     _update_ui_outputs_already_requested: bool
     """Whether an outputs UI update has already been requested."""
 
@@ -82,6 +85,7 @@ class OutputExecutor:
         self._outputs = outputs
         self._frontend = frontend
         self._logger = logger.getChild("OutputExecutor")
+        self._on_states = {}
         self._update_ui_outputs_already_requested = False
         self._shutting_down = False
         self._queue = queue.Queue()
@@ -104,14 +108,31 @@ class OutputExecutor:
             except Exception:
                 self._logger.exception("Error loading the outputs")
 
+            self._on_states = {}
+            for output in self._outputs.get_all(Output):
+                try:
+                    self._on_states[output.config.index_id] = output.is_on()
+                except OutputError:
+                    continue
+
         self._submit(load_outputs, wait=wait)
 
-    def turn_on(self, index_id: int, setpoint: BaseConfig, *, wait: bool = False) -> bool | None:
+    def turn_on(
+        self,
+        index_id: int,
+        setpoint: BaseConfig,
+        *,
+        origin: str,
+        log_level: int = logging.INFO,
+        wait: bool = False,
+    ) -> bool | None:
         """Turn an output on.
 
         Args:
             index_id (int): The id of the output.
             setpoint (BaseConfig): The setpoint the output is turned on to.
+            origin (str): Who asks for it, e.g. "automation 40", "API", etc.
+            log_level (int): The level at which the change of the output is logged.
             wait (bool): Whether to wait for the write, up to the command timeout.
 
         Returns:
@@ -122,7 +143,8 @@ class OutputExecutor:
 
         def turn_on() -> bool | None:
             try:
-                self._get_switchable(index_id, setpoint).turn_on(setpoint)
+                output = self._get_switchable(index_id, setpoint)
+                output.turn_on(setpoint)
             except OutputError as error:
                 self._logger.debug("Can't turn on output %s: %s", index_id, error)
                 return None
@@ -130,16 +152,27 @@ class OutputExecutor:
                 self._logger.exception("Error turning on output %s", index_id)
                 return None
             else:
+                is_on = output.is_on()
+                self._log_state_change(index_id, origin, log_level, on=True if is_on is None else is_on)
                 self._queue_update_ui_outputs()
                 return True
 
         return self._submit(turn_on, wait=wait)
 
-    def turn_off(self, index_id: int, *, wait: bool = False) -> bool | None:
+    def turn_off(
+        self,
+        index_id: int,
+        *,
+        origin: str,
+        log_level: int = logging.INFO,
+        wait: bool = False,
+    ) -> bool | None:
         """Turn an output off.
 
         Args:
             index_id (int): The id of the output.
+            origin (str): Who asks for it, e.g. "automation 40", "API", etc.
+            log_level (int): The level at which the change of the output is logged.
             wait (bool): Whether to wait for the write, up to the command timeout.
 
         Returns:
@@ -158,17 +191,28 @@ class OutputExecutor:
                 self._logger.exception("Error turning off output %s", index_id)
                 return None
             else:
+                self._log_state_change(index_id, origin, log_level, on=False)
                 self._queue_update_ui_outputs()
                 return False
 
         return self._submit(turn_off, wait=wait)
 
-    def toggle(self, index_id: int, setpoint: BaseConfig, *, wait: bool = False) -> bool | None:
+    def toggle(
+        self,
+        index_id: int,
+        setpoint: BaseConfig,
+        *,
+        origin: str,
+        log_level: int = logging.INFO,
+        wait: bool = False,
+    ) -> bool | None:
         """Turn an output off if it is on, and on if it is off.
 
         Args:
             index_id (int): The id of the output.
             setpoint (BaseConfig): The setpoint the output is turned on to.
+            origin (str): Who asks for it, e.g. "automation 40", "API", etc.
+            log_level (int): The level at which the change of the output is logged.
             wait (bool): Whether to wait for the toggle, up to the command timeout.
 
         Returns:
@@ -198,17 +242,20 @@ class OutputExecutor:
                 self._logger.exception("Error toggling output %s", index_id)
                 return None
             else:
+                self._log_state_change(index_id, origin, log_level, on=should_be_on)
                 self._queue_update_ui_outputs()
                 return should_be_on
 
         return self._submit(toggle, wait=wait)
 
-    def switch_thermostat(self, index_id: int, *, on: bool, wait: bool = False) -> None:
+    def switch_thermostat(self, index_id: int, *, on: bool, origin: str, reason: str, wait: bool = False) -> None:
         """Turn the device of a thermostat on or off.
 
         Args:
             index_id (int): The id of the thermostat.
             on (bool): Whether to turn the device on or off.
+            origin (str): Who asks for it, e.g. "thermostat 3".
+            reason (str): Why it is asked, e.g. "reading 25.0, target 30.0", "no reading", etc.
             wait (bool): Whether to wait for the switch, up to the command timeout.
 
         """
@@ -220,17 +267,20 @@ class OutputExecutor:
                 self._logger.debug("Can't write on output %s: %s", index_id, error)
             except Exception:
                 self._logger.exception("Error writing on output %s", index_id)
+            else:
+                self._log_state_change(index_id, f"{origin}: {reason}", logging.INFO, on=on)
 
             self._queue_update_ui_outputs()
 
         self._submit(switch_thermostat, wait=wait)
 
-    def run_enc_command(self, index_id: int, gcode: str, *, wait: bool = False) -> str | None:
+    def run_enc_command(self, index_id: int, gcode: str, *, origin: str, wait: bool = False) -> str | None:
         """Apply an ENC command to an output.
 
         Args:
             index_id (int): The id of the output.
             gcode (str): The G-code line of the ENC command.
+            origin (str): Who asks for it, e.g. "ENC".
             wait (bool): Whether to wait for the reply, up to the command timeout.
 
         Returns:
@@ -253,6 +303,9 @@ class OutputExecutor:
                 return None
 
             if reply is not None:
+                is_on = self._outputs.get(index_id, Output).is_on()
+                if is_on is not None:
+                    self._log_state_change(index_id, origin, logging.INFO, on=is_on)
                 self._queue_update_ui_outputs()
 
             return reply
@@ -298,6 +351,13 @@ class OutputExecutor:
             raise OutputError(msg)
         return output
 
+    def _log_state_change(self, index_id: int, origin: str, log_level: int, *, on: bool) -> None:
+        if self._on_states.get(index_id) == on:
+            return
+
+        self._on_states[index_id] = on
+        self._logger.log(log_level, "Output %s turned %s by %s", index_id, "on" if on else "off", origin)
+
     def _queue_update_ui_outputs(self) -> None:
         def update_ui_outputs() -> None:
             self._update_ui_outputs_already_requested = False
@@ -340,9 +400,11 @@ class OutputExecutor:
                     try:
                         output.turn_off()
                     except OutputError as error:
-                        self._logger.debug("Can't turn off an output: %s", error)
+                        self._logger.debug("Can't turn off output %s: %s", output.config.index_id, error)
                     except Exception:
-                        self._logger.exception("Error turning off an output")
+                        self._logger.exception("Error turning off output %s", output.config.index_id)
+                    else:
+                        self._log_state_change(output.config.index_id, "shutdown", logging.INFO, on=False)
                 return
 
             # Discard the command if the executor is shutting down

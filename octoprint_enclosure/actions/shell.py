@@ -36,9 +36,11 @@ class ShellAction(Action[ShellConfig]):
     @override
     def run(self) -> None:
         """Start the shell script; its result is shown within a frontend notification when it ends."""
+        self._logger.info("Shell action %s started", self.config.index_id)
         threading.Thread(target=self._run_script, name="EnclosureShellAction", daemon=True).start()
 
     def _run_script(self) -> None:
+        index_id = self.config.index_id
         command = self.config.shell_script
 
         try:
@@ -58,7 +60,7 @@ class ShellAction(Action[ShellConfig]):
                         with contextlib.suppress(ProcessLookupError):
                             os.killpg(process.pid, signal.SIGKILL)
                         process.wait()
-                        self._logger.warning("Shell script %s killed after %s s", command, SHELL_TIMEOUT_SECONDS)
+                        self._logger.warning("Shell action %s killed after %s s", index_id, SHELL_TIMEOUT_SECONDS)
                         self._frontend.show_message(
                             f"Shell script killed after {SHELL_TIMEOUT_SECONDS} s, check logs",
                             "error",
@@ -69,13 +71,13 @@ class ShellAction(Action[ShellConfig]):
                     stderr = (expired.stderr or b"").decode("utf-8", errors="replace")
                 returncode = process.returncode
         except Exception:
-            self._logger.exception("Could not execute shell script: %s", command)
+            self._logger.exception("Shell action %s can't be executed", index_id)
             self._frontend.show_message("Could not execute a shell script, check logs", "error")
             return
 
         if returncode == 0:
-            self._logger.debug("Shell script executed. Output: %s", stdout)
+            self._logger.debug("Shell action %s ended. Output: %s", index_id, stdout)
             self._frontend.show_message(f"Shell script executed. Output: {stdout}", "success")
         else:
-            self._logger.warning("Shell script %s exited with code %s: %s", command, returncode, stderr)
+            self._logger.warning("Shell action %s exited with code %s: %s", index_id, returncode, stderr)
             self._frontend.show_message(f"Shell script failed with exit code {returncode}. Error: {stderr}", "error")

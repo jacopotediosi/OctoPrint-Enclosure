@@ -30,10 +30,16 @@ class Mqtt:
         """Look up the helpers of the MQTT plugin."""
         helpers = self._plugin_manager.get_helpers(PLUGIN_ID, "mqtt_publish")
 
-        if helpers and "mqtt_publish" in helpers:
-            self._mqtt_publish = helpers["mqtt_publish"]
-        else:
-            self._logger.warning("Mqtt helpers not found. Mqtt integration won't work.")
+        # The MQTT plugin is not installed or not enabled
+        if helpers is None:
+            return
+
+        # The MQTT plugin is installed but without the helpers we need
+        if "mqtt_publish" not in helpers:
+            self._logger.warning("MQTT helpers not found. MQTT integration won't work.")
+            return
+
+        self._mqtt_publish = helpers["mqtt_publish"]
 
     def publish_sensor_reading(self, sensor_label: str, temperature: float | None, humidity: float | None) -> None:
         """Publish the latest reading of a temperature sensor, with None for the values it doesn't measure."""

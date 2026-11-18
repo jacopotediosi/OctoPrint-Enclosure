@@ -29,5 +29,5 @@ class GcodeAction(Action[GcodeConfig]):
 
         """
         lines = [line.strip() for line in self.config.gcode.split("\n") if line.strip()]
-        self._logger.debug("Sending GCODE commands: %s", lines)
+        self._logger.info("Sending G-code action %s to the printer", self.config.index_id)
         self._printer.commands(lines)

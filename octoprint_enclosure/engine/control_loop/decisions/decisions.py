@@ -146,21 +146,43 @@ class Decisions:
         self._frontend = frontend
         self._settings = settings
         self._thermostats = thermostats
-        self._logger = logger
+        self._logger = logger.getChild("Decisions")
 
         self._conditions_state = ConditionsState()
 
-        self._thermostat_decision = ThermostatDecision(sensor_poller, output_executor, printer, thermostats, logger)
-        output_control = OutputControl(outputs, output_executor, thermostats, self._thermostat_decision, logger)
-        self._pwm_curve_decision = PwmCurveDecision(automations, output_executor, logger)
-        self._toggle_timer_decision = ToggleTimerDecision(automations, scheduler, output_control, put, logger)
+        self._thermostat_decision = ThermostatDecision(
+            sensor_poller,
+            output_executor,
+            printer,
+            thermostats,
+            self._get_child_logger(ThermostatDecision),
+        )
+        output_control = OutputControl(
+            outputs,
+            output_executor,
+            thermostats,
+            self._thermostat_decision,
+            self._get_child_logger(OutputControl),
+        )
+        self._pwm_curve_decision = PwmCurveDecision(
+            automations,
+            output_executor,
+            self._get_child_logger(PwmCurveDecision),
+        )
+        self._toggle_timer_decision = ToggleTimerDecision(
+            automations,
+            scheduler,
+            output_control,
+            put,
+            self._get_child_logger(ToggleTimerDecision),
+        )
         self._filament_sensor_decision = FilamentSensorDecision(
             gpio_inputs,
             actions,
             automations,
             notifications,
             printer,
-            logger,
+            self._get_child_logger(FilamentSensorDecision),
         )
         self._automation_rule_decision = AutomationRuleDecision(
             sensors,
@@ -172,7 +194,7 @@ class Decisions:
             settings,
             output_control,
             put,
-            logger,
+            self._get_child_logger(AutomationRuleDecision),
         )
         self._decisions = (
             self._thermostat_decision,
@@ -262,6 +284,11 @@ class Decisions:
 
         # Decide again if the state changed
         if self._conditions_state != previous_state:
+            self._logger.info(
+                "Print job %s (%s)",
+                "started" if self._conditions_state.print_job_running else "ended",
+                event.name,
+            )
             self._decide()
 
         # React to the event
@@ -281,7 +308,7 @@ class Decisions:
 
     def _handle_set_thermostat_target(self, message: SetThermostatTarget) -> None:
         try:
-            self._thermostat_decision.set_target(message.index_id, message.target)
+            self._thermostat_decision.set_target(message.index_id, message.target, message.origin)
         finally:
             if message.done is not None:
                 self._output_executor.run_after_commands(message.done.set)
@@ -296,6 +323,7 @@ class Decisions:
             self._logger.debug("Can't enable or disable automation %s: %s", message.index_id, error)
         else:
             automation.enabled = message.enabled
+            self._logger.info("Automation %s %s", message.index_id, "enabled" if message.enabled else "disabled")
             self._frontend.update_automations()
         finally:
             if message.done is not None:
@@ -328,3 +356,6 @@ class Decisions:
                 decision.react(event, self._conditions_state)
             except Exception:
                 self._logger.exception("Error in %s while reacting to %s", type(decision).__name__, event)
+
+    def _get_child_logger(self, child_class: type) -> logging.Logger:
+        return self._logger.getChild(child_class.__name__)

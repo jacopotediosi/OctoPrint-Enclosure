@@ -184,17 +184,18 @@ class ControlLoop:
         """Take the decisions again after new settings were loaded."""
         self._put(SettingsLoaded())
 
-    def set_thermostat_target(self, index_id: int, target: float | None, *, wait: bool = False) -> None:
+    def set_thermostat_target(self, index_id: int, target: float | None, *, origin: str, wait: bool = False) -> None:
         """Set the target of a thermostat, and take the decisions regarding it.
 
         Args:
             index_id (int): The id of the thermostat.
             target (float | None): The target temperature or humidity, or None to turn the thermostat off.
+            origin (str): Who asks for it, e.g. "API", "ENC", etc.
             wait (bool): Whether to wait until the target is applied and the device of the thermostat is switched.
 
         """
         done = threading.Event() if wait else None
-        self._put(SetThermostatTarget(index_id, target, done))
+        self._put(SetThermostatTarget(index_id, target, origin, done))
         if done is not None and not done.wait(WAIT_TIMEOUT_SECONDS):
             self._logger.warning("Target of thermostat %s not applied after %s s", index_id, WAIT_TIMEOUT_SECONDS)
 
@@ -218,6 +219,7 @@ class ControlLoop:
             return
 
         self._printer.pause_print()
+        self._logger.info("Paused the print: waiting for thermostat %s to reach its target", index_id)
         self._put(WaitForThermostatTarget(index_id))
 
     def set_automation_enabled(self, index_id: int, *, enabled: bool, wait: bool = False) -> None:

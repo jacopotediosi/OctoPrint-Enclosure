@@ -32,6 +32,8 @@ if TYPE_CHECKING:
     from octoprint.plugin.core import PluginManager
     from octoprint.printer import PrinterInterface
 
+    from .hardware import GpioBackend, I2cBackend
+
 
 class EnclosurePlugin(
     octoprint.plugin.AssetPlugin,
@@ -52,6 +54,29 @@ class EnclosurePlugin(
     _settings: PluginSettings
     _plugin_manager: PluginManager
     _printer: PrinterInterface
+
+    # Set by initialize()
+    _enclosure_settings: Settings
+    _development_mode: bool
+    _plugin_context: PluginContext
+    _gpio_import_error: Exception | None
+    _gpio: GpioBackend
+    _i2c: I2cBackend
+    _sensors: Sensors
+    _sensor_poller: SensorPoller
+    _gpio_inputs: GpioInputs
+    _outputs: Outputs
+    _actions: Actions
+    _automations: Automations
+    _api: Api
+    _frontend: Frontend
+    _control_loop: ControlLoop
+    _scheduler: Scheduler
+    _output_executor: OutputExecutor
+    _enc_handler: EncHandler
+    _encdev_handler: EncDevHandler
+    _notifications: Notifications
+    _mqtt: Mqtt
 
     ##########
     ### Initialization
@@ -84,6 +109,7 @@ class EnclosurePlugin(
 
         # Init hardware
         self._development_mode = self._enclosure_settings.development_mode
+        self._gpio_import_error = gpio.get_import_error()
         if self._development_mode:
             self._gpio = dummy_gpio
             self._i2c = dummy_i2c
@@ -91,6 +117,8 @@ class EnclosurePlugin(
         else:
             self._gpio = gpio
             self._i2c = smbus2
+            if self._gpio_import_error is not None:
+                self._logger.error("The GPIO library can't be imported: %s", self._gpio_import_error)
 
         # Init inputs, outputs, automations, frontend and actions
         self._sensors = Sensors(self._gpio, self._logger, dummy=self._development_mode)
@@ -319,7 +347,7 @@ class EnclosurePlugin(
 
     @override
     def get_template_vars(self) -> dict:
-        gpio_import_error = gpio.get_import_error()
+        gpio_import_error = self._gpio_import_error
         return {
             "development_mode": self._development_mode,
             "gpio_import_error": str(gpio_import_error) if gpio_import_error is not None else None,
@@ -454,11 +482,14 @@ class EnclosurePlugin(
 
         # Load the inputs, the outputs, the actions and the automations
         inputs_settings = self._enclosure_settings.rpi_inputs
+        outputs_settings = self._enclosure_settings.rpi_outputs
+        actions_settings = self._enclosure_settings.actions
+        automations_settings = self._enclosure_settings.automations
         self._sensor_poller.load(inputs_settings)
         self._gpio_inputs.load(inputs_settings)
-        self._output_executor.load_outputs(self._enclosure_settings.rpi_outputs, wait=True)
-        self._actions.load(self._enclosure_settings.actions)
-        self._automations.load(self._enclosure_settings.automations)
+        self._output_executor.load_outputs(outputs_settings, wait=True)
+        self._actions.load(actions_settings)
+        self._automations.load(automations_settings)
 
         # Check the links of the automations to the other entries
         self._automations.check_links(self._sensors, self._gpio_inputs, self._outputs, self._actions)
@@ -469,3 +500,11 @@ class EnclosurePlugin(
             self._control_loop.evaluate_gpio_input_edge,
         )
         self._sensors.setup_pins()
+
+        self._logger.info(
+            "Settings applied: %s inputs, %s outputs, %s actions, %s automations",
+            len(inputs_settings),
+            len(outputs_settings),
+            len(actions_settings),
+            len(automations_settings),
+        )

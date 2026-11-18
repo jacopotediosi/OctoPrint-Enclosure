@@ -153,7 +153,11 @@ class PinSensor(Sensor[_PinConfigT]):
 
         pull_resistors = {PullResistor.UP: self._gpio.PUD_UP, PullResistor.DOWN: self._gpio.PUD_DOWN}
         pull_resistor = pull_resistors[config.input_pull_resistor]
-        self._logger.debug("Setting GPIO pin %s as INPUT with pull resistor: %s", config.gpio_pin, pull_resistor)
+        self._logger.debug(
+            "Setting GPIO pin %s as INPUT with pull resistor: %s",
+            config.gpio_pin,
+            config.input_pull_resistor.name,
+        )
         self._gpio.setup(config.gpio_pin, self._gpio.IN, pull_up_down=pull_resistor)
 
 

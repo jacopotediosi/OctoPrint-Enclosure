@@ -124,6 +124,8 @@ class Outputs:
                 self._logger.debug("Can't turn off output %s: %s", index_id, error)
             except Exception:
                 self._logger.exception("Error turning off output %s", index_id)
+            else:
+                self._logger.info("Output %s turned off by settings change", index_id)
 
             self._release_hardware(index_id, output, pins_in_use)
 

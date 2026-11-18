@@ -47,10 +47,14 @@ class EncHandler:
             cmd (str): The G-code line.
 
         """
-        if not self._settings.gcode_control or not cmd.strip().startswith("ENC"):
+        if not cmd.strip().startswith("ENC"):
             return
 
-        self._logger.debug("Received ENC command: %s", cmd)
+        if not self._settings.gcode_control:
+            self._logger.warning("Can't run ENC command %s: the gcode control is not enabled", cmd)
+            return
+
+        self._logger.info("Received ENC command: %s", cmd)
         try:
             index_id = int(get_gcode_param(cmd, "O"))
         except ValueError as error:
@@ -76,13 +80,13 @@ class EncHandler:
             if target is not None and output.config.temp_ctr_type.measurement_type is MeasurementType.TEMPERATURE:
                 target = self._settings.temperature_unit.to_celsius(target)
 
-            self._control_loop.set_thermostat_target(index_id, target)
+            self._control_loop.set_thermostat_target(index_id, target, origin="ENC")
             if wait:
                 self._control_loop.pause_print_until_thermostat_target(index_id)
 
             self._printer.log_lines(f"Setting thermostat output {index_id} to value {value}")
         else:
-            reply = self._output_executor.run_enc_command(index_id, cmd, wait=True)
+            reply = self._output_executor.run_enc_command(index_id, cmd, origin="ENC", wait=True)
 
             if reply is not None:
                 self._printer.log_lines(reply)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from functools import partial
 from typing import TYPE_CHECKING
 
@@ -11,7 +12,6 @@ from octoprint_enclosure.engine.control_loop.messages import SwitchToggleTimerOu
 from .base import Decision
 
 if TYPE_CHECKING:
-    import logging
     from collections.abc import Callable, Mapping
 
     from octoprint_enclosure.automations import AutomationEvent, Automations, ConditionsState
@@ -98,8 +98,8 @@ class ToggleTimerDecision(Decision):
             return
 
         if not automation.enabled:
-            self._logger.debug("Automation %s is disabled", index_id)
             automation.stop()
+            self._logger.info("Automation %s stopped controlling output %s", index_id, automation.config.output)
         elif not automation.conditions_satisfied(conditions_state):
             self._stop_and_turn_off(automation)
         else:
@@ -110,11 +110,14 @@ class ToggleTimerDecision(Decision):
         index_id = config.index_id
         state = OutputSetState.ON if turn_on else OutputSetState.OFF
 
-        if not self._output_control.control(config.output, state, config):
-            self._logger.debug("Can't toggle output %s of automation %s: it isn't set up", config.output, index_id)
+        origin = f"automation {index_id}"
+        if not self._output_control.control(config.output, state, config, origin, log_level=logging.DEBUG):
+            self._logger.debug("Automation %s can't control output %s", index_id, config.output)
             automation.stop()
             return
 
+        if not automation.is_running:
+            self._logger.info("Automation %s started controlling output %s", index_id, config.output)
         automation.start()
         self._scheduler.schedule(
             f"automation:{index_id}:toggle",
@@ -124,6 +127,17 @@ class ToggleTimerDecision(Decision):
 
     def _stop_and_turn_off(self, automation: ToggleTimerAutomation) -> None:
         index_id = automation.config.index_id
+        output_id = automation.config.output
+
+        if automation.is_running:
+            self._logger.info("Automation %s stopped controlling output %s: turning it off", index_id, output_id)
+
         self._scheduler.cancel(f"automation:{index_id}:toggle")
-        self._output_control.control(automation.config.output, OutputSetState.OFF, automation.config)
+        self._output_control.control(
+            output_id,
+            OutputSetState.OFF,
+            automation.config,
+            f"automation {index_id}",
+            log_level=logging.DEBUG,
+        )
         automation.stop()

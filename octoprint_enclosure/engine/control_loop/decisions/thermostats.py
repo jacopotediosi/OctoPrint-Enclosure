@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from octoprint.events import Events
@@ -7,11 +8,11 @@ from typing_extensions import override
 
 from octoprint_enclosure.automations import OctoprintEvent, ReadingEvent
 from octoprint_enclosure.outputs import ThermostatStatus
+from octoprint_enclosure.utils import MeasurementType
 
 from .base import Decision
 
 if TYPE_CHECKING:
-    import logging
     from collections.abc import Mapping
 
     from octoprint.printer import PrinterInterface
@@ -64,12 +65,21 @@ class ThermostatDecision(Decision):
 
         self._awaited_thermostat_ids = set()
 
-    def set_target(self, index_id: int, target: float | None) -> None:
+    def set_target(
+        self,
+        index_id: int,
+        target: float | None,
+        origin: str,
+        *,
+        log_level: int = logging.INFO,
+    ) -> None:
         """Set the target of a thermostat, and decide again whether its device has to be on.
 
         Args:
             index_id (int): The id of the output of the thermostat.
             target (float | None): The target temperature or humidity, or None to turn the thermostat off.
+            origin (str): Who asks for it, e.g. "API", "automation 40", etc.
+            log_level (int): The level at which the change of the target is logged.
 
         """
         thermostat = self._thermostats.get(index_id)
@@ -77,8 +87,13 @@ class ThermostatDecision(Decision):
             self._logger.debug("Can't set the target of output %s: it isn't a thermostat", index_id)
             return
 
+        if target is None and thermostat.target is not None:
+            self._logger.log(log_level, "Thermostat %s turned off by %s", index_id, origin)
+        elif target is not None and target != thermostat.target:
+            self._logger.log(log_level, "Thermostat %s target set to %s by %s", index_id, target, origin)
+
         thermostat.set_target(target)
-        self.regulate()
+        self._regulate(self._sensor_poller.get_readings(), None)
 
     def wait_for_target(self, index_id: int) -> None:
         """Make the paused print wait until a thermostat reaches its target.
@@ -88,10 +103,6 @@ class ThermostatDecision(Decision):
 
         """
         self._awaited_thermostat_ids.add(index_id)
-        self.regulate()
-
-    def regulate(self) -> None:
-        """Decide again, from the last readings, whether the device of each thermostat has to be on."""
         self._regulate(self._sensor_poller.get_readings(), None)
 
     @override
@@ -131,9 +142,26 @@ class ThermostatDecision(Decision):
                 self._logger.warning("Thermostat %s reached its maximum temperature: turning it off", index_id)
                 thermostat.turn_off()
 
-            # Decide whether the device has to be on, and switch it
+            # Decide whether the device has to be on
             should_be_on = thermostat.decide(temperature, humidity)
-            self._output_executor.switch_thermostat(index_id, on=should_be_on)
+
+            # Say why the device has to be on or off
+            device_type = thermostat.config.temp_ctr_type
+            read_value = humidity if device_type.measurement_type is MeasurementType.HUMIDITY else temperature
+            if thermostat.target is None:
+                reason = "no target"
+            elif thermostat.status is ThermostatStatus.NO_READING:
+                reason = "no reading"
+            else:
+                reason = f"reading {read_value}, target {thermostat.target}"
+
+            # Switch the device
+            self._output_executor.switch_thermostat(
+                index_id,
+                on=should_be_on,
+                origin=f"thermostat {index_id}",
+                reason=reason,
+            )
 
         # Resume the print paused by ENC W1 once every thermostat it waits for is at its target
         self._resume_print_if_targets_reached()
@@ -155,3 +183,4 @@ class ThermostatDecision(Decision):
         if self._printer.is_paused():
             self._awaited_thermostat_ids.clear()
             self._printer.resume_print()
+            self._logger.info("Resumed the print: the thermostats it waited for reached their targets")

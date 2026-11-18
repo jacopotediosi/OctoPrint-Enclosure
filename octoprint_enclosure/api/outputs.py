@@ -240,17 +240,17 @@ class OutputsApi(BaseApi):
         is_thermostat = isinstance(output, ThermostatOutput)
         if body.on is False or (is_thermostat and body.target is None):
             if is_thermostat:
-                self._control_loop.set_thermostat_target(output_id, None, wait=True)
+                self._control_loop.set_thermostat_target(output_id, None, origin="API", wait=True)
             else:
-                self._output_executor.turn_off(output_id, wait=True)
+                self._output_executor.turn_off(output_id, origin="API", wait=True)
         elif is_thermostat and body.target is not None and body.target is not UNSET:
-            self._control_loop.set_thermostat_target(output_id, body.target, wait=True)
+            self._control_loop.set_thermostat_target(output_id, body.target, origin="API", wait=True)
         elif isinstance(output, RegularOutput) and body.on is True:
-            self._output_executor.turn_on(output_id, RegularSetpoint(), wait=True)
+            self._output_executor.turn_on(output_id, RegularSetpoint(), origin="API", wait=True)
         elif isinstance(output, PwmOutput) and body.duty_cycle is not UNSET:
-            self._output_executor.turn_on(output_id, PwmSetpoint(body.duty_cycle), wait=True)
+            self._output_executor.turn_on(output_id, PwmSetpoint(body.duty_cycle), origin="API", wait=True)
         elif isinstance(output, ColorOutput) and body.color is not UNSET:
-            self._output_executor.turn_on(output_id, ColorSetpoint(body.color), wait=True)
+            self._output_executor.turn_on(output_id, ColorSetpoint(body.color), origin="API", wait=True)
         else:
             attribute = next(field.name for field in fields(body) if getattr(body, field.name) is not UNSET)
             problem = "can only be false" if attribute == "on" else "is not valid"

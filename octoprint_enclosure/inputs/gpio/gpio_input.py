@@ -78,7 +78,11 @@ class GpioInput:
             PullResistor.OFF: self._gpio.PUD_OFF,
         }
         pull_resistor = pull_resistors[config.input_pull_resistor]
-        self._logger.debug("Setting GPIO pin %s as INPUT with pull resistor: %s", config.gpio_pin, pull_resistor)
+        self._logger.debug(
+            "Setting GPIO pin %s as INPUT with pull resistor: %s",
+            config.gpio_pin,
+            config.input_pull_resistor.name,
+        )
         self._gpio.setup(config.gpio_pin, self._gpio.IN, pull_resistor)
 
     def read_pin_level(self) -> int | None:
