@@ -32,6 +32,11 @@ GAS_OHM_UPPER_LIMIT = 50000
 class Bme680Config(SensorInputConfig):
     """The configuration of a BME680 sensor."""
 
+    type_help = (
+        "The sensor connects to the I2C bus: SDA to GPIO 2 (SDA), SCL to GPIO 3 (SCL). I2C needs to be enabled: run "
+        "<code>sudo raspi-config</code> and enable I2C in the interface options."
+    )
+
 
 class Bme680Sensor(Sensor[Bme680Config]):
     """A BME680 temperature, humidity and air quality sensor."""

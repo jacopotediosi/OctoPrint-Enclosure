@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import BaseConfig, setting
+from octoprint_enclosure.utils import LabeledValue
 
 from .base import Condition
 
@@ -17,7 +18,18 @@ if TYPE_CHECKING:
 class PrintJobConditionConfig(BaseConfig):
     """The configuration of an automation condition on the print job."""
 
-    printing: bool = REQUIRED
+    type_help = (
+        '<span class="label label-info">Info:</span> The automation acts only while a print job is running, or only '
+        "while none is."
+    )
+
+    printing: bool = setting(
+        label="Print Job",
+        choices=[
+            LabeledValue(value=True, label="Only while printing"),
+            LabeledValue(value=False, label="Only while not printing"),
+        ],
+    )
     """Whether a print job must be running (True) or must not (False)."""
 
 

@@ -16,17 +16,6 @@ TEMPERATURE_UNUSED_BITS = 4
 class Tmp102Config(I2cSensorConfig):
     """The configuration of a TMP102 sensor."""
 
-    def __post_init__(self) -> None:
-        """Check the address.
-
-        Raises:
-            ValueError: If the address is not one a TMP102 can have.
-
-        """
-        if not 0x48 <= self.temp_sensor_address <= 0x4B:
-            msg = f"The TMP102 address must be between 0x48 and 0x4B, not {self.temp_sensor_address:#x}"
-            raise ValueError(msg)
-
 
 class Tmp102Sensor(Sensor[Tmp102Config]):
     """A TMP102 temperature sensor."""

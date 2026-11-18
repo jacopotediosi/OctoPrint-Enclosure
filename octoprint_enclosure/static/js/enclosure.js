@@ -613,6 +613,11 @@ $(function () {
       {value: false, label: "Not printing"}
     ];
 
+    self.connectionOptions = [
+      {value: false, label: "GPIO pin"},
+      {value: true, label: "I2C"}
+    ];
+
     self.newCondition = function () {
       return {
         condition_type: ko.observable(""),

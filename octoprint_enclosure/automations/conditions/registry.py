@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .print_job import PrintJobCondition
@@ -7,8 +8,20 @@ from .print_job import PrintJobCondition
 if TYPE_CHECKING:
     from .base import Condition
 
-CONDITIONS: dict[str, type[Condition]] = {
-    "print_job": PrintJobCondition,
+
+@dataclass(frozen=True)
+class ConditionDefinition:
+    """Describes a type of automation condition."""
+
+    label: str
+    """The name of the type of condition."""
+
+    implementation: type[Condition]
+    """The class implementing the condition."""
+
+
+CONDITIONS: dict[str, ConditionDefinition] = {
+    "print_job": ConditionDefinition(label="Print Job", implementation=PrintJobCondition),
 }
 """The supported types of automation conditions, by identifier."""
 
@@ -34,9 +47,9 @@ def conditions_from_settings(automation_settings: dict) -> list[Condition]:
     conditions = []
     for condition_settings in conditions_settings:
         condition_type = condition_settings.get("condition_type", "")
-        condition_class = CONDITIONS.get(condition_type)
-        if condition_class is None:
+        condition_definition = CONDITIONS.get(condition_type)
+        if condition_definition is None:
             msg = f"Unsupported condition type: {condition_type!r}"
             raise ValueError(msg)
-        conditions.append(condition_class.from_settings(condition_settings))
+        conditions.append(condition_definition.implementation.from_settings(condition_settings))
     return conditions

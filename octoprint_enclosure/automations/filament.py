@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import REQUIRED, ActionId
+from octoprint_enclosure.settings import ActionId, setting
 
 from .base import Automation, AutomationConfig
 from .events import GpioEdgeEvent
@@ -27,7 +27,16 @@ MIN_PRESENCE_SECONDS = 90
 class FilamentConfig(AutomationConfig):
     """The configuration of an automation that runs an action when a sensor detects the end of the filament."""
 
-    action: ActionId = REQUIRED
+    type_help = (
+        '<span class="label label-info">Info:</span> Runs the selected action when the sensor detects the end of the '
+        "filament during a print, for example a G-code action that changes the filament or a printer action that "
+        "pauses the print."
+    )
+
+    action: ActionId = setting(
+        label="Action",
+        help_text=("Action to run when the sensor detects the end of the filament. Configured in the Actions tab."),
+    )
     """The id of the action run when the filament ends."""
 
 

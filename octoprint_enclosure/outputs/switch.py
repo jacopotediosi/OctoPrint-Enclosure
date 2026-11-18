@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.settings import REQUIRED
+from octoprint_enclosure.settings import setting
+from octoprint_enclosure.utils import LabeledValue
 
 from .config import OutputConfig
 
@@ -17,32 +18,85 @@ if TYPE_CHECKING:
 class SwitchConfig(OutputConfig):
     """The configuration of an output with a switch, on a GPIO pin or driven by a device on the I2C bus."""
 
-    active_low: bool = REQUIRED
-    """Whether the output switch is on when it is low."""
-
-    gpio_i2c_enabled: bool = REQUIRED
+    gpio_i2c_enabled: bool = setting(
+        label="Connection",
+        choices=[LabeledValue(value=False, label="GPIO pin"), LabeledValue(value=True, label="I2C")],
+    )
     """Whether the output switch is driven by a device on the I2C bus, instead of a GPIO pin."""
 
-    gpio_pin: int = REQUIRED
+    gpio_pin: int = setting(
+        label="GPIO",
+        help_text="GPIO the output is connected to.",
+        min_value=0,
+        visible_if={"gpio_i2c_enabled": [False]},
+    )
     """The GPIO pin of the output switch, when it isn't driven through I2C."""
 
-    gpio_i2c_bus: int = REQUIRED
+    gpio_i2c_bus: int = setting(
+        label="I2C Bus",
+        help_text=(
+            "1 is the bus of GPIO 2 and 3. For a device on another bus, for example one made on other pins with "
+            "<code>dtoverlay=i2c-gpio</code>, use its number: <code>i2cdetect -l</code> lists the buses. I2C needs to "
+            "be enabled: run <code>sudo raspi-config</code> and enable I2C in the interface options."
+        ),
+        min_value=0,
+        visible_if={"gpio_i2c_enabled": [True]},
+    )
     """The number of the I2C bus."""
 
-    gpio_i2c_address: int = REQUIRED
+    gpio_i2c_address: int = setting(
+        label="I2C Address",
+        help_text=(
+            "Address of the device, in hexadecimal. Find it by running <code>i2cdetect -y 1</code> (from the "
+            "<code>i2c-tools</code> package) on your Raspberry Pi."
+        ),
+        min_value=0,
+        max_value=127,
+        visible_if={"gpio_i2c_enabled": [True]},
+    )
     """The I2C address of the device."""
 
-    gpio_i2c_register: int = REQUIRED
+    gpio_i2c_register: int = setting(
+        label="I2C Register",
+        help_text="Register to write, in hexadecimal.",
+        min_value=0,
+        max_value=255,
+        visible_if={"gpio_i2c_enabled": [True]},
+    )
     """The I2C register written to set the output switch high or low."""
 
-    gpio_i2c_register_status: int = REQUIRED
-    """The I2C register read to know whether the output switch is high."""
-
-    gpio_i2c_data_on: int = REQUIRED
+    gpio_i2c_data_on: int = setting(
+        label="I2C ON data",
+        help_text="Value written to turn the output on, in hexadecimal.",
+        min_value=0,
+        max_value=255,
+        visible_if={"gpio_i2c_enabled": [True]},
+    )
     """The value of the I2C registers when the output switch is high."""
 
-    gpio_i2c_data_off: int = REQUIRED
+    gpio_i2c_data_off: int = setting(
+        label="I2C OFF data",
+        help_text="Value written to turn the output off, in hexadecimal.",
+        min_value=0,
+        max_value=255,
+        visible_if={"gpio_i2c_enabled": [True]},
+    )
     """The value written via I2C to set the output switch low."""
+
+    gpio_i2c_register_status: int = setting(
+        label="I2C Register (read status)",
+        help_text="Register read to know the state of the output, in hexadecimal.",
+        min_value=0,
+        max_value=255,
+        visible_if={"gpio_i2c_enabled": [True]},
+    )
+    """The I2C register read to know whether the output switch is high."""
+
+    active_low: bool = setting(
+        label="Active Low",
+        help_text="Enable it if your device turns on when the pin is connected to ground, as most relay modules do.",
+    )
+    """Whether the output switch is on when it is low."""
 
 
 class Switch:

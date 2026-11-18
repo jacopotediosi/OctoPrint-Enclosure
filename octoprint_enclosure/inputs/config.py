@@ -1,35 +1,35 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
 
-from octoprint_enclosure.settings import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import BaseConfig, setting
+from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 
-class PullResistor(Enum):
+class PullResistor(LabeledEnum):
     """The internal resistor that pulls a GPIO pin up or down."""
 
-    UP = "input_pull_up"
-    DOWN = "input_pull_down"
-    OFF = ""
+    UP = LabeledValue(value="input_pull_up", label="Input Pullup")
+    DOWN = LabeledValue(value="input_pull_down", label="Input Pulldown")
+    OFF = LabeledValue(value="", label="None")
 
 
-class InputType(Enum):
+class InputType(LabeledEnum):
     """The type of an input."""
 
-    GPIO = "gpio"
-    TEMPERATURE_SENSOR = "temperature_sensor"
+    GPIO = LabeledValue(value="gpio", label="GPIO Input / Filament Sensor")
+    TEMPERATURE_SENSOR = LabeledValue(value="temperature_sensor", label="Temperature Sensor")
 
 
 @dataclass(frozen=True)
 class InputConfig(BaseConfig):
     """The configuration shared by all the inputs."""
 
-    index_id: int = REQUIRED
+    index_id: int = setting(label="Id")
     """The id of the input."""
 
-    input_type: InputType = REQUIRED
-    """The type of the input."""
-
-    label: str = field(default="", compare=False)
+    label: str = setting(default="", label="Label", compare=False)
     """The name of the input."""
+
+    input_type: InputType = setting(label="Input Type")
+    """The type of the input."""

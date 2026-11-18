@@ -94,7 +94,7 @@ ignore = [
 allow-star-arg-any = true
 
 [tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["octoprint_enclosure.utils.Rgb"]
+extend-immutable-calls = ["octoprint_enclosure.settings.setting", "octoprint_enclosure.utils.Rgb"]
 
 [tool.ruff.lint.flake8-type-checking]
 runtime-evaluated-base-classes = ["octoprint_enclosure.settings.BaseConfig"]

@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from typing_extensions import override
 
+from octoprint_enclosure.settings import setting
+
 from .base import Action, ActionConfig
 
 
@@ -11,7 +13,7 @@ from .base import Action, ActionConfig
 class GcodeConfig(ActionConfig):
     """The configuration of an action that sends G-code to the printer."""
 
-    gcode: str = ""
+    gcode: str = setting(default="", label="Gcode", widget="textarea")
     """The G-code to send."""
 
 

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from octoprint_enclosure.automations.events import ReadingEvent
-from octoprint_enclosure.settings import REQUIRED, BaseConfig, SensorInputId
+from octoprint_enclosure.settings import BaseConfig, SensorInputId, setting
 
 from .base import Trigger
 
@@ -18,13 +18,26 @@ if TYPE_CHECKING:
 class TemperatureTriggerConfig(BaseConfig):
     """The configuration of an automation trigger on the temperature read by a sensor."""
 
-    linked_temp_sensor: SensorInputId = REQUIRED
+    linked_temp_sensor: SensorInputId = setting(
+        label="Temperature Sensor",
+        help_text="Sensor that reads the temperature. Configured in the Inputs tab.",
+    )
     """The id of the input of the linked sensor."""
 
-    alarm_set_temp: float = REQUIRED
+    alarm_set_temp: float = setting(
+        label="Set Temperature",
+        help_text="Temperature above which the automation runs.",
+        widget="temperature",
+    )
     """The temperature above which the automation starts."""
 
-    repeat_while_above: bool = REQUIRED
+    repeat_while_above: bool = setting(
+        label="Repeat while above",
+        help_text=(
+            "Run the automation at every reading above the set temperature, instead of only when the temperature goes "
+            "above it the first time."
+        ),
+    )
     """Whether the automation starts at every temperature reading above the threshold, instead of only when the
     temperature goes above it the first time."""
 

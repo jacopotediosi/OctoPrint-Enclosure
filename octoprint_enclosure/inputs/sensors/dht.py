@@ -18,6 +18,11 @@ WORKER_TIMEOUT_SECONDS = 30
 class DhtConfig(PinSensorConfig):
     """The configuration of a DHT sensor."""
 
+    type_help = (
+        '<span class="label label-important">Attention</span> These sensors need the <code>libgpiod2</code> system '
+        "package. Install it with the command: <code>sudo apt install libgpiod2</code>."
+    )
+
 
 class _DhtSensor(PinSensor[DhtConfig]):
     """A DHT temperature and humidity sensor."""

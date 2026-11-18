@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from octoprint_enclosure.settings import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import BaseConfig, setting
 
 if TYPE_CHECKING:
     import logging
@@ -22,14 +22,20 @@ class ActionError(Exception):
 class ActionConfig(BaseConfig):
     """The configuration shared by all the actions."""
 
-    index_id: int = REQUIRED
+    index_id: int = setting(label="Id")
     """The id of the action."""
 
-    action_type: str = ""
+    label: str = setting(default="", label="Label", compare=False)
+    """The label of the action."""
+
+    action_type: str = setting(default="", label="Action Type")
     """The type of the action."""
 
-    label: str = field(default="", compare=False)
-    """The label of the action."""
+    hide_btn_ui: bool = setting(default=False, label="Hide in tab", compare=False)
+    """Whether the button of the action is hidden in the Enclosure tab."""
+
+    show_on_navbar: bool = setting(default=False, label="Show in navbar", compare=False)
+    """Whether the action has a button in the navbar."""
 
 
 _ConfigT = TypeVar("_ConfigT", bound=ActionConfig)

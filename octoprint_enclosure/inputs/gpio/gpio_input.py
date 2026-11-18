@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from octoprint_enclosure.inputs.config import InputConfig, PullResistor
-from octoprint_enclosure.settings import REQUIRED
+from octoprint_enclosure.settings import setting
 
 if TYPE_CHECKING:
     import logging
@@ -21,10 +21,17 @@ class GpioInputError(Exception):
 class GpioConfig(InputConfig):
     """The configuration of a GPIO input."""
 
-    gpio_pin: int = REQUIRED
+    gpio_pin: int = setting(label="GPIO", min_value=0)
     """The GPIO pin of the input."""
 
-    input_pull_resistor: PullResistor = REQUIRED
+    input_pull_resistor: PullResistor = setting(
+        label="Input Pull Resistor",
+        help_text=(
+            "Choose Input Pullup if your button or sensor connects the pin to ground, or Input Pulldown if it connects "
+            "it to 3.3V."
+        ),
+        choices=[PullResistor.UP, PullResistor.DOWN],
+    )
     """The pull resistor of the pin."""
 
 

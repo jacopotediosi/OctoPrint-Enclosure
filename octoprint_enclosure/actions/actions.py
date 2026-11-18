@@ -88,14 +88,14 @@ class Actions:
                 self._logger.warning("Invalid settings for an action: %s", error)
                 continue
 
-            action_class = ACTIONS.get(action_config.action_type)
-            if action_class is None:
+            action_definition = ACTIONS.get(action_config.action_type)
+            if action_definition is None:
                 action: Action = self._create_invalid_action(
                     action_config,
                     f"Unsupported action type: {action_config.action_type!r}",
                 )
             else:
-                action = self._create_action(action_class, action_config, action_settings)
+                action = self._create_action(action_definition.implementation, action_config, action_settings)
 
             actions[action_config.index_id] = action
 

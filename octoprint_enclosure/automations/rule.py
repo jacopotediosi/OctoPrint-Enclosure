@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
+from octoprint_enclosure.settings import setting
 from octoprint_enclosure.utils import parse_hhmm, seconds_until_next
 
 from .base import Automation, AutomationConfig
@@ -29,13 +30,29 @@ if TYPE_CHECKING:
 class RuleConfig(AutomationConfig):
     """The configuration of an automation rule."""
 
-    trigger_type: str = ""
+    type_help = (
+        '<span class="label label-info">Info:</span> Does something when its trigger happens, for example controls an '
+        "output when a button connected to a GPIO input is pressed, or when the temperature goes above a threshold."
+    )
+
+    trigger_type: str = setting(default="", label="Trigger")
     """The type of the trigger of the rule."""
 
-    delay: float = 0
+    delay: float = setting(
+        default=0,
+        label="Delay",
+        help_text="Seconds to wait after the trigger before running the reactions.",
+        unit="s",
+        widget="rule_timing",
+    )
     """The seconds to wait after the trigger before running the reactions."""
 
-    at: str = ""
+    at: str = setting(
+        default="",
+        label="At",
+        help_text="Time of day, as <code>HH:MM</code>: the reactions run the next time it comes after the trigger.",
+        widget="rule_timing",
+    )
     """The time of day, as HH:MM, at which to run the reactions."""
 
     def __post_init__(self) -> None:
@@ -140,8 +157,8 @@ class RuleAutomation(Automation[RuleConfig]):
     def from_settings(cls, settings: dict, logger: logging.Logger) -> Self:
         config = RuleConfig.from_settings(settings)
 
-        trigger_class = TRIGGERS.get(config.trigger_type)
-        if trigger_class is None:
+        trigger_definition = TRIGGERS.get(config.trigger_type)
+        if trigger_definition is None:
             msg = f"Unsupported trigger type: {config.trigger_type!r}"
             raise ValueError(msg)
 
@@ -157,10 +174,11 @@ class RuleAutomation(Automation[RuleConfig]):
         reactions = []
         for reaction_settings in reactions_settings:
             reaction_type = reaction_settings.get("reaction_type", "")
-            reaction_class = REACTIONS.get(reaction_type)
-            if reaction_class is None:
+            reaction_definition = REACTIONS.get(reaction_type)
+            if reaction_definition is None:
                 msg = f"Unsupported reaction type: {reaction_type!r}"
                 raise ValueError(msg)
-            reactions.append(reaction_class.from_settings(reaction_settings))
+            reactions.append(reaction_definition.implementation.from_settings(reaction_settings))
 
-        return cls(config, trigger_class.from_settings(settings), conditions_from_settings(settings), reactions, logger)
+        trigger = trigger_definition.implementation.from_settings(settings)
+        return cls(config, trigger, conditions_from_settings(settings), reactions, logger)

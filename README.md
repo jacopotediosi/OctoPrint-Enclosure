@@ -52,8 +52,8 @@ For DHT11 and DHT22 sensors, don't forget to connect a 4.7K - 10K resistor from 
 The plugin reads these sensors through the CircuitPython-based Adafruit library, which is installed automatically together with the plugin. The library also needs the `libgpiod2` system package; open a raspberry pi terminal and type:
 
 ```
-sudo apt-get update
-sudo apt-get install libgpiod2 -y
+sudo apt update
+sudo apt install libgpiod2 -y
 ```
 
 You can test the library by using the sample code from https://learn.adafruit.com/dht-humidity-sensing-on-raspberry-pi-with-gdocs-logging/python-setup.
@@ -110,7 +110,7 @@ sudo raspi-config
 To find the sensor address, install `i2c-tools`:
 
 ```
-sudo apt-get install i2c-tools
+sudo apt install i2c-tools
 ```
 
 Find the address of the sensor:

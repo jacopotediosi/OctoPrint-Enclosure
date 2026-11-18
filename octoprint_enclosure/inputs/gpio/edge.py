@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from enum import Enum
+from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 
-class Edge(Enum):
+class Edge(LabeledEnum):
     """A change of the level of a GPIO pin: a rise from low to high, or a fall from high to low."""
 
-    RISE = "rise"
-    FALL = "fall"
+    RISE = LabeledValue(value="rise", label="Rise")
+    FALL = LabeledValue(value="fall", label="Fall")
 
     @property
     def level(self) -> int:

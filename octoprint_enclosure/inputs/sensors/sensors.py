@@ -92,14 +92,14 @@ class Sensors:
                 self._logger.warning("Invalid settings for an input with a temperature sensor: %s", error)
                 continue
 
-            sensor_class = DummySensor if self._dummy else SENSORS.get(input_config.temp_sensor_type)
-            if sensor_class is None:
+            sensor_definition = SENSORS["dummy"] if self._dummy else SENSORS.get(input_config.temp_sensor_type)
+            if sensor_definition is None:
                 sensor: Sensor = self._create_invalid_sensor(
                     input_config,
                     f"Unsupported sensor type: {input_config.temp_sensor_type!r}",
                 )
             else:
-                sensor = self._create_sensor(sensor_class, input_config, input_settings)
+                sensor = self._create_sensor(sensor_definition.implementation, input_config, input_settings)
 
             sensors[input_config.index_id] = sensor
 

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import REQUIRED
+from octoprint_enclosure.settings import setting
 
 from .color import ColorOutput
 from .config import OutputConfig
@@ -25,10 +25,10 @@ FRAME_BITS = 32
 class LedstripConfig(OutputConfig):
     """The configuration of an Open-Smart RGB LED strip."""
 
-    ledstrip_gpio_clk: int = REQUIRED
+    ledstrip_gpio_clk: int = setting(label="CLK GPIO", help_text="GPIO of the clock line.", min_value=0)
     """The GPIO pin of the clock signal (CLK)."""
 
-    ledstrip_gpio_dat: int = REQUIRED
+    ledstrip_gpio_dat: int = setting(label="DAT GPIO", help_text="GPIO of the data line.", min_value=0)
     """The GPIO pin of the data signal (DAT)."""
 
 

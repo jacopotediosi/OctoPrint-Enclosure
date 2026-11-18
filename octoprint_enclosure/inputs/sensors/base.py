@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from typing_extensions import override
 
 from octoprint_enclosure.inputs.config import InputConfig, PullResistor
-from octoprint_enclosure.settings import REQUIRED, HexInt
+from octoprint_enclosure.settings import HexInt, setting
 
 if TYPE_CHECKING:
     import logging
@@ -49,13 +49,35 @@ class SensorError(Exception):
 class SensorInputConfig(InputConfig):
     """The configuration shared by all the inputs with a temperature sensor."""
 
-    temp_sensor_type: str = ""
+    temp_sensor_type: str = setting(
+        default="",
+        label="Sensor Type",
+    )
     """The type of the sensor."""
 
-    show_graph_temp: bool = field(default=False, compare=False)
+    temp_sensor_navbar: bool = setting(default=True, label="Show temperature in navbar", compare=False)
+    """Whether the temperature is shown in the navbar."""
+
+    show_graph_temp: bool = setting(
+        default=False,
+        label="Show temperature in graph",
+        help_text=(
+            "Shows the temperature in the OctoPrint temperature graph. Requires a graph plugin like "
+            '<a href="https://github.com/jneilliii/OctoPrint-PlotlyTempGraph" target="_blank">PlotlyTempGraph</a>.'
+        ),
+        compare=False,
+    )
     """Whether the temperature is shown in the temperature graph."""
 
-    show_graph_humidity: bool = field(default=False, compare=False)
+    show_graph_humidity: bool = setting(
+        default=False,
+        label="Show humidity in graph",
+        help_text=(
+            "Shows the humidity in the OctoPrint temperature graph. Requires a graph plugin like "
+            '<a href="https://github.com/jneilliii/OctoPrint-PlotlyTempGraph" target="_blank">PlotlyTempGraph</a>.'
+        ),
+        compare=False,
+    )
     """Whether the humidity is shown in the temperature graph."""
 
 
@@ -124,10 +146,19 @@ class Sensor(ABC, Generic[_ConfigT]):
 class PinSensorConfig(SensorInputConfig):
     """The configuration shared by the sensors with a data line on a GPIO pin."""
 
-    gpio_pin: int = REQUIRED
+    gpio_pin: int = setting(label="GPIO", help_text="GPIO the data line of the sensor is connected to.", min_value=0)
     """The GPIO pin of the data line."""
 
-    input_pull_resistor: PullResistor = PullResistor.OFF
+    input_pull_resistor: PullResistor = setting(
+        default=PullResistor.OFF,
+        label="Input Pull Resistor",
+        help_text=(
+            "A sensor on a board usually has the resistor it needs already: choose None. A bare sensor needs one: "
+            "choose Input Pullup, or add a 4.7K to 10K resistor between its data pin and 3.3V. If in doubt, Input "
+            "Pullup does no harm."
+        ),
+        choices=[PullResistor.OFF, PullResistor.UP],
+    )
     """The internal pull resistor of the data line."""
 
 
@@ -170,8 +201,27 @@ class PinSensor(Sensor[_PinConfigT]):
 class I2cSensorConfig(SensorInputConfig):
     """The configuration shared by the sensors on the I2C bus."""
 
-    temp_sensor_address: HexInt = REQUIRED
-    """The I2C address of the sensor."""
+    type_help = (
+        "The sensor connects to the I2C bus: SDA to GPIO 2 (SDA), SCL to GPIO 3 (SCL). I2C needs to be enabled: run "
+        "<code>sudo raspi-config</code> and enable I2C in the interface options."
+    )
 
-    temp_sensor_i2cbus: int = 1
+    temp_sensor_i2cbus: int = setting(
+        default=1,
+        label="i2c Bus",
+        help_text=(
+            "1 is the bus of GPIO 2 and 3. For a sensor on another bus, for example one made on other pins with "
+            "<code>dtoverlay=i2c-gpio</code>, use its number: <code>i2cdetect -l</code> lists the buses."
+        ),
+        min_value=0,
+    )
     """The number of the I2C bus."""
+
+    temp_sensor_address: HexInt = setting(
+        label="Sensor Address",
+        help_text=(
+            "Address of the sensor, in hexadecimal. Find it by running <code>i2cdetect -y 1</code> (from the "
+            "<code>i2c-tools</code> package) on your Raspberry Pi."
+        ),
+    )
+    """The I2C address of the sensor."""

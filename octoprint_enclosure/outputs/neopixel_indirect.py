@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import REQUIRED, HexInt
+from octoprint_enclosure.settings import HexInt, setting
 from octoprint_enclosure.utils import Rgb, get_gcode_param
 
 from .color import ColorOutput, ColorSetpoint
@@ -17,17 +17,42 @@ BUS = 1
 class NeopixelIndirectConfig(OutputConfig):
     """The configuration of NeoPixels driven by a microcontroller on the I2C bus."""
 
-    gpio_pin: int = REQUIRED
+    microcontroller_address: HexInt = setting(
+        label="Microcontroller Address",
+        help_text=(
+            "Address of the microcontroller, in hexadecimal. Find it by running <code>i2cdetect -y 1</code> (from the "
+            "<code>i2c-tools</code> package) on your Raspberry Pi."
+        ),
+    )
+    """The I2C address of the microcontroller."""
+
+    gpio_pin: int = setting(
+        label="Microcontroller Pin",
+        help_text=(
+            '<span class="label label-important">Attention</span> NeoPixels need a microcontroller (e.g., an Arduino) '
+            "connected to the I2C bus, which needs to be enabled: run <code>sudo raspi-config</code> and enable I2C "
+            "in the interface options. This is the pin of the microcontroller the NeoPixels are connected to."
+        ),
+        min_value=0,
+        max_value=255,
+    )
     """The pin of the microcontroller the NeoPixels are connected to."""
 
-    neopixel_count: int = REQUIRED
+    neopixel_count: int = setting(
+        label="Number of LEDs",
+        help_text="Number of LEDs on the strip.",
+        min_value=1,
+        max_value=255,
+    )
     """The number of NeoPixels."""
 
-    neopixel_brightness: int = REQUIRED
+    neopixel_brightness: int = setting(
+        label="Brightness",
+        help_text="Value between 0 and 255.",
+        min_value=0,
+        max_value=255,
+    )
     """The brightness of the NeoPixels, from 0 to 255."""
-
-    microcontroller_address: HexInt = REQUIRED
-    """The I2C address of the microcontroller."""
 
 
 class NeopixelIndirectOutput(ColorOutput[NeopixelIndirectConfig]):

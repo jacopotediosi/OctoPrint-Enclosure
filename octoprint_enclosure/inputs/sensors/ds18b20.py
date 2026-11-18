@@ -6,6 +6,8 @@ from pathlib import Path
 
 from typing_extensions import override
 
+from octoprint_enclosure.settings import setting
+
 from .base import PinSensor, PinSensorConfig, Reading, SensorError
 
 DEVICES_DIR = Path("/sys/bus/w1/devices/")
@@ -15,7 +17,26 @@ DEVICES_DIR = Path("/sys/bus/w1/devices/")
 class Ds18b20Config(PinSensorConfig):
     """The configuration of a DS18B20 sensor."""
 
-    ds18b20_serial: str = ""
+    type_help = (
+        '<span class="label label-important">Attention</span> This sensor needs 1-Wire enabled: run '
+        "<code>sudo raspi-config</code>, enable 1-Wire in the interface options and reboot."
+    )
+
+    gpio_pin: int = setting(
+        label="GPIO",
+        help_text="GPIO the data line is connected to, usually 4 unless you changed the 1-Wire overlay.",
+        min_value=0,
+    )
+    """The GPIO pin of the data line."""
+
+    ds18b20_serial: str = setting(
+        default="",
+        label="DS18B20 Serial Number",
+        help_text=(
+            "Serial number of the sensor, needed when there is more than one. Find it by running "
+            "<code>ls /sys/bus/w1/devices</code> on your Raspberry Pi: it looks like <code>28-0123456789ab</code>."
+        ),
+    )
     """The serial number of the sensor, such as 28-0123456789ab."""
 
 

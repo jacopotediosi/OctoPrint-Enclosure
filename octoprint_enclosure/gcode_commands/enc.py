@@ -51,7 +51,7 @@ class EncHandler:
             return
 
         if not self._settings.gcode_control:
-            self._logger.warning("Can't run ENC command %s: the gcode control is not enabled", cmd)
+            self._logger.warning("Can't run ENC command %s: ENC commands are not enabled", cmd)
             return
 
         self._logger.info("Received ENC command: %s", cmd)

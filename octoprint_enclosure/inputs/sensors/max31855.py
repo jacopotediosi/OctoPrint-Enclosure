@@ -5,7 +5,8 @@ from dataclasses import dataclass
 import spidev  # ty: ignore[unresolved-import] - spidev is a compiled module without type stubs
 from typing_extensions import override
 
-from octoprint_enclosure.settings import REQUIRED, HexInt
+from octoprint_enclosure.settings import HexInt, setting
+from octoprint_enclosure.utils import LabeledValue
 
 from .base import Reading, Sensor, SensorError, SensorInputConfig
 
@@ -26,7 +27,16 @@ RESPONSE_FAULTS = {
 class Max31855Config(SensorInputConfig):
     """The configuration of a MAX31855 sensor."""
 
-    temp_sensor_address: HexInt = REQUIRED
+    type_help = (
+        "The sensor connects to the SPI bus: SCLK to GPIO 11 (SCLK), MISO to GPIO 9 (MISO). SPI needs to be enabled: "
+        "run <code>sudo raspi-config</code> and enable SPI in the interface options."
+    )
+
+    temp_sensor_address: HexInt = setting(
+        label="Sensor Address (CE Select)",
+        help_text="CE select: CE0 on GPIO 8 or CE1 on GPIO 7.",
+        choices=[LabeledValue(value="0", label="CE0"), LabeledValue(value="1", label="CE1")],
+    )
     """The SPI chip select of the sensor, 0 for CE0 or 1 for CE1."""
 
     def __post_init__(self) -> None:

@@ -1,37 +1,42 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
 
-from octoprint_enclosure.settings import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import BaseConfig, setting
+from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 
-class OutputType(Enum):
+class OutputType(LabeledEnum):
     """The type of an output."""
 
-    REGULAR = "regular"
-    PWM = "pwm"
-    NEOPIXEL_INDIRECT = "neopixel_indirect"
-    NEOPIXEL_DIRECT = "neopixel_direct"
-    LEDSTRIP = "ledstrip"
-    THERMOSTAT = "temp_hum_control"
+    REGULAR = LabeledValue(value="regular", label="Regular IO")
+    PWM = LabeledValue(value="pwm", label="PWM")
+    NEOPIXEL_INDIRECT = LabeledValue(value="neopixel_indirect", label="NeoPixel Indirect")
+    NEOPIXEL_DIRECT = LabeledValue(value="neopixel_direct", label="NeoPixel Direct")
+    LEDSTRIP = LabeledValue(value="ledstrip", label="RGB LED Strip")
+    THERMOSTAT = LabeledValue(value="temp_hum_control", label="Thermostat")
 
 
 @dataclass(frozen=True)
 class OutputConfig(BaseConfig):
     """The configuration shared by all the outputs."""
 
-    index_id: int = REQUIRED
+    index_id: int = setting(label="Id")
     """The id of the output."""
 
-    output_type: OutputType = REQUIRED
-    """The type of the output."""
-
-    label: str = field(default="", compare=False)
+    label: str = setting(default="", label="Label", compare=False)
     """The name of the output."""
 
-    hide_btn_ui: bool = field(default=False, compare=False)
+    output_type: OutputType = setting(label="Output Type")
+    """The type of the output."""
+
+    hide_btn_ui: bool = setting(default=False, label="Hide in tab", compare=False)
     """Whether the button of the output is hidden in the Enclosure tab."""
 
-    show_on_navbar: bool = field(default=False, compare=False)
+    show_on_navbar: bool = setting(
+        default=False,
+        label="Show in navbar",
+        visible_if={"output_type": ["regular"]},
+        compare=False,
+    )
     """Whether the output has a button in the navbar."""

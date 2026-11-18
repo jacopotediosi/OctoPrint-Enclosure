@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Optional
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import REQUIRED, BaseConfig, SensorInputId
-from octoprint_enclosure.utils import MeasurementType
+from octoprint_enclosure.settings import BaseConfig, SensorInputId, setting
+from octoprint_enclosure.utils import LabeledEnum, LabeledValue, MeasurementType
 
 from .base import Output
 from .switch import Switch, SwitchConfig
@@ -18,12 +18,12 @@ if TYPE_CHECKING:
     from octoprint_enclosure.hardware import GpioBackend, I2cBackend
 
 
-class ThermostatDeviceType(Enum):
+class ThermostatDeviceType(LabeledEnum):
     """The type of the device a thermostat turns on and off."""
 
-    HEATER = "heater"
-    COOLER = "cooler"
-    DEHUMIDIFIER = "dehumidifier"
+    HEATER = LabeledValue(value="heater", label="Heater")
+    COOLER = LabeledValue(value="cooler", label="Cooler")
+    DEHUMIDIFIER = LabeledValue(value="dehumidifier", label="Dehumidifier")
 
     @property
     def measurement_type(self) -> MeasurementType:
@@ -37,17 +37,36 @@ class ThermostatDeviceType(Enum):
 class ThermostatConfig(SwitchConfig):
     """The configuration of a thermostat."""
 
-    linked_temp_sensor: SensorInputId = REQUIRED
-    """The id of the input of the sensor that reads the temperature or the humidity."""
-
-    temp_ctr_type: ThermostatDeviceType = REQUIRED
+    temp_ctr_type: ThermostatDeviceType = setting(label="Device Type")
     """The type of the device that the output switch turns on and off."""
 
-    temp_ctr_deadband: float = REQUIRED
+    linked_temp_sensor: SensorInputId = setting(
+        label="Temperature Sensor",
+        help_text="Sensor the thermostat reads. Configured in the Inputs tab.",
+        widget="thermostat_sensor",
+    )
+    """The id of the input of the sensor that reads the temperature or the humidity."""
+
+    temp_ctr_deadband: float = setting(
+        label="Value Deadband",
+        help_text="Allowable drift of the thermostat below its target. Set it to zero to disable.",
+        min_value=0,
+        visible_if={"temp_ctr_type": ["heater", "cooler"]},
+        widget="temperature_interval",
+    )
     """How far below the target the value can go before a heater turns on, or a cooler turns off. Between there and
     the target, the device stays as it is. A dehumidifier ignores it."""
 
-    temp_ctr_max_temp: Optional[float] = None  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
+    temp_ctr_max_temp: Optional[float] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
+        default=None,
+        label="Maximum Temperature",
+        help_text=(
+            "Maximum temperature the sensor should read. Above it, the thermostat turns off until its target is set "
+            "again. Leave it empty for no maximum."
+        ),
+        visible_if={"temp_ctr_type": ["heater"]},
+        widget="temperature",
+    )
     """The temperature above which a heater turns its thermostat off, or None if it has no maximum."""
 
 
@@ -55,7 +74,7 @@ class ThermostatConfig(SwitchConfig):
 class ThermostatSetpoint(BaseConfig):
     """The setpoint a thermostat is turned on to."""
 
-    target: float = REQUIRED
+    target: float = setting()
     """The target temperature in Celsius, or the target humidity for a dehumidifier."""
 
 

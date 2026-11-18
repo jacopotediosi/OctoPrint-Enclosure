@@ -1,11 +1,21 @@
-{% macro text_control_group(value_binding, label, help="", disabled=false) %}
+{% macro text_control_group(value_binding, label, help="", disabled=false, unit="") %}
     <div class="control-group">
         <label class="control-label">{{ label }}</label>
         <div class="controls">
-            <input type="text"
-                   class="input-block-level"
-                   data-bind="value: {{ value_binding }}"
-                   {% if disabled %}disabled{% endif %}>
+            {% if unit %}
+                <div class="input-append">
+                    <input type="text"
+                           class="input-medium"
+                           data-bind="value: {{ value_binding }}"
+                           {% if disabled %}disabled{% endif %}>
+                    <span class="add-on">{{ unit }}</span>
+                </div>
+            {% else %}
+                <input type="text"
+                       class="input-block-level"
+                       data-bind="value: {{ value_binding }}"
+                       {% if disabled %}disabled{% endif %}>
+            {% endif %}
             {% if help %}<span class="help-inline">{{ help }}</span>{% endif %}
             {% if caller is defined %}{{ caller() }}{% endif %}
         </div>
@@ -84,10 +94,10 @@
     </div>
     <div data-bind="if: $root.outputType({{ output_binding }}()) == 'temp_hum_control'">
         <div data-bind="if: $root.thermostatDeviceType({{ output_binding }}()) == 'dehumidifier'">
-            {{ text_control_group("target", _("Target"), "Humidity the thermostat is set to when the automation turns it on") }}
+            {{ text_control_group("target", _("Target"), "Value the thermostat is set to when the automation turns it on", unit="%") }}
         </div>
         <div data-bind="ifnot: $root.thermostatDeviceType({{ output_binding }}()) == 'dehumidifier'">
-            {{ temperature_control_group("target", _("Target"), "Temperature the thermostat is set to when the automation turns it on") }}
+            {{ temperature_control_group("target", _("Target"), "Value the thermostat is set to when the automation turns it on") }}
         </div>
     </div>
 {% endmacro %}

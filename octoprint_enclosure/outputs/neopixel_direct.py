@@ -8,7 +8,7 @@ from pathlib import Path
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import REQUIRED
+from octoprint_enclosure.settings import setting
 from octoprint_enclosure.utils import Rgb, get_gcode_param
 
 from .base import OutputError
@@ -26,16 +26,27 @@ SPI_PIN = 10
 class NeopixelDirectConfig(OutputConfig):
     """The configuration of NeoPixels connected directly to the Raspberry Pi."""
 
-    gpio_pin: int = REQUIRED
+    gpio_pin: int = setting(label="GPIO", help_text="GPIO the output is connected to.", min_value=0)
     """The GPIO pin the NeoPixels are connected to."""
 
-    neopixel_count: int = REQUIRED
+    neopixel_count: int = setting(label="Number of LEDs", help_text="Number of LEDs on the strip.", min_value=1)
     """The number of NeoPixels."""
 
-    neopixel_brightness: int = REQUIRED
+    neopixel_brightness: int = setting(
+        label="Brightness",
+        help_text="Value between 0 and 255.",
+        min_value=0,
+        max_value=255,
+    )
     """The brightness of the NeoPixels, from 0 to 255."""
 
-    neopixel_dma: int = 10
+    neopixel_dma: int = setting(
+        default=10,
+        label="DMA Channel",
+        help_text="DMA channel used to drive the NeoPixels.",
+        min_value=0,
+        max_value=15,
+    )
     """The DMA channel used to drive the NeoPixels."""
 
 

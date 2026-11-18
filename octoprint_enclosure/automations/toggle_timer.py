@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from octoprint_enclosure.outputs import OutputSetpointConfig
-from octoprint_enclosure.settings import REQUIRED, OutputId
+from octoprint_enclosure.settings import OutputId, setting
 
 from .base import Automation, AutomationConfig
 
@@ -21,13 +21,18 @@ if TYPE_CHECKING:
 class ToggleTimerConfig(AutomationConfig, OutputSetpointConfig):
     """The configuration of an automation that turns an output on and off in turn."""
 
-    output: OutputId = REQUIRED
+    type_help = (
+        '<span class="label label-info">Info:</span> Turns an output on and off in turn, on for the on time and off '
+        "for the off time."
+    )
+
+    output: OutputId = setting(label="Controlled IO", help_text="Output to turn on and off in turn.")
     """The id of the output to control."""
 
-    toggle_timer_on: float = REQUIRED
+    toggle_timer_on: float = setting(label="On Time", help_text="Seconds the output stays on.", unit="s")
     """The seconds the output stays on."""
 
-    toggle_timer_off: float = REQUIRED
+    toggle_timer_off: float = setting(label="Off Time", help_text="Seconds the output stays off.", unit="s")
     """The seconds the output stays off."""
 
     def __post_init__(self) -> None:

@@ -1,30 +1,36 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
 
 from octoprint_enclosure.outputs import OutputSetpointConfig
-from octoprint_enclosure.settings import REQUIRED, OutputId
+from octoprint_enclosure.settings import OutputId, setting
+from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 from .base import Reaction
 
 
-class OutputSetState(Enum):
+class OutputSetState(LabeledEnum):
     """What to do with an output."""
 
-    ON = "on"
-    OFF = "off"
-    TOGGLE = "toggle"
+    ON = LabeledValue(value="on", label="On")
+    OFF = LabeledValue(value="off", label="Off")
+    TOGGLE = LabeledValue(value="toggle", label="Toggle")
 
 
 @dataclass(frozen=True)
 class OutputControlConfig(OutputSetpointConfig):
     """The configuration of an automation reaction that controls an output."""
 
-    controlled_io: OutputId = REQUIRED
+    controlled_io: OutputId = setting(
+        label="Controlled IO",
+        help_text="Output to control when the event happens.",
+    )
     """The id of the output to control."""
 
-    controlled_io_set_state: OutputSetState = REQUIRED
+    controlled_io_set_state: OutputSetState = setting(
+        label="Set Controlled IO State",
+        help_text="Whether to turn the controlled IO on or off, or to toggle it, when the event happens.",
+    )
     """What to do with the output."""
 
 

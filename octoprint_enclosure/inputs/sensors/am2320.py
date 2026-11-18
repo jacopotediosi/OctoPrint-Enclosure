@@ -29,6 +29,11 @@ READ_RESPONSE_BYTES = 1 + 1 + REGISTER_COUNT + 2
 class Am2320Config(SensorInputConfig):
     """The configuration of an AM2320 sensor."""
 
+    type_help = (
+        "The sensor connects to the I2C bus: SDA to GPIO 2 (SDA), SCL to GPIO 3 (SCL). I2C needs to be enabled: run "
+        "<code>sudo raspi-config</code> and enable I2C in the interface options."
+    )
+
 
 class Am2320Sensor(Sensor[Am2320Config]):
     """An AM2320 temperature and humidity sensor."""

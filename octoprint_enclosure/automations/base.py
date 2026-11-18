@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from octoprint_enclosure.settings import REQUIRED, BaseConfig
+from octoprint_enclosure.settings import BaseConfig, setting
 
 from .conditions import conditions_from_settings
 
@@ -29,19 +29,28 @@ class AutomationError(Exception):
 class AutomationConfig(BaseConfig):
     """The configuration shared by all the automations."""
 
-    index_id: int = REQUIRED
+    index_id: int = setting(label="Id")
     """The id of the automation."""
 
-    automation_type: str = ""
-    """The type of the automation."""
-
-    label: str = field(default="", compare=False)
+    label: str = setting(default="", label="Label", compare=False)
     """The label of the automation."""
 
-    enabled: bool = field(default=True, compare=False)
+    automation_type: str = setting(default="", label="Automation Type")
+    """The type of the automation."""
+
+    enabled: bool = setting(
+        default=True,
+        label="Enabled",
+        compare=False,
+    )
     """Whether the automation is enabled."""
 
-    show_in_tab: bool = field(default=False, compare=False)
+    show_in_tab: bool = setting(
+        default=False,
+        label="Show in tab",
+        help_text="Shows the automation in the Enclosure tab, with a switch to enable or disable it.",
+        compare=False,
+    )
     """Whether the Enclosure tab shows the automation, with a switch to enable or disable it."""
 
 
