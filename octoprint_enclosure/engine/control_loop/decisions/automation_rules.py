@@ -12,6 +12,7 @@ from octoprint_enclosure.automations import (
     GpioEdgeEvent,
     GpioInputTrigger,
     OutputControlReaction,
+    OutputSetState,
     ReadingEvent,
     RuleAutomation,
     RunActionReaction,
@@ -144,7 +145,10 @@ class AutomationRuleDecision(Decision):
                 for reaction in rule.reactions:
                     if isinstance(reaction, OutputControlReaction):
                         config = reaction.config
-                        self._output_control.control(config.controlled_io, config.controlled_io_set_state, config)
+
+                        # A toggle is skipped: the level of an input doesn't tell that the input changed
+                        if config.controlled_io_set_state is not OutputSetState.TOGGLE:
+                            self._output_control.control(config.controlled_io, config.controlled_io_set_state, config)
 
     def run_reactions(self, message: RunAutomationRuleReactions, conditions_state: ConditionsState) -> None:
         """Run now the reactions of a rule whose delay is over, unless the rule changed meanwhile.
