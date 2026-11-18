@@ -21,12 +21,10 @@
     <div class="tab-content">
         <div class="tab-pane active" id="enclosure-settings-tab-inputs">
             <p>
-                Configure all
-                <strong>inputs</strong>. Inputs get data from gpio or connected sensors to provide additional functionality.
+                Here you set up the hardware the plugin reads, such as sensors and buttons. In the Automations tab you choose what a reading or a
+                button press does.
             </p>
-            <p>
-                Example of possible inputs are buttons and filament sensors connected to GPIO pins, and temperature and humidity sensors.
-            </p>
+            <hr />
             <form class="form-horizontal">
                 <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.rpi_inputs">
                     {{ text_control_group("label", _("Label"), "Name of Input") }}
@@ -151,11 +149,10 @@
         </div>
         <div class="tab-pane" id="enclosure-settings-tab-outputs">
             <p>
-                Configure all
-                <strong>outputs</strong>. Outputs are the devices driven by the plugin: from a button on the Enclosure tab, from an automation, or
-                automatically, for example when a print ends or a temperature alarm goes off.
+                Here you set up the hardware the plugin drives, such as relays, fans and LEDs. In the Automations tab you choose when it turns on and
+                off.
             </p>
-            <p>Example of possible outputs are GPIO pins, neopixel LED's or thermostats.</p>
+            <hr />
             <form class="form-horizontal">
                 <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.rpi_outputs">
                     <!--
@@ -268,10 +265,10 @@
         </div>
         <div class="tab-pane" id="enclosure-settings-tab-actions">
             <p>
-                Configure all
-                <strong>actions</strong>. Actions send gcode or a command to the printer, or run a shell script, from a button on the Enclosure tab
-                or on the navbar, or from an automation.
+                Here you define the commands the plugin can run, such as sending G-code to the printer or running a script. In the Automations tab you
+                choose when they run.
             </p>
+            <hr />
             <form class="form-horizontal">
                 <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.actions">
                     {{ select_control_group("action_type", _("Action Type"), [
@@ -330,11 +327,11 @@
         </div>
         <div class="tab-pane" id="enclosure-settings-tab-automations">
             <p>
-                Configure all
-                <strong>automations</strong>. A rule reacts to a trigger, such as a GPIO input that changes or a temperature above a threshold: it
-                controls an output, runs an action or stops the thermostats. A filament sensor detects the end of the filament during a
-                print. A PWM linked to temperature sets the duty cycle of a PWM output from a temperature.
+                Here you set up the logic of your enclosure, connecting inputs to outputs and actions. For example: turn on the lights when a
+                button is pressed, start a fan when a sensor reads a high temperature, pause the print when a filament sensor detects the end
+                of the filament.
             </p>
+            <hr />
             <form class="form-horizontal">
                 <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.automations">
                     {% call select_control_group("automation_type", _("Automation Type"), [
