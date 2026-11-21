@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from octoprint_enclosure.settings import ActionId, BaseConfig, setting
+from octoprint_enclosure.settings import ActionId, setting
 
-from .base import Reaction
+from .base import Reaction, ReactionConfig
 
 
 @dataclass(frozen=True)
-class RunActionConfig(BaseConfig):
+class RunActionConfig(ReactionConfig):
     """The configuration of an automation reaction that runs an action."""
 
     action: ActionId = setting(

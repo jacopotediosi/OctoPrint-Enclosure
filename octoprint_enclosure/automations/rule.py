@@ -10,7 +10,7 @@ from octoprint_enclosure.utils import parse_hhmm, seconds_until_next
 
 from .base import Automation, AutomationConfig
 from .conditions import conditions_from_settings
-from .reactions import REACTIONS, OutputControlReaction, OutputSetState
+from .reactions import REACTIONS, OutputControlReaction, OutputSetState, ReactionConfig
 from .triggers import TRIGGERS
 
 if TYPE_CHECKING:
@@ -174,10 +174,10 @@ class RuleAutomation(Automation[RuleConfig]):
 
         reactions = []
         for reaction_settings in reactions_settings:
-            reaction_type = reaction_settings.get("reaction_type", "")
-            reaction_definition = REACTIONS.get(reaction_type)
+            reaction_config = ReactionConfig.from_settings(reaction_settings)
+            reaction_definition = REACTIONS.get(reaction_config.reaction_type)
             if reaction_definition is None:
-                msg = f"Unsupported reaction type: {reaction_type!r}"
+                msg = f"Unsupported reaction type: {reaction_config.reaction_type!r}"
                 raise ValueError(msg)
             reactions.append(reaction_definition.implementation.from_settings(reaction_settings))
 

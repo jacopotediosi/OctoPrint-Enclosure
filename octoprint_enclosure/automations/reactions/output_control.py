@@ -6,7 +6,7 @@ from octoprint_enclosure.outputs import OutputSetpointConfig
 from octoprint_enclosure.settings import OutputId, setting
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
-from .base import Reaction
+from .base import Reaction, ReactionConfig
 
 
 class OutputSetState(LabeledEnum):
@@ -18,7 +18,7 @@ class OutputSetState(LabeledEnum):
 
 
 @dataclass(frozen=True)
-class OutputControlConfig(OutputSetpointConfig):
+class OutputControlConfig(OutputSetpointConfig, ReactionConfig):
     """The configuration of an automation reaction that controls an output."""
 
     controlled_io: OutputId = setting(

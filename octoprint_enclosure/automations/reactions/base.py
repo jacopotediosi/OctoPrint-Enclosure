@@ -1,13 +1,23 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from octoprint_enclosure.settings import BaseConfig
+from octoprint_enclosure.settings import BaseConfig, setting
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-_ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
+
+@dataclass(frozen=True)
+class ReactionConfig(BaseConfig):
+    """The configuration shared by all the automation reactions."""
+
+    reaction_type: str = setting(label="Reaction")
+    """The type of the reaction."""
+
+
+_ConfigT = TypeVar("_ConfigT", bound=ReactionConfig)
 
 
 class Reaction(Generic[_ConfigT]):

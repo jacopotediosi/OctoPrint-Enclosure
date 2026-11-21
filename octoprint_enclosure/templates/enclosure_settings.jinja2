@@ -1,5 +1,6 @@
 {% from "enclosure_macros.jinja2" import checkbox_control_group, gpio_alert, select_control_group, setpoint_control_groups, temperature_control_group, text_control_group %}
 {{ gpio_alert(plugin_enclosure_development_mode, plugin_enclosure_gpio_import_error, plugin_enclosure_gpio_numbering_is_board) }}
+<script type="application/json" id="enclosure-settings-fields">{{ plugin_enclosure_settings_fields|tojson }}</script>
 <div class="tabbable">
     <ul class="nav nav-tabs">
         <li class="active">
@@ -212,7 +213,14 @@
                         {{ text_control_group("gpio_i2c_register_status", _("I2C Register (read status)"), "I2C register for reading gpio state in HEX value") }}
                     </div>
                     <div data-bind="if: output_type() == 'regular' || output_type() == 'temp_hum_control'">
-                        {{ checkbox_control_group("active_low", _("Active Low"), "Active low means that the GPIO will turn on when receive a low signal (ground) from Raspberry PI") }}
+                        <div class="control-group">
+                            <label class="control-label">{{ _("Active Level") }}</label>
+                            <div class="controls">
+                                <select data-bind="options: $root.activeLevelOptions, optionsText: 'label', optionsValue: 'value', optionsCaption: 'Select Active Level', optionsAfterRender: $root.disablePlaceholderOption, value: active_low, valueAllowUnset: true, placeholderWhenUnset: true">
+                                </select>
+                                <span class="help-inline">Active low means that the GPIO will turn on when receive a low signal (ground) from Raspberry PI</span>
+                            </div>
+                        </div>
                     </div>
                     <div data-bind="if: output_type() == 'temp_hum_control'">
                         {{ select_control_group("temp_ctr_type", _("Device Type"), [("heater", _("Heater")), ("cooler", _("Cooler")), ("dehumidifier", _("Dehumidifier"))], placeholder="Select Device Type") }}

@@ -402,7 +402,46 @@ $(function () {
       self.automations(settings.automations());
     };
 
+    self.observableOf = function (value) {
+      return Array.isArray(value) ? ko.observableArray(value.slice()) : ko.observable(value);
+    };
+
+    self.newItem = function (fields) {
+      var item = {};
+      fields.forEach(function (field) {
+        item[field.name] = self.observableOf(field.default === null ? field.empty : field.default);
+      });
+      return item;
+    };
+
+    self.completeItems = function (fields, items) {
+      items.forEach(function (item) {
+        fields.forEach(function (field) {
+          if (item[field.name] === undefined) {
+            item[field.name] = self.observableOf(field.empty);
+          }
+          if (field.fields !== null) {
+            self.completeItems(field.fields, item[field.name]());
+          }
+        });
+      });
+    };
+
+    self.completeSettings = function () {
+      Object.keys(self.settingsFields).forEach(function (listName) {
+        var items = self.settingsViewModel.settings.plugins.enclosure[listName]();
+        self.completeItems(self.settingsFields[listName], items);
+      });
+    };
+
     self.onBeforeBinding = function () {
+      self.settingsFields = JSON.parse($("#enclosure-settings-fields").text());
+
+      self.completeSettings();
+      Object.keys(self.settingsFields).forEach(function (listName) {
+        self.settingsViewModel.settings.plugins.enclosure[listName].subscribe(self.completeSettings);
+      });
+
       self.bindFromSettings();
     };
 
@@ -469,26 +508,17 @@ $(function () {
       return indexes.length == 0 ? 1 : Math.max.apply(null, indexes) + 1;
     };
 
-    self.addRpiInput = function () {
-      var nextIndex = self.nextIndexId(self.settingsViewModel.settings.plugins.enclosure.rpi_inputs());
+    self.addItem = function (listName, labelPrefix) {
+      var items = self.settingsViewModel.settings.plugins.enclosure[listName];
+      var item = self.newItem(self.settingsFields[listName]);
+      item.index_id(self.nextIndexId(items()));
+      item.label(labelPrefix + " " + item.index_id());
+      items.push(item);
+      return item;
+    };
 
-      self.settingsViewModel.settings.plugins.enclosure.rpi_inputs.push({
-        index_id: ko.observable(nextIndex),
-        label: ko.observable("Input " + nextIndex),
-        input_type: ko.observable(""),
-        gpio_pin: ko.observable(0),
-        input_pull_resistor: ko.observable("input_pull_up"),
-        temp_sensor_type: ko.observable(""),
-        temp_sensor_address: ko.observable(""),
-        ds18b20_serial: ko.observable(""),
-        temp_sensor_navbar: ko.observable(true),
-        temp_sensor_i2cbus: ko.observable(1),
-        temp_i2c_bus: ko.observable(1),
-        temp_i2c_address: ko.observable(1),
-        temp_i2c_register: ko.observable(1),
-        show_graph_temp: ko.observable(false),
-        show_graph_humidity: ko.observable(false)
-      });
+    self.addRpiInput = function () {
+      self.addItem("rpi_inputs", "Input");
     };
 
     self.removeRpiInput = function (definition) {
@@ -496,36 +526,7 @@ $(function () {
     };
 
     self.addRpiOutput = function () {
-      var nextIndex = self.nextIndexId(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs());
-
-      self.settingsViewModel.settings.plugins.enclosure.rpi_outputs.push({
-        index_id: ko.observable(nextIndex),
-        label: ko.observable("Output " + nextIndex),
-        output_type: ko.observable(""),
-        gpio_pin: ko.observable(0),
-        hide_btn_ui: ko.observable(false),
-        active_low: ko.observable(true),
-        linked_temp_sensor: ko.observable(""),
-        temp_ctr_type: ko.observable(""),
-        temp_ctr_deadband: ko.observable(0),
-        temp_ctr_max_temp: ko.observable(null),
-        pwm_frequency: ko.observable(50),
-        neopixel_count: ko.observable(0),
-        neopixel_brightness: ko.observable(255),
-        neopixel_dma: ko.observable(10),
-        ledstrip_gpio_clk: ko.observable(""),
-        ledstrip_gpio_dat: ko.observable(""),
-        microcontroller_address: ko.observable(0),
-        show_on_navbar: ko.observable(false),
-        gpio_i2c_enabled: ko.observable(false),
-        gpio_i2c_bus: ko.observable(1),
-        gpio_i2c_address: ko.observable(1),
-        gpio_i2c_register: ko.observable(1),
-        gpio_i2c_data_on: ko.observable(1),
-        gpio_i2c_data_off: ko.observable(0),
-        gpio_i2c_register_status: ko.observable(1)
-      });
-
+      self.addItem("rpi_outputs", "Output");
     };
 
     self.removeRpiOutput = function (data) {
@@ -533,18 +534,7 @@ $(function () {
     };
 
     self.addAction = function () {
-      var nextIndex = self.nextIndexId(self.settingsViewModel.settings.plugins.enclosure.actions());
-
-      self.settingsViewModel.settings.plugins.enclosure.actions.push({
-        index_id: ko.observable(nextIndex),
-        label: ko.observable("Action " + nextIndex),
-        action_type: ko.observable(""),
-        gcode: ko.observable(""),
-        shell_script: ko.observable(""),
-        printer_action: ko.observable("pause"),
-        hide_btn_ui: ko.observable(false),
-        show_on_navbar: ko.observable(false)
-      });
+      self.addItem("actions", "Action");
     };
 
     self.removeAction = function (data) {
@@ -552,37 +542,7 @@ $(function () {
     };
 
     self.addAutomation = function () {
-      var nextIndex = self.nextIndexId(self.settingsViewModel.settings.plugins.enclosure.automations());
-
-      self.settingsViewModel.settings.plugins.enclosure.automations.push({
-        index_id: ko.observable(nextIndex),
-        label: ko.observable("Automation " + nextIndex),
-        enabled: ko.observable(true),
-        show_in_tab: ko.observable(false),
-        automation_type: ko.observable(""),
-        trigger_type: ko.observable(""),
-        input: ko.observable(""),
-        edge: ko.observable("fall"),
-        linked_temp_sensor: ko.observable(""),
-        alarm_set_temp: ko.observable(""),
-        repeat_while_above: ko.observable(false),
-        octoprint_events: ko.observableArray([]),
-        delay: ko.observable(0),
-        at: ko.observable(""),
-        conditions: ko.observableArray([]),
-        reactions: ko.observableArray([self.newReaction()]),
-        action: ko.observable(""),
-        output: ko.observable(""),
-        toggle_timer_on: ko.observable(0),
-        toggle_timer_off: ko.observable(0),
-        duty_cycle: ko.observable(0),
-        color: ko.observable("#000000"),
-        target: ko.observable(null),
-        temperature_a: ko.observable(0),
-        duty_a: ko.observable(0),
-        temperature_b: ko.observable(0),
-        duty_b: ko.observable(0)
-      });
+      self.addReaction(self.addItem("automations", "Automation"));
     };
 
     self.removeAutomation = function (data) {
@@ -618,35 +578,28 @@ $(function () {
       {value: true, label: "I2C"}
     ];
 
-    self.newCondition = function () {
-      return {
-        condition_type: ko.observable("print_job"),
-        printing: ko.observable(true)
-      };
+    self.activeLevelOptions = [
+      {value: false, label: "High"},
+      {value: true, label: "Low"}
+    ];
+
+    self.addNestedItem = function (automation, listName) {
+      var list = ko.utils.arrayFirst(self.settingsFields.automations, function (field) {
+        return field.name === listName;
+      });
+      automation[listName].push(self.newItem(list.fields));
     };
 
     self.addCondition = function (automation) {
-      automation.conditions.push(self.newCondition());
+      self.addNestedItem(automation, "conditions");
     };
 
     self.removeCondition = function (automation, condition) {
       automation.conditions.remove(condition);
     };
 
-    self.newReaction = function () {
-      return {
-        reaction_type: ko.observable(""),
-        controlled_io: ko.observable(""),
-        controlled_io_set_state: ko.observable("on"),
-        duty_cycle: ko.observable(0),
-        color: ko.observable("#000000"),
-        target: ko.observable(null),
-        action: ko.observable("")
-      };
-    };
-
     self.addReaction = function (automation) {
-      automation.reactions.push(self.newReaction());
+      self.addNestedItem(automation, "reactions");
     };
 
     self.removeReaction = function (automation, reaction) {

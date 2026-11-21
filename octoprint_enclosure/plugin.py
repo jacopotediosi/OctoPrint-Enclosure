@@ -14,7 +14,7 @@ from .actions import Actions
 from .api import Api
 from .automations import Automations
 from .engine import ControlLoop, OutputExecutor, Scheduler
-from .frontend import Frontend
+from .frontend import Frontend, describe_settings_fields
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
 from .inputs import GpioInputs, SensorPoller, Sensors
@@ -353,6 +353,7 @@ class EnclosurePlugin(
             "gpio_import_error": str(gpio_import_error) if gpio_import_error is not None else None,
             "gpio_numbering_is_board": gpio_import_error is None and self._gpio.getmode() == self._gpio.BOARD,
             "octoprint_events": sorted(all_events()),
+            "settings_fields": describe_settings_fields(),
         }
 
     @override

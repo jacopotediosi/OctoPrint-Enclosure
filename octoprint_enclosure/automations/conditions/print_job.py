@@ -5,17 +5,17 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import BaseConfig, setting
+from octoprint_enclosure.settings import setting
 from octoprint_enclosure.utils import LabeledValue
 
-from .base import Condition
+from .base import Condition, ConditionConfig
 
 if TYPE_CHECKING:
     from octoprint_enclosure.automations.conditions_state import ConditionsState
 
 
 @dataclass(frozen=True)
-class PrintJobConditionConfig(BaseConfig):
+class PrintJobConditionConfig(ConditionConfig):
     """The configuration of an automation condition on the print job."""
 
     type_help = (

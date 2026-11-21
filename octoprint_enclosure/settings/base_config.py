@@ -299,13 +299,11 @@ class BaseConfig:
             list[_IdT]: The value of each field of that type.
 
         Examples:
-            >>> from octoprint_enclosure.automations.reactions.output_control import OutputControlConfig
-            >>> config = OutputControlConfig.from_settings(
-            ...     {"controlled_io": 3, "controlled_io_set_state": "on", "duty_cycle": 0, "color": "#000000"}
-            ... )
-            >>> config.get_linked_ids(OutputId)
-            [3]
+            >>> from octoprint_enclosure.automations.reactions.run_action import RunActionConfig
+            >>> config = RunActionConfig.from_settings({"reaction_type": "run_action", "action": 3})
             >>> config.get_linked_ids(ActionId)
+            [3]
+            >>> config.get_linked_ids(OutputId)
             []
 
         """

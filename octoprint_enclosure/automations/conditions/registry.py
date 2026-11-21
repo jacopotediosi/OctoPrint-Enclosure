@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .base import ConditionConfig
 from .print_job import PrintJobCondition
 
 if TYPE_CHECKING:
@@ -46,10 +47,10 @@ def conditions_from_settings(automation_settings: dict) -> list[Condition]:
 
     conditions = []
     for condition_settings in conditions_settings:
-        condition_type = condition_settings.get("condition_type", "")
-        condition_definition = CONDITIONS.get(condition_type)
+        condition_config = ConditionConfig.from_settings(condition_settings)
+        condition_definition = CONDITIONS.get(condition_config.condition_type)
         if condition_definition is None:
-            msg = f"Unsupported condition type: {condition_type!r}"
+            msg = f"Unsupported condition type: {condition_config.condition_type!r}"
             raise ValueError(msg)
         conditions.append(condition_definition.implementation.from_settings(condition_settings))
     return conditions

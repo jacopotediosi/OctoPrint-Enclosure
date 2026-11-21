@@ -1,16 +1,26 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from octoprint_enclosure.settings import BaseConfig
+from octoprint_enclosure.settings import BaseConfig, setting
 
 if TYPE_CHECKING:
     from typing_extensions import Self
 
     from octoprint_enclosure.automations.conditions_state import ConditionsState
 
-_ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
+
+@dataclass(frozen=True)
+class ConditionConfig(BaseConfig):
+    """The configuration shared by all the automation conditions."""
+
+    condition_type: str = setting(default="print_job", label="Condition")
+    """The type of the condition."""
+
+
+_ConfigT = TypeVar("_ConfigT", bound=ConditionConfig)
 
 
 class Condition(ABC, Generic[_ConfigT]):
