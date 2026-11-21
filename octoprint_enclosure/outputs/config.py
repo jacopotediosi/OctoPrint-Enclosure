@@ -24,7 +24,7 @@ class OutputConfig(BaseConfig):
     index_id: int = setting(label="Id")
     """The id of the output."""
 
-    label: str = setting(default="", optional=True, label="Label", compare=False)
+    label: str = setting(optional=True, label="Label", compare=False)
     """The name of the output."""
 
     output_type: OutputType = setting(label="Output Type")

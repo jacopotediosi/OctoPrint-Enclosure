@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import MISSING, dataclass, fields
+from dataclasses import MISSING, Field, dataclass, fields
 from dataclasses import field as dataclass_field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, FrozenSet, NewType, Optional, TypeVar, get_type_hints
@@ -128,22 +128,37 @@ class _FieldType:
     parse: Callable[[Any], Any]
     """The function that reads a saved value of the type."""
 
+    value_type: type | tuple[type, ...]
+    """The Python type of a value of the type, or the Python types if more than one."""
+
 
 _FIELD_TYPES: dict[Any, _FieldType] = {
-    str: _FieldType(name="str", parse=str),
-    int: _FieldType(name="int", parse=int),
-    float: _FieldType(name="float", parse=parse_float),
-    Optional[float]: _FieldType(name="float", parse=parse_float),
-    bool: _FieldType(name="bool", parse=parse_bool),
-    HexInt: _FieldType(name="HexInt", parse=parse_hex),
-    Rgb: _FieldType(name="Rgb", parse=parse_hex_color),
-    FrozenSet[str]: _FieldType(name="FrozenSet[str]", parse=_parse_str_set),
-    SensorInputId: _FieldType(name="SensorInputId", parse=int),
-    GpioInputId: _FieldType(name="GpioInputId", parse=int),
-    OutputId: _FieldType(name="OutputId", parse=int),
-    ActionId: _FieldType(name="ActionId", parse=int),
+    str: _FieldType(name="str", parse=str, value_type=str),
+    int: _FieldType(name="int", parse=int, value_type=int),
+    float: _FieldType(name="float", parse=parse_float, value_type=(int, float)),
+    Optional[float]: _FieldType(name="float", parse=parse_float, value_type=(int, float)),
+    bool: _FieldType(name="bool", parse=parse_bool, value_type=bool),
+    HexInt: _FieldType(name="HexInt", parse=parse_hex, value_type=int),
+    Rgb: _FieldType(name="Rgb", parse=parse_hex_color, value_type=Rgb),
+    FrozenSet[str]: _FieldType(name="FrozenSet[str]", parse=_parse_str_set, value_type=frozenset),
+    SensorInputId: _FieldType(name="SensorInputId", parse=int, value_type=int),
+    GpioInputId: _FieldType(name="GpioInputId", parse=int, value_type=int),
+    OutputId: _FieldType(name="OutputId", parse=int, value_type=int),
+    ActionId: _FieldType(name="ActionId", parse=int, value_type=int),
 }
 """The types a field of a configuration can have."""
+
+_WIDGET_TYPES: dict[str, tuple[Any, ...]] = {
+    "octoprint_events": (FrozenSet[str],),
+    "output_setpoint": (float, Optional[float], Rgb),
+    "pwm_output": (OutputId,),
+    "rule_timing": (float, str),
+    "temperature": (float, Optional[float]),
+    "temperature_interval": (float,),
+    "textarea": (str,),
+    "thermostat_sensor": (SensorInputId,),
+}
+"""The widgets a field can declare, each with the types of the fields it is for."""
 
 
 @dataclass(frozen=True)
@@ -152,6 +167,149 @@ class BaseConfig:
 
     type_help: ClassVar[str] = ""
     """The help text of the type (can also contain HTML)."""
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Check how the fields of the configuration are declared.
+
+        Raises:
+            TypeError: If some declarations are not valid.
+
+        """
+        super().__init_subclass__(**kwargs)
+
+        type_hints = {
+            name: type_hint
+            for name, type_hint in get_type_hints(cls).items()
+            if getattr(type_hint, "__origin__", None) is not ClassVar
+        }
+        names = list(type_hints)
+        problems = []
+
+        # Check type help
+        type_help = vars(cls).get("type_help", "")
+        if type_help and not type_help.rstrip().endswith("."):
+            problems.append("type_help has no final period")
+
+        # Check fields
+        for name, type_hint in type_hints.items():
+            # Check type hint
+            is_enum = isinstance(type_hint, type) and issubclass(type_hint, Enum)
+            if type_hint not in _FIELD_TYPES and not is_enum:
+                problems.append(f"{name} has a type that can't be read from settings: {type_hint}")
+                continue
+
+            # The fields of the parent classes were checked with their classes
+            field = vars(cls).get(name)
+            if not isinstance(field, Field) or "optional" not in field.metadata:
+                continue
+
+            parse = type_hint if is_enum else _FIELD_TYPES[type_hint].parse
+            default = field.default
+            has_default = default is not MISSING and default is not _NO_DEFAULT
+            optional = field.metadata["optional"]
+            choices = field.metadata["choices"]
+            unit = field.metadata["unit"]
+            min_value = field.metadata["min_value"]
+            max_value = field.metadata["max_value"]
+            widget = field.metadata["widget"]
+            is_number = type_hint in (int, float, Optional[float], HexInt)
+            has_limits = min_value is not None or max_value is not None
+            has_optional_type = type(None) in getattr(type_hint, "__args__", ())
+
+            # Limits
+            if has_limits and not is_number:
+                problems.append(f"{name} has limits but is not a number")
+            if min_value is not None and max_value is not None and min_value > max_value:
+                problems.append(f"{name} has min_value {min_value} higher than max_value {max_value}")
+
+            # Default
+            if is_enum:
+                is_default_of_type = isinstance(default, type_hint)
+            else:
+                # A bool is also an int, but it is not the value of a number
+                is_default_of_type = isinstance(default, _FIELD_TYPES[type_hint].value_type)
+                is_default_of_type = is_default_of_type and isinstance(default, bool) == (type_hint is bool)
+
+            if has_default and (default == "" or default is None):
+                problems.append(f"{name} has an empty default, which is the same as no default")
+            elif has_default and not is_default_of_type:
+                problems.append(f"{name} has a default that is not a value of its type: {default!r}")
+            elif has_default and is_number and min_value is not None and default < min_value:
+                problems.append(f"{name} has a default lower than its min_value: {default!r}")
+            elif has_default and is_number and max_value is not None and default > max_value:
+                problems.append(f"{name} has a default higher than its max_value: {default!r}")
+            if type_hint is bool and choices is None and not has_default:
+                problems.append(f"{name} is a bool without choices, which needs a default")
+
+            # Optional
+            if optional and type_hint is not str and not has_optional_type:
+                problems.append(f"{name} is optional but its type is not str nor Optional")
+            if has_optional_type and not optional:
+                problems.append(f"{name} has an Optional type but is not optional")
+
+            # Choices
+            if is_enum and not issubclass(type_hint, LabeledEnum):
+                problems.append(f"{name} is an enumeration without labels: use a LabeledEnum")
+            elif choices is not None:
+                # The choices of an enumeration are its members, the others are saved values with their label
+                try:
+                    choice_values = [parse(choice if is_enum else choice.value) for choice in choices]
+                    choice_labels = [choice.label for choice in choices]
+                except (AttributeError, TypeError, ValueError, OverflowError):
+                    problems.append(f"{name} has choices that are not values it can have, each with a label")
+                else:
+                    if not choices:
+                        problems.append(f"{name} has no choices")
+                    if len(set(choice_values)) != len(choice_values):
+                        problems.append(f"{name} has repeated choices")
+                    if "" in choice_labels or len(set(choice_labels)) != len(choice_labels):
+                        problems.append(f"{name} has choices with empty or repeated labels")
+                    if has_default and default not in choice_values:
+                        problems.append(f"{name} has a default that is not one of its choices: {default!r}")
+                if has_limits:
+                    problems.append(f"{name} has both choices and limits")
+
+            # Unit and widget
+            if unit and (not is_number or choices is not None):
+                problems.append(f"{name} has a unit but is not a number, or has choices")
+            if widget and widget not in _WIDGET_TYPES:
+                problems.append(f"{name} has an unknown widget: {widget!r}")
+            elif widget and type_hint not in _WIDGET_TYPES[widget]:
+                problems.append(f"{name} has the widget {widget!r}, which is not for its type")
+            if unit and widget in ("temperature", "temperature_interval"):
+                problems.append(f"{name} has a unit, but its widget shows the unit of the temperatures")
+
+            # Visible if
+            for other_name, other_values in (field.metadata["visible_if"] or {}).items():
+                if other_name not in names[: names.index(name)]:
+                    problems.append(f"{name} is visible if {other_name}, which is not a field declared before it")
+                    continue
+
+                # A field with a type that can't be read is already a problem
+                other_type_hint = type_hints[other_name]
+                if other_type_hint in _FIELD_TYPES:
+                    other_parse = _FIELD_TYPES[other_type_hint].parse
+                elif isinstance(other_type_hint, type) and issubclass(other_type_hint, Enum):
+                    other_parse = other_type_hint
+                else:
+                    continue
+
+                try:
+                    for other_value in other_values:
+                        other_parse(other_value)
+                except (TypeError, ValueError, OverflowError):
+                    problems.append(f"{name} is visible if {other_name} has values it can't have: {other_values!r}")
+                if not other_values:
+                    problems.append(f"{name} is visible if {other_name} has one of no values")
+
+            # Texts
+            help_text = field.metadata["help_text"]
+            if help_text and not help_text.rstrip().endswith("."):
+                problems.append(f"{name} has a help text with no final period")
+
+        if problems:
+            msg = f"{cls.__name__} has invalid declarations: {'; '.join(problems)}"
+            raise TypeError(msg)
 
     @classmethod
     def from_settings(cls, settings: dict) -> Self:
@@ -167,7 +325,6 @@ class BaseConfig:
             Self: The configuration.
 
         Raises:
-            TypeError: If a field has a type that can't be read from settings.
             ValueError: If a key is missing, empty or null and its field is not optional, or its value is not valid
                 for its field or for the configuration.
 
@@ -191,13 +348,7 @@ class BaseConfig:
 
         for field in fields(cls):
             type_hint = type_hints[field.name]
-            if type_hint in _FIELD_TYPES:
-                parse = _FIELD_TYPES[type_hint].parse
-            elif isinstance(type_hint, type) and issubclass(type_hint, Enum):
-                parse = type_hint
-            else:
-                msg = f"{field.name} has a type that can't be read from settings: {type_hint}"
-                raise TypeError(msg)
+            parse = _FIELD_TYPES[type_hint].parse if type_hint in _FIELD_TYPES else type_hint
 
             value = settings.get(field.name, "")
             if value == "" or value is None:

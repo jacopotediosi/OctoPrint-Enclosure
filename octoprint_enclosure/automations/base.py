@@ -32,7 +32,7 @@ class AutomationConfig(BaseConfig):
     index_id: int = setting(label="Id")
     """The id of the automation."""
 
-    label: str = setting(default="", optional=True, label="Label", compare=False)
+    label: str = setting(optional=True, label="Label", compare=False)
     """The label of the automation."""
 
     automation_type: str = setting(label="Automation Type")

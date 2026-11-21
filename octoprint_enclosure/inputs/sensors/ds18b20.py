@@ -30,7 +30,6 @@ class Ds18b20Config(PinSensorConfig):
     """The GPIO pin of the data line."""
 
     ds18b20_serial: str = setting(
-        default="",
         optional=True,
         label="DS18B20 Serial Number",
         help_text=(

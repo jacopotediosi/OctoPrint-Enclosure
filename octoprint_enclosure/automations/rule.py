@@ -48,7 +48,6 @@ class RuleConfig(AutomationConfig):
     """The seconds to wait after the trigger before running the reactions."""
 
     at: str = setting(
-        default="",
         optional=True,
         label="At",
         help_text="Time of day, as <code>HH:MM</code>: the reactions run the next time it comes after the trigger.",

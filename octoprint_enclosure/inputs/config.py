@@ -28,7 +28,7 @@ class InputConfig(BaseConfig):
     index_id: int = setting(label="Id")
     """The id of the input."""
 
-    label: str = setting(default="", optional=True, label="Label", compare=False)
+    label: str = setting(optional=True, label="Label", compare=False)
     """The name of the input."""
 
     input_type: InputType = setting(label="Input Type")
