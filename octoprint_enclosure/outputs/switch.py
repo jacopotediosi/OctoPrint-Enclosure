@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.settings import setting
+from octoprint_enclosure.settings import HexInt, setting
 from octoprint_enclosure.utils import LabeledValue
 
 from .config import OutputConfig
@@ -44,7 +44,7 @@ class SwitchConfig(OutputConfig):
     )
     """The number of the I2C bus."""
 
-    gpio_i2c_address: int = setting(
+    gpio_i2c_address: HexInt = setting(
         label="I2C Address",
         help_text=(
             "Address of the device, in hexadecimal. Find it by running <code>i2cdetect -y 1</code> (from the "
@@ -56,7 +56,7 @@ class SwitchConfig(OutputConfig):
     )
     """The I2C address of the device."""
 
-    gpio_i2c_register: int = setting(
+    gpio_i2c_register: HexInt = setting(
         label="I2C Register",
         help_text="Register to write, in hexadecimal.",
         min_value=0,
@@ -65,7 +65,7 @@ class SwitchConfig(OutputConfig):
     )
     """The I2C register written to set the output switch high or low."""
 
-    gpio_i2c_data_on: int = setting(
+    gpio_i2c_data_on: HexInt = setting(
         label="I2C ON data",
         help_text="Value written to turn the output on, in hexadecimal.",
         min_value=0,
@@ -74,7 +74,7 @@ class SwitchConfig(OutputConfig):
     )
     """The value of the I2C registers when the output switch is high."""
 
-    gpio_i2c_data_off: int = setting(
+    gpio_i2c_data_off: HexInt = setting(
         label="I2C OFF data",
         help_text="Value written to turn the output off, in hexadecimal.",
         min_value=0,
@@ -83,7 +83,7 @@ class SwitchConfig(OutputConfig):
     )
     """The value written via I2C to set the output switch low."""
 
-    gpio_i2c_register_status: int = setting(
+    gpio_i2c_register_status: HexInt = setting(
         label="I2C Register (read status)",
         help_text="Register read to know the state of the output, in hexadecimal.",
         min_value=0,

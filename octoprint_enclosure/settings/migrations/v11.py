@@ -63,6 +63,7 @@ def migrate(settings: PluginSettings, logger: logging.Logger) -> None:
     _move_neopixel_dma_to_each_output(rpi_outputs, settings)
     _remove_use_sudo(settings)
     _convert_board_pins_to_bcm(rpi_inputs, rpi_outputs, settings)
+    _convert_i2c_numbers_to_hexadecimal(rpi_inputs, rpi_outputs)
 
     settings.set(["rpi_inputs"], rpi_inputs)
     settings.set(["rpi_outputs"], rpi_outputs)
@@ -834,3 +835,27 @@ def _convert_board_pins_to_bcm(rpi_inputs: list[dict], rpi_outputs: list[dict], 
                 rpi_output["gpio_pin"] = board_to_bcm.get(pin, "")
 
     settings.remove(["use_board_pin_number"])
+
+
+def _convert_i2c_numbers_to_hexadecimal(rpi_inputs: list[dict], rpi_outputs: list[dict]) -> None:
+    """Write in hexadecimal the I2C address, registers and data of the raw I2C sensors and of the I2C outputs.
+
+    The settings asked for hexadecimal values, but read them as decimal numbers. Version 11 reads them as
+    hexadecimal, so each saved number is rewritten to keep its value, e.g. 32 becomes 20.
+    """
+    input_keys = ("temp_i2c_address", "temp_i2c_register")
+    output_keys = (
+        "gpio_i2c_address",
+        "gpio_i2c_register",
+        "gpio_i2c_data_on",
+        "gpio_i2c_data_off",
+        "gpio_i2c_register_status",
+    )
+    for items, keys in ((rpi_inputs, input_keys), (rpi_outputs, output_keys)):
+        for item in items:
+            for key in keys:
+                try:
+                    number = int(item.get(key, ""))
+                except (TypeError, ValueError, OverflowError):
+                    continue
+                item[key] = f"{number:x}"

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.settings import setting
+from octoprint_enclosure.settings import HexInt, setting
 
 from .base import Reading, Sensor, SensorError, SensorInputConfig
 
@@ -33,7 +33,7 @@ class RawI2cConfig(SensorInputConfig):
     )
     """The number of the I2C bus."""
 
-    temp_i2c_address: int = setting(
+    temp_i2c_address: HexInt = setting(
         label="I2C Address",
         help_text=(
             "Address of the device, in hexadecimal. Find it by running <code>i2cdetect -y 1</code> (from the "
@@ -44,7 +44,7 @@ class RawI2cConfig(SensorInputConfig):
     )
     """The I2C address of the device."""
 
-    temp_i2c_register: int = setting(
+    temp_i2c_register: HexInt = setting(
         label="I2C Register",
         help_text="Register to read, in hexadecimal.",
         min_value=0,
