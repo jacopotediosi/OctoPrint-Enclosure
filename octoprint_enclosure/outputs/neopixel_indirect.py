@@ -47,6 +47,7 @@ class NeopixelIndirectConfig(OutputConfig):
     """The number of NeoPixels."""
 
     neopixel_brightness: int = setting(
+        default=255,
         label="Brightness",
         help_text="Value between 0 and 255.",
         min_value=0,

@@ -24,7 +24,7 @@ class PwmConfig(OutputConfig):
     gpio_pin: int = setting(label="GPIO", help_text="GPIO the output is connected to.", min_value=0)
     """The GPIO pin of the PWM."""
 
-    pwm_frequency: int = setting(label="PWM Frequency", unit="Hz", min_value=1)
+    pwm_frequency: int = setting(default=50, label="PWM Frequency", unit="Hz", min_value=1)
     """The frequency of the PWM, in Hz."""
 
 

@@ -24,6 +24,7 @@ class RawI2cConfig(SensorInputConfig):
     )
 
     temp_i2c_bus: int = setting(
+        default=1,
         label="I2C Bus",
         help_text=(
             "1 is the bus of GPIO 2 and 3. For a device on another bus, for example one made on other pins with "

@@ -35,6 +35,7 @@ class OutputSetpointConfig(BaseConfig):
 
     target: Optional[float] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
         default=None,
+        optional=True,
         label="Target",
         help_text="Value the thermostat is set to when it is turned on.",
         widget="output_setpoint",

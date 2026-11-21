@@ -26,6 +26,7 @@ class GpioInputTriggerConfig(BaseConfig):
     """The id of the GPIO input."""
 
     edge: Edge = setting(
+        default=Edge.FALL,
         label="Edge",
         help_text=(
             "If your button or sensor connects the pin to ground, Fall is when it does and Rise when it stops. If it "

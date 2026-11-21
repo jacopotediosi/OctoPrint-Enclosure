@@ -35,7 +35,7 @@ class RuleConfig(AutomationConfig):
         "output when a button connected to a GPIO input is pressed, or when the temperature goes above a threshold."
     )
 
-    trigger_type: str = setting(default="", label="Trigger")
+    trigger_type: str = setting(label="Trigger")
     """The type of the trigger of the rule."""
 
     delay: float = setting(
@@ -49,6 +49,7 @@ class RuleConfig(AutomationConfig):
 
     at: str = setting(
         default="",
+        optional=True,
         label="At",
         help_text="Time of day, as <code>HH:MM</code>: the reactions run the next time it comes after the trigger.",
         widget="rule_timing",

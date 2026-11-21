@@ -24,6 +24,7 @@ class PrintJobConditionConfig(BaseConfig):
     )
 
     printing: bool = setting(
+        default=True,
         label="Print Job",
         choices=[
             LabeledValue(value=True, label="Only while printing"),

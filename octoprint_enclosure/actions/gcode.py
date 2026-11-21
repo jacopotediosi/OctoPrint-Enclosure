@@ -13,7 +13,7 @@ from .base import Action, ActionConfig
 class GcodeConfig(ActionConfig):
     """The configuration of an action that sends G-code to the printer."""
 
-    gcode: str = setting(default="", label="Gcode", widget="textarea")
+    gcode: str = setting(default="", optional=True, label="Gcode", widget="textarea")
     """The G-code to send."""
 
 

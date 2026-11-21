@@ -19,6 +19,7 @@ class SwitchConfig(OutputConfig):
     """The configuration of an output with a switch, on a GPIO pin or driven by a device on the I2C bus."""
 
     gpio_i2c_enabled: bool = setting(
+        default=False,
         label="Connection",
         choices=[LabeledValue(value=False, label="GPIO pin"), LabeledValue(value=True, label="I2C")],
     )
@@ -33,6 +34,7 @@ class SwitchConfig(OutputConfig):
     """The GPIO pin of the output switch, when it isn't driven through I2C."""
 
     gpio_i2c_bus: int = setting(
+        default=1,
         label="I2C Bus",
         help_text=(
             "1 is the bus of GPIO 2 and 3. For a device on another bus, for example one made on other pins with "
@@ -93,8 +95,9 @@ class SwitchConfig(OutputConfig):
     """The I2C register read to know whether the output switch is high."""
 
     active_low: bool = setting(
-        label="Active Low",
-        help_text="Enable it if your device turns on when the pin is connected to ground, as most relay modules do.",
+        label="Active Level",
+        help_text="Choose Low if your device turns on when the pin is connected to ground, as most relay modules do.",
+        choices=[LabeledValue(value=False, label="High"), LabeledValue(value=True, label="Low")],
     )
     """Whether the output switch is on when it is low."""
 

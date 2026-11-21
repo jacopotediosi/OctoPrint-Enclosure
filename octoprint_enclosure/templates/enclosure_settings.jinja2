@@ -67,7 +67,7 @@
                         </div>
                         <div data-bind="if: temp_sensor_type() == '18b20'">
                             {{ text_control_group("gpio_pin", _("GPIO"), "GPIO the data line is connected to, 4 unless you changed the 1-Wire overlay") }}
-                            {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("", "None"), ("input_pull_up", "Input Pullup")], "Whether to enable the built-in pullup for this temperature sensor. If set, then no external pullup is needed.") }}
+                            {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("none", "None"), ("input_pull_up", "Input Pullup")], "Whether to enable the built-in pullup for this temperature sensor. If set, then no external pullup is needed.") }}
                             {{ text_control_group("ds18b20_serial", _("DS18B20 Serial"), "DS18B20 serial value, needs to be used to have support for multiple sensors, read documentation on github page for more information. The serial is typically in the form of 28-0123456789ab.") }}
                         </div>
                         <div data-bind="if: temp_sensor_type() == 'si7021' || temp_sensor_type() == '20' || temp_sensor_type() == 'bme280' || temp_sensor_type() == 'am2320' || temp_sensor_type() == 'aht10' || temp_sensor_type() == 'tmp102' || temp_sensor_type() == 'mcp9808'">
@@ -114,7 +114,7 @@
                                 </div>
                             </div>
                             {{ text_control_group("gpio_pin", _("GPIO"), "GPIO the data line of the sensor is connected to") }}
-                            {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("", "None"), ("input_pull_up", "Input Pullup")], "Whether to enable the built-in pullup for this temperature sensor. If set, then no external pullup is needed.") }}
+                            {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("none", "None"), ("input_pull_up", "Input Pullup")], "Whether to enable the built-in pullup for this temperature sensor. If set, then no external pullup is needed.") }}
                         </div>
                     </div>
                     <div data-bind="if: input_type() == 'gpio'">

@@ -25,6 +25,7 @@ class GpioConfig(InputConfig):
     """The GPIO pin of the input."""
 
     input_pull_resistor: PullResistor = setting(
+        default=PullResistor.UP,
         label="Input Pull Resistor",
         help_text=(
             "Choose Input Pullup if your button or sensor connects the pin to ground, or Input Pulldown if it connects "

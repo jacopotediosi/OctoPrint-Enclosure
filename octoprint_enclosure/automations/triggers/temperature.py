@@ -32,6 +32,7 @@ class TemperatureTriggerConfig(BaseConfig):
     """The temperature above which the automation starts."""
 
     repeat_while_above: bool = setting(
+        default=False,
         label="Repeat while above",
         help_text=(
             "Run the automation at every reading above the set temperature, instead of only when the temperature goes "

@@ -25,10 +25,10 @@ class ActionConfig(BaseConfig):
     index_id: int = setting(label="Id")
     """The id of the action."""
 
-    label: str = setting(default="", label="Label", compare=False)
+    label: str = setting(default="", optional=True, label="Label", compare=False)
     """The label of the action."""
 
-    action_type: str = setting(default="", label="Action Type")
+    action_type: str = setting(label="Action Type")
     """The type of the action."""
 
     hide_btn_ui: bool = setting(default=False, label="Hide in tab", compare=False)

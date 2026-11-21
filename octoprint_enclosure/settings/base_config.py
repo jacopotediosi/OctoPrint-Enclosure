@@ -41,13 +41,14 @@ _IdT = TypeVar("_IdT", bound=int)
 _DefaultT = TypeVar("_DefaultT")
 
 
-_REQUIRED: Any = object()
-"""The default of a field whose key must be set."""
+_NO_DEFAULT: Any = object()
+"""The default of a field that has none."""
 
 
 def setting(
     *,
-    default: _DefaultT = _REQUIRED,
+    default: _DefaultT = _NO_DEFAULT,
+    optional: bool = False,
     label: str = "",
     help_text: str = "",
     choices: Sequence[LabeledValue | LabeledEnum] | None = None,
@@ -61,7 +62,8 @@ def setting(
     """Declare a field of a configuration.
 
     Args:
-        default (_DefaultT): The default of the field. Without one, the key of the field must be set.
+        default (_DefaultT): The value of the field in a new item. Without one, the field starts empty.
+        optional (bool): Whether the field can be left empty.
         label (str): The label of the field.
         help_text (str): The help text (can also contain HTML).
         choices (Sequence[LabeledValue | LabeledEnum] | None): The values the field can be set to, in order:
@@ -92,6 +94,7 @@ def setting(
 
     """
     metadata = {
+        "optional": optional,
         "label": label,
         "help_text": help_text,
         "choices": choices,
@@ -154,7 +157,8 @@ class BaseConfig:
     def from_settings(cls, settings: dict) -> Self:
         """Read the configuration from settings.
 
-        A key that is missing, empty or null gives the default of its field. A field with no default needs its key.
+        A key that is missing, empty or null leaves an optional field empty: an empty text for a text, None for the
+        others. Every other field needs its key.
 
         Args:
             settings (dict): The settings to read.
@@ -164,18 +168,22 @@ class BaseConfig:
 
         Raises:
             TypeError: If a field has a type that can't be read from settings.
-            ValueError: If a key is missing, empty or null and its field needs it, or its value is not valid for its
-                field or for the configuration.
+            ValueError: If a key is missing, empty or null and its field is not optional, or its value is not valid
+                for its field or for the configuration.
 
         Examples:
             >>> @dataclass(frozen=True)
             ... class I2cConfig(BaseConfig):
             ...     temp_sensor_address: HexInt = setting()
-            ...     temp_sensor_i2cbus: int = 1
-            >>> I2cConfig.from_settings({"label": "Enclosure", "temp_sensor_address": "38", "temp_sensor_i2cbus": "3"})
-            I2cConfig(temp_sensor_address=56, temp_sensor_i2cbus=3)
-            >>> I2cConfig.from_settings({"label": "Enclosure", "temp_sensor_address": "38", "temp_sensor_i2cbus": ""})
-            I2cConfig(temp_sensor_address=56, temp_sensor_i2cbus=1)
+            ...     label: str = setting(optional=True)
+            >>> I2cConfig.from_settings({"temp_sensor_address": "38", "label": "Enclosure"})
+            I2cConfig(temp_sensor_address=56, label='Enclosure')
+            >>> I2cConfig.from_settings({"temp_sensor_address": "38"})
+            I2cConfig(temp_sensor_address=56, label='')
+            >>> I2cConfig.from_settings({"label": "Enclosure"})
+            Traceback (most recent call last):
+                ...
+            ValueError: temp_sensor_address is not set
 
         """
         type_hints = get_type_hints(cls)
@@ -193,11 +201,12 @@ class BaseConfig:
 
             value = settings.get(field.name, "")
             if value == "" or value is None:
-                if field.default is MISSING or field.default is _REQUIRED:
+                if not field.metadata.get("optional", False):
                     msg = f"{field.name} is not set"
                     raise ValueError(msg)
 
-                # The dataclass fills in the default
+                # An optional field left empty is an empty text, or None if it is not a text
+                values[field.name] = "" if type_hint is str else None
                 continue
 
             try:
@@ -229,8 +238,8 @@ class BaseConfig:
 
                 - "name" (str): The name of the field.
                 - "type" (str): The name of the type of the field, or "Enum" for an enumeration.
-                - "optional" (bool): Whether the key of the field can be left unset.
-                - "default" (Any): The default of the field as it is saved, None if the field is not optional.
+                - "optional" (bool): Whether the field can be left empty.
+                - "default" (Any): The value of the field in a new item, as it is saved, None if it starts empty.
                 - "label" (str): The label, empty if not declared.
                 - "help_text" (str): The help text, empty if not declared.
                 - "choices" (list[list[Any]] | None): The values the field can be set to, each with its label, None
@@ -249,9 +258,7 @@ class BaseConfig:
         for field in fields(cls):
             type_hint = type_hints[field.name]
             type_name = _FIELD_TYPES[type_hint].name if type_hint in _FIELD_TYPES else "Enum"
-            optional = field.default is not MISSING and field.default is not _REQUIRED
-
-            default = field.default if optional else None
+            default = None if field.default is MISSING or field.default is _NO_DEFAULT else field.default
             if isinstance(default, Enum):
                 default = default.value
             elif isinstance(default, Rgb):
@@ -267,7 +274,7 @@ class BaseConfig:
                 {
                     "name": field.name,
                     "type": type_name,
-                    "optional": optional,
+                    "optional": field.metadata.get("optional", False),
                     "default": default,
                     "label": field.metadata.get("label", ""),
                     "help_text": field.metadata.get("help_text", ""),
@@ -293,7 +300,9 @@ class BaseConfig:
 
         Examples:
             >>> from octoprint_enclosure.automations.reactions.output_control import OutputControlConfig
-            >>> config = OutputControlConfig.from_settings({"controlled_io": 3, "controlled_io_set_state": "on"})
+            >>> config = OutputControlConfig.from_settings(
+            ...     {"controlled_io": 3, "controlled_io_set_state": "on", "duty_cycle": 0, "color": "#000000"}
+            ... )
             >>> config.get_linked_ids(OutputId)
             [3]
             >>> config.get_linked_ids(ActionId)

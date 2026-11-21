@@ -64,6 +64,7 @@ def migrate(settings: PluginSettings, logger: logging.Logger) -> None:
     _remove_use_sudo(settings)
     _convert_board_pins_to_bcm(rpi_inputs, rpi_outputs, settings)
     _convert_i2c_numbers_to_hexadecimal(rpi_inputs, rpi_outputs)
+    _replace_empty_values_with_defaults(rpi_inputs, rpi_outputs, actions, automations)
 
     settings.set(["rpi_inputs"], rpi_inputs)
     settings.set(["rpi_outputs"], rpi_outputs)
@@ -764,7 +765,7 @@ def _add_keys_of_every_type_with_defaults(actions: list[dict], automations: list
         "toggle_timer_on": 0,
         "toggle_timer_off": 0,
         "duty_cycle": 0,
-        "color": "",
+        "color": "#000000",
         "target": None,
     }
     reaction_defaults = {
@@ -772,7 +773,7 @@ def _add_keys_of_every_type_with_defaults(actions: list[dict], automations: list
         "controlled_io": "",
         "controlled_io_set_state": "on",
         "duty_cycle": 0,
-        "color": "",
+        "color": "#000000",
         "target": None,
         "action": "",
     }
@@ -859,3 +860,42 @@ def _convert_i2c_numbers_to_hexadecimal(rpi_inputs: list[dict], rpi_outputs: lis
                 except (TypeError, ValueError, OverflowError):
                     continue
                 item[key] = f"{number:x}"
+
+
+def _replace_empty_values_with_defaults(
+    rpi_inputs: list[dict],
+    rpi_outputs: list[dict],
+    actions: list[dict],
+    automations: list[dict],
+) -> None:
+    """Write the default of the fields that are saved empty or missing and that version 11 needs set.
+
+    Version 10 read an empty or missing value of these fields as their default. Version 11 would reject the item, so
+    the default is written.
+    """
+    sensor_input_defaults = {
+        "input_pull_resistor": "none",
+        "temp_sensor_i2cbus": 1,
+        "temp_sensor_navbar": True,
+        "show_graph_temp": False,
+        "show_graph_humidity": False,
+    }
+    output_defaults = {"hide_btn_ui": False, "show_on_navbar": False, "neopixel_dma": 10}
+    action_defaults = {"hide_btn_ui": False, "show_on_navbar": False}
+    automation_defaults = {"enabled": True, "show_in_tab": False, "delay": 0, "duty_cycle": 0, "color": "#000000"}
+    reaction_defaults = {"duty_cycle": 0, "color": "#000000"}
+
+    sensor_inputs = [rpi_input for rpi_input in rpi_inputs if rpi_input.get("input_type") == "temperature_sensor"]
+    reactions = [reaction for automation in automations for reaction in automation["reactions"]]
+
+    for items, defaults in (
+        (sensor_inputs, sensor_input_defaults),
+        (rpi_outputs, output_defaults),
+        (actions, action_defaults),
+        (automations, automation_defaults),
+        (reactions, reaction_defaults),
+    ):
+        for item in items:
+            for key, value in defaults.items():
+                if item.get(key) in ("", None):
+                    item[key] = value

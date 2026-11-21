@@ -11,7 +11,7 @@ class PullResistor(LabeledEnum):
 
     UP = LabeledValue(value="input_pull_up", label="Input Pullup")
     DOWN = LabeledValue(value="input_pull_down", label="Input Pulldown")
-    OFF = LabeledValue(value="", label="None")
+    OFF = LabeledValue(value="none", label="None")
 
 
 class InputType(LabeledEnum):
@@ -28,7 +28,7 @@ class InputConfig(BaseConfig):
     index_id: int = setting(label="Id")
     """The id of the input."""
 
-    label: str = setting(default="", label="Label", compare=False)
+    label: str = setting(default="", optional=True, label="Label", compare=False)
     """The name of the input."""
 
     input_type: InputType = setting(label="Input Type")

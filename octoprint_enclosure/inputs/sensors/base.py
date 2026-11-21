@@ -49,10 +49,7 @@ class SensorError(Exception):
 class SensorInputConfig(InputConfig):
     """The configuration shared by all the inputs with a temperature sensor."""
 
-    temp_sensor_type: str = setting(
-        default="",
-        label="Sensor Type",
-    )
+    temp_sensor_type: str = setting(label="Sensor Type")
     """The type of the sensor."""
 
     temp_sensor_navbar: bool = setting(default=True, label="Show temperature in navbar", compare=False)
@@ -150,7 +147,7 @@ class PinSensorConfig(SensorInputConfig):
     """The GPIO pin of the data line."""
 
     input_pull_resistor: PullResistor = setting(
-        default=PullResistor.OFF,
+        default=PullResistor.UP,
         label="Input Pull Resistor",
         help_text=(
             "A sensor on a board usually has the resistor it needs already: choose None. A bare sensor needs one: "

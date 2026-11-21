@@ -48,6 +48,7 @@ class ThermostatConfig(SwitchConfig):
     """The id of the input of the sensor that reads the temperature or the humidity."""
 
     temp_ctr_deadband: float = setting(
+        default=2,
         label="Value Deadband",
         help_text="Allowable drift of the thermostat below its target. Set it to zero to disable.",
         min_value=0,
@@ -58,7 +59,8 @@ class ThermostatConfig(SwitchConfig):
     the target, the device stays as it is. A dehumidifier ignores it."""
 
     temp_ctr_max_temp: Optional[float] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
-        default=None,
+        default=65,
+        optional=True,
         label="Maximum Temperature",
         help_text=(
             "Maximum temperature the sensor should read. Above it, the thermostat turns off until its target is set "

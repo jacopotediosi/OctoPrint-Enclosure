@@ -576,7 +576,7 @@ $(function () {
         toggle_timer_on: ko.observable(0),
         toggle_timer_off: ko.observable(0),
         duty_cycle: ko.observable(0),
-        color: ko.observable(""),
+        color: ko.observable("#000000"),
         target: ko.observable(null),
         temperature_a: ko.observable(0),
         duty_a: ko.observable(0),
@@ -620,7 +620,7 @@ $(function () {
 
     self.newCondition = function () {
       return {
-        condition_type: ko.observable(""),
+        condition_type: ko.observable("print_job"),
         printing: ko.observable(true)
       };
     };
@@ -639,7 +639,7 @@ $(function () {
         controlled_io: ko.observable(""),
         controlled_io_set_state: ko.observable("on"),
         duty_cycle: ko.observable(0),
-        color: ko.observable(""),
+        color: ko.observable("#000000"),
         target: ko.observable(null),
         action: ko.observable("")
       };
