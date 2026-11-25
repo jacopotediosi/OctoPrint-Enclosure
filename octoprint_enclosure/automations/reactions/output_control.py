@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, ClassVar, Mapping, Sequence
 
 from octoprint_enclosure.outputs import OutputSetpointConfig
 from octoprint_enclosure.settings import OutputId, setting
@@ -20,6 +21,10 @@ class OutputSetState(LabeledEnum):
 @dataclass(frozen=True)
 class OutputControlConfig(OutputSetpointConfig, ReactionConfig):
     """The configuration of an automation reaction that controls an output."""
+
+    setpoint_visible_if: ClassVar[Mapping[str, Sequence[Any]]] = {
+        "controlled_io_set_state": [OutputSetState.ON.value, OutputSetState.TOGGLE.value],
+    }
 
     controlled_io: OutputId = setting(
         label="Controlled IO",

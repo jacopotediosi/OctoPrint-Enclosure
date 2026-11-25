@@ -25,7 +25,9 @@ class InputType(LabeledEnum):
 class InputConfig(BaseConfig):
     """The configuration shared by all the inputs."""
 
-    index_id: int = setting(label="Id")
+    type_field_name = "input_type"
+
+    index_id: int = setting(label="Id", widget="id")
     """The id of the input."""
 
     label: str = setting(optional=True, label="Label", compare=False)

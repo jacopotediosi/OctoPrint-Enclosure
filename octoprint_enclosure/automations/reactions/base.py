@@ -4,16 +4,26 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from octoprint_enclosure.settings import BaseConfig, setting
+from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 if TYPE_CHECKING:
     from typing_extensions import Self
+
+
+class ReactionType(LabeledEnum):
+    """The type of an automation reaction."""
+
+    OUTPUT_CONTROL = LabeledValue(value="output_control", label="Output Control")
+    RUN_ACTION = LabeledValue(value="run_action", label="Run Action")
 
 
 @dataclass(frozen=True)
 class ReactionConfig(BaseConfig):
     """The configuration shared by all the automation reactions."""
 
-    reaction_type: str = setting(label="Reaction")
+    type_field_name = "reaction_type"
+
+    reaction_type: ReactionType = setting(label="Reaction")
     """The type of the reaction."""
 
 

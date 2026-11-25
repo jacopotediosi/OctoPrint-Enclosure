@@ -1,3 +1,5 @@
+/* Tab */
+
 #enclosure-table {
     table-layout: fixed;
     width: 100%;
@@ -49,4 +51,28 @@
 
 .ledstrip-div, .neopixel-div{
     width: 25%;
+}
+
+/* Settings */
+
+.enclosure-required > .control-label::after {
+    content: " *";
+    color: #b94a48;
+}
+
+#settings_plugin_enclosure input[type="number"] {
+    text-align: left;
+}
+
+#settings_plugin_enclosure .controls > select ~ .help-block {
+    margin-top: 10px;
+}
+
+#settings_plugin_enclosure .input-append {
+    display: flex;
+}
+
+#settings_plugin_enclosure .input-append > input {
+    flex: 1;
+    min-width: 0;
 }

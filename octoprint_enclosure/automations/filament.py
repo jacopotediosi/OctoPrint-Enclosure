@@ -10,21 +10,20 @@ from octoprint_enclosure.settings import ActionId, setting
 
 from .base import Automation, AutomationConfig
 from .events import GpioEdgeEvent
-from .triggers import GpioInputTrigger
+from .triggers import GpioInputTrigger, GpioInputTriggerConfig
 
 if TYPE_CHECKING:
     import logging
 
     from typing_extensions import Self
 
-    from octoprint_enclosure.settings import BaseConfig
 
 MIN_PRESENCE_SECONDS = 90
 """The seconds the filament has to be present before its end counts."""
 
 
 @dataclass(frozen=True)
-class FilamentConfig(AutomationConfig):
+class FilamentConfig(AutomationConfig, GpioInputTriggerConfig):
     """The configuration of an automation that runs an action when a sensor detects the end of the filament."""
 
     type_help = (
@@ -44,6 +43,8 @@ class FilamentAutomation(Automation[FilamentConfig]):
     """An automation that runs an action when a sensor detects the end of the filament."""
 
     config_class = FilamentConfig
+
+    nested_item_lists = ()
 
     _trigger: GpioInputTrigger
     """The GPIO input of the sensor, with the edge that means that the filament is missing."""
@@ -71,24 +72,11 @@ class FilamentAutomation(Automation[FilamentConfig]):
         """The GPIO input of the filament sensor, with the edge that means that the filament is missing."""
         return self._trigger
 
-    @property
-    @override
-    def configs(self) -> list[BaseConfig]:
-        """The configurations the automation is made of."""
-        return [*super().configs, self.trigger.config]
-
-    @override
-    def has_same_config(self, other: Automation) -> bool:
-        return (
-            isinstance(other, FilamentAutomation)
-            and super().has_same_config(other)
-            and other.trigger.config == self.trigger.config
-        )
-
     @classmethod
     @override
     def from_settings(cls, settings: dict, logger: logging.Logger) -> Self:
-        return cls(FilamentConfig.from_settings(settings), GpioInputTrigger.from_settings(settings), logger)
+        config = FilamentConfig.from_settings(settings)
+        return cls(config, GpioInputTrigger(config), logger)
 
     def is_filament_missing(self, level: int) -> bool:
         """Check whether a level of the input of the sensor means that the filament is missing.

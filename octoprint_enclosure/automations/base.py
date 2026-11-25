@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 
 from octoprint_enclosure.settings import BaseConfig, setting
+from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
-from .conditions import conditions_from_settings
+from .conditions import CONDITIONS, ConditionConfig, conditions_from_settings
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from typing_extensions import Self
 
@@ -25,18 +26,26 @@ class AutomationError(Exception):
     """Raised when an automation can't be used, with the reason as message."""
 
 
+class AutomationType(LabeledEnum):
+    """The type of an automation."""
+
+    RULE = LabeledValue(value="rule", label="Rule (Trigger-Reaction)")
+    FILAMENT = LabeledValue(value="filament", label="Filament Sensor")
+    PWM_TEMPERATURE_LINKED = LabeledValue(value="pwm_temperature_linked", label="PWM Linked to Temperature")
+    TOGGLE_TIMER = LabeledValue(value="toggle_timer", label="Toggle Timer")
+
+
 @dataclass(frozen=True)
 class AutomationConfig(BaseConfig):
     """The configuration shared by all the automations."""
 
-    index_id: int = setting(label="Id")
+    type_field_name = "automation_type"
+
+    index_id: int = setting(label="Id", widget="id")
     """The id of the automation."""
 
     label: str = setting(optional=True, label="Label", compare=False)
     """The label of the automation."""
-
-    automation_type: str = setting(label="Automation Type")
-    """The type of the automation."""
 
     enabled: bool = setting(
         default=True,
@@ -44,6 +53,9 @@ class AutomationConfig(BaseConfig):
         compare=False,
     )
     """Whether the automation is enabled."""
+
+    automation_type: AutomationType = setting(label="Automation Type")
+    """The type of the automation."""
 
     show_in_tab: bool = setting(
         default=False,
@@ -54,6 +66,23 @@ class AutomationConfig(BaseConfig):
     """Whether the Enclosure tab shows the automation, with a switch to enable or disable it."""
 
 
+@dataclass(frozen=True)
+class NestedItemListDefinition:
+    """Describes a list of items nested in the settings of an automation, e.g. its conditions."""
+
+    settings_key: str
+    """The key of the settings of the automation that holds the list."""
+
+    item_label: str
+    """The name of one item of the list."""
+
+    shared_item_config_class: type[BaseConfig]
+    """The dataclass of the configuration shared by all the items."""
+
+    item_type_classes: Mapping[Any, Any]
+    """The class implementing each type of item."""
+
+
 _ConfigT = TypeVar("_ConfigT", bound=AutomationConfig)
 
 
@@ -62,6 +91,22 @@ class Automation(Generic[_ConfigT]):
 
     config_class: type[_ConfigT]
     """The dataclass of the configuration, whose fields are named like the keys of the settings of the automation."""
+
+    config_type_classes: ClassVar[Mapping[Any, Any]] = {}
+    """The class implementing each type that the type field of the configuration chooses among, e.g. each trigger.
+
+    Empty if the only type field of the configuration is the type of automation.
+    """
+
+    nested_item_lists: ClassVar[Sequence[NestedItemListDefinition]] = (
+        NestedItemListDefinition(
+            settings_key="conditions",
+            item_label="Condition",
+            shared_item_config_class=ConditionConfig,
+            item_type_classes=CONDITIONS,
+        ),
+    )
+    """The lists of items nested in the settings of the automation, e.g. its conditions."""
 
     config: _ConfigT
     """The configuration of the automation."""

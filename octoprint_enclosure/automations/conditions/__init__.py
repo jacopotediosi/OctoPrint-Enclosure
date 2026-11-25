@@ -1,4 +1,4 @@
-from .base import Condition
-from .registry import conditions_from_settings
+from .base import Condition, ConditionConfig
+from .registry import CONDITIONS, conditions_from_settings
 
-__all__ = ["Condition", "conditions_from_settings"]
+__all__ = ["CONDITIONS", "Condition", "ConditionConfig", "conditions_from_settings"]

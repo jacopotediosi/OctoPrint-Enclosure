@@ -1,3 +1,22 @@
+{# ALERTS #}
+{% macro gpio_alert(development_mode, gpio_import_error, gpio_numbering_is_board) %}
+    {% if development_mode %}
+        <div class="alert alert-error enclosure-gpio-alert">
+            <strong>{{ _("Development mode is enabled:") }}</strong> {{ _("GPIO and I2C (pins, sensors, etc) are simulated.") }}
+        </div>
+    {% elif gpio_import_error %}
+        <div class="alert alert-error enclosure-gpio-alert">
+            <strong>{{ _("The GPIO library failed to load:") }}</strong> {{ gpio_import_error }}
+            <br>
+            {{ _("This usually happens when OctoPrint isn't running on a Raspberry Pi. GPIO (pins, sensors, etc) won't work.") }}
+        </div>
+    {% elif gpio_numbering_is_board %}
+        <div class="alert alert-error enclosure-gpio-alert">
+            <strong>{{ _("Another plugin set the GPIO numbering to BOARD:") }}</strong> {{ _("this plugin needs BCM, so its GPIO pins won't work.") }}
+        </div>
+    {% endif %}
+{% endmacro %}
+{# HAND-WRITTEN FORMS #}
 {% macro text_control_group(value_binding, label, help="", disabled=false, unit="") %}
     <div class="control-group">
         <label class="control-label">{{ label }}</label>
@@ -16,88 +35,248 @@
                        data-bind="value: {{ value_binding }}"
                        {% if disabled %}disabled{% endif %}>
             {% endif %}
-            {% if help %}<span class="help-inline">{{ help }}</span>{% endif %}
+            {% if help %}<span class="help-block">{{ help }}</span>{% endif %}
             {% if caller is defined %}{{ caller() }}{% endif %}
         </div>
     </div>
 {% endmacro %}
-{% macro temperature_control_group(value_binding, label, help="", interval=false) %}
+{% macro select_control_group(value_binding, label, options, help="", disabled=false, placeholder="") %}
+    {% set binding -%}
+        value: {{ value_binding }}
+        {%- if placeholder %}, valueAllowUnset: true, placeholderWhenUnset: true{% endif -%}
+    {%- endset %}
     <div class="control-group">
         <label class="control-label">{{ label }}</label>
         <div class="controls">
-            <div class="input-append">
-                <input type="text"
-                       class="input-medium"
-                       data-bind="temperature: {{ value_binding }}{% if interval %}, temperatureInterval: true{% endif %}">
-                <span class="add-on" data-bind="text: $root.temperatureUnitLabel()"></span>
-            </div>
-            {% if help %}<span class="help-inline">{{ help }}</span>{% endif %}
-        </div>
-    </div>
-{% endmacro %}
-{% macro select_control_group(value_binding, label, options, help="", placeholder="") %}
-    <div class="control-group">
-        <label class="control-label">{{ label }}</label>
-        <div class="controls">
-            <select data-bind="{% if options is string %}options: {{ options }}, optionsText: 'label', optionsValue: 'index_id', {% if placeholder %}optionsCaption: '{{ placeholder }}', optionsAfterRender: $root.disablePlaceholderOption, {% endif %}{% endif %}value: {{ value_binding }}{% if placeholder %}, valueAllowUnset: true, placeholderWhenUnset: true{% endif %}">
-                {% if options is not string %}
-                    {% if placeholder %}<option value="" disabled>{{ placeholder }}</option>{% endif %}
-                    {% for value, text in options %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
-                {% endif %}
+            <select class="input-block-level"
+                    data-bind="{{ binding|safe }}"
+                    {% if disabled %}disabled{% endif %}>
+                {% if placeholder %}<option value="" disabled>{{ placeholder }}</option>{% endif %}
+                {% for value, text in options %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
             </select>
-            {% if help %}<span class="help-inline">{{ help }}</span>{% endif %}
+            {% if help %}<span class="help-block">{{ help }}</span>{% endif %}
             {% if caller is defined %}{{ caller() }}{% endif %}
         </div>
     </div>
 {% endmacro %}
-{% macro checkbox_control_group(checked_binding, label, help="") %}
+{% macro checkbox_control_group(checked_binding, label, help="", disabled=false) %}
     <div class="control-group">
         <div class="controls">
             <label class="checkbox">
-                <input type="checkbox" data-bind="checked: {{ checked_binding }}">
+                <input type="checkbox"
+                       data-bind="checked: {{ checked_binding }}"
+                       {% if disabled %}disabled{% endif %}>
                 {{ label }}
             </label>
-            {% if help %}<span class="help-inline">{{ help }}</span>{% endif %}
+            {% if help %}<span class="help-block">{{ help }}</span>{% endif %}
             {% if caller is defined %}{{ caller() }}{% endif %}
         </div>
     </div>
 {% endmacro %}
-{% macro gpio_alert(development_mode, gpio_import_error, gpio_numbering_is_board) %}
-    {% if development_mode %}
-        <div class="alert alert-error enclosure-gpio-alert">
-            <strong>{{ _("Development mode is enabled:") }}</strong> {{ _("GPIO and I2C (pins, sensors, etc) are simulated.") }}
-        </div>
-    {% elif gpio_import_error %}
-        <div class="alert alert-error enclosure-gpio-alert">
-            <strong>{{ _("The GPIO library failed to load:") }}</strong> {{ gpio_import_error }}
-            <br>
-            {{ _("This usually happens when OctoPrint isn't running on a Raspberry Pi. GPIO (pins, sensors, etc) won't work.") }}
-        </div>
-    {% elif gpio_numbering_is_board %}
-        <div class="alert alert-error enclosure-gpio-alert">
-            <strong>{{ _("Another plugin set the GPIO numbering to BOARD:") }}</strong> {{ _("this plugin needs BCM, so its GPIO pins won't work.") }}
-        </div>
+{# GENERATED FORMS: INPUTS #}
+{% macro default_input(field) %}
+    {% if field.type == "int" or field.type == "float" %}
+        <input type="number"
+               class="input-block-level"
+               step="{{ '1' if field.type == 'int' else 'any' }}"
+               {% if field.min_value is not none %}min="{{ field.min_value }}"{% endif %}
+               {% if field.max_value is not none %}max="{{ field.max_value }}"{% endif %}
+               data-bind="value: {{ field.name }}">
+    {% else %}
+        <input type="text"
+               class="input-block-level"
+               data-bind="value: {{ field.name }}">
     {% endif %}
 {% endmacro %}
-{% macro setpoint_control_groups(output_binding) %}
-    <div data-bind="if: $root.outputType({{ output_binding }}()) == 'pwm'">
-        {{ text_control_group("duty_cycle", _("Duty Cycle"), "Duty cycle the PWM is set to when the automation turns it on, between 0 and 100") }}
+{% macro temperature_input(field, is_interval) %}
+    <div class="input-append">
+        <input type="text"
+               data-bind="temperature: {{ field.name }}{% if is_interval %}, temperatureInterval: true{% endif %}">
+        <span class="add-on" data-bind="text: $root.temperatureUnitLabel()"></span>
     </div>
-    <div data-bind="if: ['ledstrip', 'neopixel_indirect', 'neopixel_direct'].indexOf($root.outputType({{ output_binding }}())) >= 0">
-        <div class="control-group">
-            <label class="control-label">{{ _("Color") }}</label>
-            <div class="controls">
-                <input type="color" class="input-block-level" data-bind="value: color">
-                <span class="help-inline">Color the LEDs are set to when the automation turns them on</span>
+{% endmacro %}
+{% macro select_input(field, options, options_value, options_text) %}
+    {% set binding = [
+        "options: " ~ options,
+        "optionsValue: " ~ options_value,
+        "optionsText: " ~ options_text,
+        "optionsCaption: " ~ ("Select " ~ field.label)|tojson|forceescape,
+        "optionsAfterRender: $root.disablePlaceholderOption",
+        "value: " ~ field.name,
+        "valueAllowUnset: true",
+        "placeholderWhenUnset: true",
+    ]|join(", ") %}
+    <select class="input-block-level" data-bind="{{ binding }}"></select>
+{% endmacro %}
+{# GENERATED FORMS: WIDGETS #}
+{% macro default_widget(field) %}
+    {% set linked_items = {
+        "SensorInputId": "$root.settings_temperature_sensors",
+        "GpioInputId": "$root.settings_gpio_inputs",
+        "OutputId": "$root.settingsViewModel.settings.plugins.enclosure.rpi_outputs",
+        "ActionId": "$root.settingsViewModel.settings.plugins.enclosure.actions"
+    } %}
+    {% if field.choices is not none %}
+        {{ select_input(
+            field,
+            field.choices|tojson|forceescape,
+            options_value="function (choice) { return choice[0]; }",
+            options_text="function (choice) { return choice[1]; }"
+        ) }}
+    {% elif field.type == "bool" %}
+        <label class="checkbox">
+            <input type="checkbox" data-bind="checked: {{ field.name }}">
+            {{ field.label }}
+        </label>
+    {% elif field.type in linked_items %}
+        {{ select_input(field, linked_items[field.type], options_value="'index_id'", options_text="'label'") }}
+    {% elif field.type == "Rgb" %}
+        <input type="color"
+               class="input-block-level"
+               data-bind="value: {{ field.name }}">
+    {% elif field.unit %}
+        <div class="input-append">
+            {{ default_input(field) }}
+            <span class="add-on">{{ field.unit }}</span>
+        </div>
+    {% else %}
+        {{ default_input(field) }}
+    {% endif %}
+{% endmacro %}
+{% macro id_widget(field) %}
+    <input type="text"
+           class="input-block-level"
+           data-bind="value: {{ field.name }}"
+           disabled>
+{% endmacro %}
+{% macro octoprint_events_widget(field) %}
+    <select multiple
+            size="10"
+            class="input-block-level"
+            data-bind="selectedOptions: {{ field.name }}">
+        {% for event in plugin_enclosure_octoprint_events %}<option value="{{ event }}">{{ event }}</option>{% endfor %}
+    </select>
+{% endmacro %}
+{% macro output_setpoint_widget(field) %}
+    {% if field.device_types_by_measurement_type %}
+        {% set device_type = "$root.thermostatDeviceType(" ~ field.output_field ~ "())" %}
+        <!-- ko if: {{ field.device_types_by_measurement_type.temperature|tojson }}.indexOf({{ device_type }}) >= 0 -->
+        {{ temperature_input(field, false) }}
+        <!-- /ko -->
+        <!-- ko if: {{ field.device_types_by_measurement_type.humidity|tojson }}.indexOf({{ device_type }}) >= 0 -->
+        <div class="input-append">
+            <input type="text" data-bind="value: {{ field.name }}">
+            <span class="add-on">%</span>
+        </div>
+        <!-- /ko -->
+    {% else %}
+        {{ default_widget(field) }}
+    {% endif %}
+{% endmacro %}
+{% macro pwm_output_widget(field) %}
+    {{ select_input(field, "$root.settings_outputs_pwm", options_value="'index_id'", options_text="'label'") }}
+{% endmacro %}
+{% macro temperature_widget(field) %}
+    {{ temperature_input(field, false) }}
+{% endmacro %}
+{% macro temperature_interval_widget(field) %}
+    {{ temperature_input(field, true) }}
+{% endmacro %}
+{% macro textarea_widget(field) %}
+    <textarea rows="4" class="block" data-bind="value: {{ field.name }}"></textarea>
+{% endmacro %}
+{% macro thermostat_sensor_widget(field) %}
+    {% set device_types = field.device_types_by_measurement_type %}
+    {% set options = [
+        device_types.temperature|tojson|forceescape ~ ".indexOf(" ~ field.device_type_field ~ "()) >= 0",
+        "? $root.settings_temperature_sensors()",
+        ": " ~ device_types.humidity|tojson|forceescape ~ ".indexOf(" ~ field.device_type_field ~ "()) >= 0",
+        "? $root.settings_hum_sensors()",
+        ": []",
+    ]|join(" ") %}
+    {{ select_input(field, options, options_value="'index_id'", options_text="'label'") }}
+{% endmacro %}
+{% macro field_widget(field) %}
+    {% set widgets = {
+        "id": id_widget,
+        "octoprint_events": octoprint_events_widget,
+        "output_setpoint": output_setpoint_widget,
+        "pwm_output": pwm_output_widget,
+        "temperature": temperature_widget,
+        "temperature_interval": temperature_interval_widget,
+        "textarea": textarea_widget,
+        "thermostat_sensor": thermostat_sensor_widget,
+    } %}
+    {% if field.widget %}
+        {{ widgets[field.widget](field) }}
+    {% else %}
+        {{ default_widget(field) }}
+    {% endif %}
+{% endmacro %}
+{# GENERATED FORMS: FIELDS #}
+{% macro visible_binding(field) -%}
+    {%- set output_types = field.visible_if_output_type or {} -%}
+    {%- for name, values in (field.visible_if or {}).items() -%}
+        {{ values|tojson|forceescape }}.indexOf({{ name }}()) >= 0
+        {%- if not loop.last or output_types %} && {% endif -%}
+    {%- endfor -%}
+    {%- for name, types in output_types.items() -%}
+        {{ types|tojson|forceescape }}.indexOf($root.outputType({{ name }}())) >= 0
+        {%- if not loop.last %} && {% endif -%}
+    {%- endfor -%}
+{%- endmacro %}
+{% macro field_control_group(field) %}
+    {% set is_checkbox = field.type == "bool" and field.choices is none %}
+    {% set is_required = not field.optional and not is_checkbox %}
+    {% set visible = visible_binding(field) %}
+    <div class="control-group{% if is_required %} enclosure-required{% endif %}"
+         {% if visible %}data-bind="visible: {{ visible }}"{% endif %}>
+        {% if not is_checkbox %}<label class="control-label">{{ field.label }}</label>{% endif %}
+        <div class="controls">
+            {{ field_widget(field) }}
+            {% if field.help_text %}<span class="help-block">{{ field.help_text|safe }}</span>{% endif %}
+            {% for variant in field.variants|default([]) %}
+                {% if variant.help_text %}
+                    <span class="help-block"
+                          data-bind="visible: {{ field.name }}() == {{ variant.value|tojson|forceescape }}">{{ variant.help_text|safe }}</span>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+{% endmacro %}
+{# GENERATED FORMS: FORMS #}
+{% macro form_list(list_field) %}
+    <div data-bind="foreach: {{ list_field.name }}">
+        <div class="well well-small">
+            {{ form_fields(list_field.list_item_form) }}
+            <div class="clearfix">
+                <a title="Remove {{ list_field.label }}"
+                   class="btn btn-small btn-danger pull-right"
+                   data-bind="click: function() { $parent.{{ list_field.name }}.remove($data) }">
+                    <i class="icon-trash"></i>
+                </a>
             </div>
         </div>
     </div>
-    <div data-bind="if: $root.outputType({{ output_binding }}()) == 'temp_hum_control'">
-        <div data-bind="if: $root.thermostatDeviceType({{ output_binding }}()) == 'dehumidifier'">
-            {{ text_control_group("target", _("Target"), "Value the thermostat is set to when the automation turns it on", unit="%") }}
-        </div>
-        <div data-bind="ifnot: $root.thermostatDeviceType({{ output_binding }}()) == 'dehumidifier'">
-            {{ temperature_control_group("target", _("Target"), "Value the thermostat is set to when the automation turns it on") }}
+    <div class="control-group">
+        <div class="controls">
+            <button type="button"
+                    class="btn btn-small"
+                    data-bind="click: function() { $root.addNestedItem($data, '{{ list_field.name }}') }">
+                Add {{ list_field.label }}...
+            </button>
         </div>
     </div>
+{% endmacro %}
+{% macro form_fields(form) %}
+    {% for field in form %}
+        {% if field.list_item_form is defined %}
+            {{ form_list(field) }}
+        {% else %}
+            {{ field_control_group(field) }}
+            {% for variant in field.variants|default([]) %}
+                <div data-bind="if: {{ field.name }}() == {{ variant.value|tojson|forceescape }}">{{ form_fields(variant.form) }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endfor %}
 {% endmacro %}

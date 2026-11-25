@@ -72,20 +72,11 @@ class Automations:
                 self._logger.warning("Invalid settings for an automation: %s", error)
                 continue
 
-            automation_definition = AUTOMATIONS.get(automation_config.automation_type)
-            if automation_definition is None:
-                automation: Automation = self._create_invalid_automation(
-                    automation_config,
-                    f"Unsupported automation type: {automation_config.automation_type!r}",
-                )
-            else:
-                automation = self._create_automation(
-                    automation_definition.implementation,
-                    automation_config,
-                    automation_settings,
-                )
-
-            automations[automation_config.index_id] = automation
+            automations[automation_config.index_id] = self._create_automation(
+                AUTOMATIONS[automation_config.automation_type],
+                automation_config,
+                automation_settings,
+            )
 
         self._automations = automations
 

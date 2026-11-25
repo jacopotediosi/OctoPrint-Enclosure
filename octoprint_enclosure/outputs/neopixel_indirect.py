@@ -23,6 +23,8 @@ class NeopixelIndirectConfig(OutputConfig):
             "Address of the microcontroller, in hexadecimal. Find it by running <code>i2cdetect -y 1</code> (from the "
             "<code>i2c-tools</code> package) on your Raspberry Pi."
         ),
+        min_value=0,
+        max_value=127,
     )
     """The I2C address of the microcontroller."""
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import fields
 from typing import TYPE_CHECKING
 
+from octoprint_enclosure.utils import check_all_members_mapped
+
 from .config import OutputType
 from .ledstrip import LedstripOutput
 from .neopixel_direct import NeopixelDirectOutput
@@ -23,7 +25,10 @@ OUTPUTS: dict[OutputType, type[Output]] = {
     OutputType.LEDSTRIP: LedstripOutput,
     OutputType.THERMOSTAT: ThermostatOutput,
 }
-"""The class of each type of output."""
+"""The class implementing each type of output."""
+
+# Check that OUTPUTS contains every type of output
+check_all_members_mapped(OUTPUTS, OutputType)
 
 # Check that OutputSetpointConfig contains every field of every output setpoint
 _output_setpoint_config_fields = {field.name for field in fields(OutputSetpointConfig)}

@@ -8,6 +8,7 @@ from typing_extensions import override
 
 from octoprint_enclosure.inputs.config import InputConfig, PullResistor
 from octoprint_enclosure.settings import HexInt, setting
+from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 if TYPE_CHECKING:
     import logging
@@ -45,11 +46,34 @@ class SensorError(Exception):
     """Raised when a sensor can't be read, with the reason as message."""
 
 
+class SensorType(LabeledEnum):
+    """The type of a temperature sensor."""
+
+    AHT10 = LabeledValue(value="aht10", label="AHT10")
+    AM2302 = LabeledValue(value="2302", label="AM2302")
+    AM2320 = LabeledValue(value="am2320", label="AM2320")
+    BME280 = LabeledValue(value="bme280", label="BME280")
+    BME680 = LabeledValue(value="bme680", label="BME680")
+    DHT11 = LabeledValue(value="11", label="DHT11")
+    DHT20 = LabeledValue(value="20", label="DHT20")
+    DHT22 = LabeledValue(value="22", label="DHT22")
+    DS18B20 = LabeledValue(value="18b20", label="DS18B20")
+    MAX31855 = LabeledValue(value="max31855", label="MAX31855")
+    MCP9808 = LabeledValue(value="mcp9808", label="MCP9808")
+    RPI_CPU = LabeledValue(value="rpi", label="Raspberry Pi CPU")
+    RAW_I2C_HUMIDITY = LabeledValue(value="hum_raw_i2c", label="Raw I2C Humidity")
+    RAW_I2C_TEMPERATURE = LabeledValue(value="temp_raw_i2c", label="Raw I2C Temperature")
+    SI7021 = LabeledValue(value="si7021", label="SI7021")
+    TMP102 = LabeledValue(value="tmp102", label="TMP102")
+
+
 @dataclass(frozen=True)
 class SensorInputConfig(InputConfig):
     """The configuration shared by all the inputs with a temperature sensor."""
 
-    temp_sensor_type: str = setting(label="Sensor Type")
+    type_field_name = "temp_sensor_type"
+
+    temp_sensor_type: SensorType = setting(label="Sensor Type")
     """The type of the sensor."""
 
     temp_sensor_navbar: bool = setting(default=True, label="Show temperature in navbar", compare=False)
@@ -220,5 +244,7 @@ class I2cSensorConfig(SensorInputConfig):
             "Address of the sensor, in hexadecimal. Find it by running <code>i2cdetect -y 1</code> (from the "
             "<code>i2c-tools</code> package) on your Raspberry Pi."
         ),
+        min_value=0,
+        max_value=127,
     )
     """The I2C address of the sensor."""

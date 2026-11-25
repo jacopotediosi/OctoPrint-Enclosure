@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 class AutomationResponse(ItemResponse):
     """An automation."""
 
-    type: str = field(metadata={"enum": list(AUTOMATIONS)})
+    type: str = field(metadata={"enum": [automation_type.value for automation_type in AUTOMATIONS]})
 
     enabled: bool
     """Whether the automation is enabled."""
@@ -44,7 +44,7 @@ class AutomationResponse(ItemResponse):
         config = automation.config
         return cls(
             id=config.index_id,
-            type=config.automation_type,
+            type=config.automation_type.value,
             label=config.label,
             enabled=automation.enabled,
         )

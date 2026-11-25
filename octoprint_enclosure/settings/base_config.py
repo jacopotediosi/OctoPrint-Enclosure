@@ -72,8 +72,8 @@ def setting(
         unit (str): The unit of the value, e.g. "Hz", "s", etc.
         min_value (float | None): The lowest value a numeric field accepts, or None for no limit.
         max_value (float | None): The highest value a numeric field accepts, or None for no limit.
-        visible_if (Mapping[str, Sequence[Any]] | None): When the field is used: for each of the other fields it
-            names, the values that field can have. None if the field is always used.
+        visible_if (Mapping[str, Sequence[Any]] | None): When the field is used: each of the other fields it names
+            must have one of the values listed for it. None if the field is always used.
         widget (str): The widget of the field, e.g. "temperature", "textarea", etc. Empty for the default one of the
             type of the field.
         compare (bool): Whether the field counts when two configurations are compared.
@@ -148,11 +148,11 @@ _FIELD_TYPES: dict[Any, _FieldType] = {
 }
 """The types a field of a configuration can have."""
 
-_WIDGET_TYPES: dict[str, tuple[Any, ...]] = {
+WIDGET_TYPES: dict[str, tuple[Any, ...]] = {
+    "id": (int,),
     "octoprint_events": (FrozenSet[str],),
     "output_setpoint": (float, Optional[float], Rgb),
     "pwm_output": (OutputId,),
-    "rule_timing": (float, str),
     "temperature": (float, Optional[float]),
     "temperature_interval": (float,),
     "textarea": (str,),
@@ -167,6 +167,9 @@ class BaseConfig:
 
     type_help: ClassVar[str] = ""
     """The help text of the type (can also contain HTML)."""
+
+    type_field_name: ClassVar[str] = ""
+    """The name of the field with the type, e.g. the type of an output. Empty if no field has a type."""
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Check how the fields of the configuration are declared.
@@ -189,6 +192,11 @@ class BaseConfig:
         type_help = vars(cls).get("type_help", "")
         if type_help and not type_help.rstrip().endswith("."):
             problems.append("type_help has no final period")
+
+        # Check type field name
+        type_field_name = vars(cls).get("type_field_name", "")
+        if type_field_name and type_field_name not in names:
+            problems.append(f"type_field_name is not the name of a field: {type_field_name!r}")
 
         # Check fields
         for name, type_hint in type_hints.items():
@@ -272,9 +280,9 @@ class BaseConfig:
             # Unit and widget
             if unit and (not is_number or choices is not None):
                 problems.append(f"{name} has a unit but is not a number, or has choices")
-            if widget and widget not in _WIDGET_TYPES:
+            if widget and widget not in WIDGET_TYPES:
                 problems.append(f"{name} has an unknown widget: {widget!r}")
-            elif widget and type_hint not in _WIDGET_TYPES[widget]:
+            elif widget and type_hint not in WIDGET_TYPES[widget]:
                 problems.append(f"{name} has the widget {widget!r}, which is not for its type")
             if unit and widget in ("temperature", "temperature_interval"):
                 problems.append(f"{name} has a unit, but its widget shows the unit of the temperatures")
@@ -398,8 +406,8 @@ class BaseConfig:
                 - "unit" (str): The unit of the value, empty if not declared.
                 - "min_value" (float | None): The lowest accepted value, None if not declared.
                 - "max_value" (float | None): The highest accepted value, None if not declared.
-                - "visible_if" (Mapping[str, Sequence[Any]] | None): When the field is used: for each field it names,
-                  the values that field can have. None if not declared.
+                - "visible_if" (Mapping[str, Sequence[Any]] | None): When the field is used: each field it names must
+                  have one of the values listed for it. None if not declared.
                 - "widget" (str): The widget, empty if not declared.
 
         """

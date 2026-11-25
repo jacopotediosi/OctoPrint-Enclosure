@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 class ActionResponse(ItemResponse):
     """An action, e.g. a G-code or shell script."""
 
-    type: str = field(metadata={"enum": list(ACTIONS)})
+    type: str = field(metadata={"enum": [action_type.value for action_type in ACTIONS]})
 
     @classmethod
     def from_action(cls, action: Action) -> ActionResponse:
@@ -38,7 +38,7 @@ class ActionResponse(ItemResponse):
 
         """
         config = action.config
-        return cls(id=config.index_id, type=config.action_type, label=config.label)
+        return cls(id=config.index_id, type=config.action_type.value, label=config.label)
 
 
 class ActionsApi(BaseApi):

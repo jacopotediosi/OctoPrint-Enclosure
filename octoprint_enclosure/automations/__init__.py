@@ -5,7 +5,7 @@ from .events import AutomationEvent, GpioEdgeEvent, OctoprintEvent, ReadingEvent
 from .filament import FilamentAutomation
 from .pwm_temperature_linked import PwmTemperatureLinkedAutomation
 from .reactions import OutputControlReaction, OutputSetState, Reaction, RunActionReaction
-from .rule import RuleAutomation
+from .rule import RuleAutomation, RuleTiming
 from .toggle_timer import ToggleTimerAutomation
 from .triggers import GpioInputTrigger, TemperatureTrigger
 
@@ -25,6 +25,7 @@ __all__ = [
     "Reaction",
     "ReadingEvent",
     "RuleAutomation",
+    "RuleTiming",
     "RunActionReaction",
     "TemperatureTrigger",
     "ToggleTimerAutomation",

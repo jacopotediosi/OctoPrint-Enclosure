@@ -406,6 +406,30 @@ $(function () {
       return Array.isArray(value) ? ko.observableArray(value.slice()) : ko.observable(value);
     };
 
+    self.formFields = function (form) {
+      var fields = [];
+      var addField = function (field) {
+        var isNew = fields.every(function (added) {
+          return added.name !== field.name;
+        });
+        if (isNew) {
+          fields.push(field);
+        }
+      };
+      form.forEach(function (field) {
+        addField({
+          name: field.name,
+          default: field.default,
+          empty: field.empty,
+          fields: field.list_item_form === undefined ? null : self.formFields(field.list_item_form),
+        });
+        (field.variants || []).forEach(function (variant) {
+          self.formFields(variant.form).forEach(addField);
+        });
+      });
+      return fields;
+    };
+
     self.newItem = function (fields) {
       var item = {};
       fields.forEach(function (field) {
@@ -417,10 +441,11 @@ $(function () {
     self.completeItems = function (fields, items) {
       items.forEach(function (item) {
         fields.forEach(function (field) {
-          if (item[field.name] === undefined) {
+          var isList = field.fields !== null;
+          if (item[field.name] === undefined || (isList && !Array.isArray(ko.unwrap(item[field.name])))) {
             item[field.name] = self.observableOf(field.empty);
           }
-          if (field.fields !== null) {
+          if (isList) {
             self.completeItems(field.fields, item[field.name]());
           }
         });
@@ -435,7 +460,11 @@ $(function () {
     };
 
     self.onBeforeBinding = function () {
-      self.settingsFields = JSON.parse($("#enclosure-settings-fields").text());
+      var forms = JSON.parse($("#enclosure-settings-forms").text());
+      self.settingsFields = {};
+      Object.keys(forms).forEach(function (listName) {
+        self.settingsFields[listName] = self.formFields(forms[listName]);
+      });
 
       self.completeSettings();
       Object.keys(self.settingsFields).forEach(function (listName) {
@@ -542,68 +571,18 @@ $(function () {
     };
 
     self.addAutomation = function () {
-      self.addReaction(self.addItem("automations", "Automation"));
+      self.addNestedItem(self.addItem("automations", "Automation"), "reactions");
     };
 
     self.removeAutomation = function (data) {
       self.settingsViewModel.settings.plugins.enclosure.automations.remove(data);
     };
 
-    self.ruleTimings = new WeakMap();
-
-    self.ruleTiming = function (rule) {
-      var timing = self.ruleTimings.get(rule);
-      if (!timing) {
-        timing = ko.observable(rule.at() !== "" ? "at" : parseFloat(rule.delay()) > 0 ? "delay" : "now");
-        timing.subscribe(function (value) {
-          if (value !== "delay") {
-            rule.delay(0);
-          }
-          if (value !== "at") {
-            rule.at("");
-          }
-        });
-        self.ruleTimings.set(rule, timing);
-      }
-      return timing;
-    };
-
-    self.printingOptions = [
-      {value: true, label: "Printing"},
-      {value: false, label: "Not printing"}
-    ];
-
-    self.connectionOptions = [
-      {value: false, label: "GPIO pin"},
-      {value: true, label: "I2C"}
-    ];
-
-    self.activeLevelOptions = [
-      {value: false, label: "High"},
-      {value: true, label: "Low"}
-    ];
-
     self.addNestedItem = function (automation, listName) {
       var list = ko.utils.arrayFirst(self.settingsFields.automations, function (field) {
         return field.name === listName;
       });
       automation[listName].push(self.newItem(list.fields));
-    };
-
-    self.addCondition = function (automation) {
-      self.addNestedItem(automation, "conditions");
-    };
-
-    self.removeCondition = function (automation, condition) {
-      automation.conditions.remove(condition);
-    };
-
-    self.addReaction = function (automation) {
-      self.addNestedItem(automation, "reactions");
-    };
-
-    self.removeReaction = function (automation, reaction) {
-      automation.reactions.remove(reaction);
     };
 
     self.setOutput = function (item, body) {

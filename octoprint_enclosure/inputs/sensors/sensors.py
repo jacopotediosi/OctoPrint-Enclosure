@@ -42,6 +42,12 @@ class _InvalidSensor(Sensor[SensorInputConfig]):
 class Sensors:
     """The temperature sensors of the inputs."""
 
+    config_class = SensorInputConfig
+    """The dataclass of the configuration shared by all the inputs with a temperature sensor."""
+
+    config_type_classes = SENSORS
+    """The class implementing each type that the type field of the configuration chooses among."""
+
     _gpio: GpioBackend
     """The GPIO backend."""
 
@@ -92,16 +98,8 @@ class Sensors:
                 self._logger.warning("Invalid settings for an input with a temperature sensor: %s", error)
                 continue
 
-            sensor_definition = SENSORS["dummy"] if self._dummy else SENSORS.get(input_config.temp_sensor_type)
-            if sensor_definition is None:
-                sensor: Sensor = self._create_invalid_sensor(
-                    input_config,
-                    f"Unsupported sensor type: {input_config.temp_sensor_type!r}",
-                )
-            else:
-                sensor = self._create_sensor(sensor_definition.implementation, input_config, input_settings)
-
-            sensors[input_config.index_id] = sensor
+            sensor_class = DummySensor if self._dummy else SENSORS[input_config.temp_sensor_type]
+            sensors[input_config.index_id] = self._create_sensor(sensor_class, input_config, input_settings)
 
         with self._lock:
             self._sensors = sensors

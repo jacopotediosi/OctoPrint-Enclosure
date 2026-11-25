@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from octoprint_enclosure.settings import BaseConfig, setting
+from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 if TYPE_CHECKING:
     import logging
@@ -18,17 +19,27 @@ class ActionError(Exception):
     """Raised when an action can't be used, with the reason as message."""
 
 
+class ActionType(LabeledEnum):
+    """The type of an action."""
+
+    GCODE = LabeledValue(value="gcode_output", label="Gcode")
+    SHELL = LabeledValue(value="shell_output", label="Shell Script")
+    PRINTER = LabeledValue(value="printer", label="Printer")
+
+
 @dataclass(frozen=True)
 class ActionConfig(BaseConfig):
     """The configuration shared by all the actions."""
 
-    index_id: int = setting(label="Id")
+    type_field_name = "action_type"
+
+    index_id: int = setting(label="Id", widget="id")
     """The id of the action."""
 
     label: str = setting(optional=True, label="Label", compare=False)
     """The label of the action."""
 
-    action_type: str = setting(label="Action Type")
+    action_type: ActionType = setting(label="Action Type")
     """The type of the action."""
 
     hide_btn_ui: bool = setting(default=False, label="Hide in tab", compare=False)

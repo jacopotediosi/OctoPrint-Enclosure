@@ -16,6 +16,7 @@ from octoprint_enclosure.automations import (
     OutputSetState,
     ReadingEvent,
     RuleAutomation,
+    RuleTiming,
     RunActionReaction,
     TemperatureTrigger,
 )
@@ -118,7 +119,8 @@ class AutomationRuleDecision(Decision):
             delay_seconds = rule.config.delay_seconds()
 
             if delay_seconds > 0:
-                when = f"at {rule.config.at}" if rule.config.at else f"in {delay_seconds:g} s"
+                at_time_of_day = rule.config.timing is RuleTiming.AT
+                when = f"at {rule.config.at}" if at_time_of_day else f"in {delay_seconds:g} s"
                 self._logger.info("Automation %s triggered by %s: runs %s", index_id, cause, when)
                 self._scheduler.schedule(
                     f"automation:{index_id}:delay",
@@ -141,7 +143,10 @@ class AutomationRuleDecision(Decision):
         for rule in self._automations.get_all(RuleAutomation):
             # Skip the rules that are not on a GPIO input, and the delayed ones, that act some time after an edge
             trigger = rule.trigger
-            if not isinstance(trigger, GpioInputTrigger) or rule.config.delay or rule.config.at:
+            is_delayed = rule.config.timing is RuleTiming.AT or (
+                rule.config.timing is RuleTiming.DELAY and rule.config.delay > 0
+            )
+            if not isinstance(trigger, GpioInputTrigger) or is_delayed:
                 continue
 
             # Get the trigger input id

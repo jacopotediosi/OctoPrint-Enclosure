@@ -5,6 +5,8 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from typing_extensions import Self
 
 
@@ -52,3 +54,20 @@ class LabeledEnum(Enum):
         member._value_ = labeled_value.value
         member.label = labeled_value.label
         return member
+
+
+def check_all_members_mapped(mapping: Mapping[Any, Any], enum_class: type[Enum]) -> None:
+    """Check that a mapping has an entry for every member of an enumeration.
+
+    Args:
+        mapping (Mapping[Any, Any]): The mapping, with the members of the enumeration as keys.
+        enum_class (type[Enum]): The enumeration.
+
+    Raises:
+        TypeError: If some members of the enumeration have no entry in the mapping.
+
+    """
+    missing_names = [member.name for member in enum_class if member not in mapping]
+    if missing_names:
+        msg = f"Members of {enum_class.__name__} with no entry: {', '.join(missing_names)}"
+        raise TypeError(msg)

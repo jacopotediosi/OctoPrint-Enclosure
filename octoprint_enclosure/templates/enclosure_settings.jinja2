@@ -1,7 +1,11 @@
-{% from "enclosure_macros.jinja2" import checkbox_control_group, gpio_alert, select_control_group, setpoint_control_groups, temperature_control_group, text_control_group %}
+{% from "enclosure_macros.jinja2" import checkbox_control_group, form_fields, gpio_alert, select_control_group, text_control_group with context %}
+<!-- ALERT (COMMON TO ALL TABS) -->
 {{ gpio_alert(plugin_enclosure_development_mode, plugin_enclosure_gpio_import_error, plugin_enclosure_gpio_numbering_is_board) }}
-<script type="application/json" id="enclosure-settings-fields">{{ plugin_enclosure_settings_fields|tojson }}</script>
+<!-- SETTINGS FORMS (READ BY THE JAVASCRIPT) -->
+<script type="application/json" id="enclosure-settings-forms">{{ plugin_enclosure_settings_forms|tojson }}</script>
+<!-- TABS -->
 <div class="tabbable">
+    <!-- TAB NAVIGATION BUTTONS -->
     <ul class="nav nav-tabs">
         <li class="active">
             <a href="#enclosure-settings-tab-inputs" data-toggle="tab">{{ _("Inputs") }}</a>
@@ -19,7 +23,9 @@
             <a href="#enclosure-settings-tab-advanced" data-toggle="tab">{{ _("Advanced") }}</a>
         </li>
     </ul>
+    <!-- TAB CONTENT -->
     <div class="tab-content">
+        <!-- TAB INPUTS -->
         <div class="tab-pane active" id="enclosure-settings-tab-inputs">
             <p>
                 Here you set up the hardware the plugin reads, such as sensors and buttons. In the Automations tab you choose what a reading or a
@@ -28,117 +34,9 @@
             <hr />
             <form class="form-horizontal">
                 <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.rpi_inputs">
-                    {{ text_control_group("index_id", _("Id"), disabled=true) }}
-                    {{ text_control_group("label", _("Label")) }}
-                    {% call select_control_group("input_type", _("Input Type"), [("gpio", _("GPIO Input")), ("temperature_sensor", _("Temperature Sensor"))], placeholder="Select Input Type") %}
-                        <span class="help-inline" data-bind="visible: input_type() == 'gpio'">
-                            <span class="label label-info">Info:</span> GPIO will input status of the pin, HIGH / LOW </span>
-                        <span class="help-inline"
-                              data-bind="visible: input_type() == 'temperature_sensor'">
-                            <span class="label label-info">Info:</span> Temperature Sensors will input temperature and humidity data.
-                        </span>
-                    {% endcall %}
-                    <div data-bind="if: input_type() == 'temperature_sensor'">
-                        {% call select_control_group("temp_sensor_type", _("Sensor Type"), [
-                            ("aht10", "AHT10"),
-                            ("2302", "AM2302"),
-                            ("am2320", "AM2320"),
-                            ("bme280", "BME280"),
-                            ("bme680", "BME680"),
-                            ("11", "DHT11"),
-                            ("20", "DHT20"),
-                            ("22", "DHT22"),
-                            ("18b20", "DS18B20"),
-                            ("max31855", "MAX31855"),
-                            ("mcp9808", "MCP9808"),
-                            ("rpi", "Raspberry Pi CPU"),
-                            ("hum_raw_i2c", "Raw I2C Humidity"),
-                            ("temp_raw_i2c", "Raw I2C Temperature"),
-                            ("si7021", "SI7021"),
-                            ("tmp102", "TMP102"),
-                        ], placeholder="Select Sensor") %}
-                        {% endcall %}
-                        <div data-bind="if: temp_sensor_type() == 'temp_raw_i2c' || temp_sensor_type() == 'hum_raw_i2c'">
-                            {{ text_control_group("temp_i2c_bus", _("I2C Bus"), "This value should remain 1 unless you've used dtoverlay=i2c-gpio or you are using another bus.") }}
-                            {% call text_control_group("temp_i2c_address", _("I2C Address")) %}
-                                <span class="help-inline">I2C address in HEX value, you can find it by running
-                                    <code>i2cdetect -y 1</code> on your Raspberry Pi</span>
-                            {% endcall %}
-                            {{ text_control_group("temp_i2c_register", _("I2C Register"), "I2C register in HEX value") }}
-                        </div>
-                        <div data-bind="if: temp_sensor_type() == '18b20'">
-                            {{ text_control_group("gpio_pin", _("GPIO"), "GPIO the data line is connected to, 4 unless you changed the 1-Wire overlay") }}
-                            {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("none", "None"), ("input_pull_up", "Input Pullup")], "Whether to enable the built-in pullup for this temperature sensor. If set, then no external pullup is needed.") }}
-                            {{ text_control_group("ds18b20_serial", _("DS18B20 Serial"), "DS18B20 serial value, needs to be used to have support for multiple sensors, read documentation on github page for more information. The serial is typically in the form of 28-0123456789ab.") }}
-                        </div>
-                        <div data-bind="if: temp_sensor_type() == 'si7021' || temp_sensor_type() == '20' || temp_sensor_type() == 'bme280' || temp_sensor_type() == 'am2320' || temp_sensor_type() == 'aht10' || temp_sensor_type() == 'tmp102' || temp_sensor_type() == 'mcp9808'">
-                            <div class="control-group">
-                                <label class="control-label">{{ _("GPIO") }}</label>
-                                <div class="controls">
-                                    <input type="text"
-                                           class="input-block-level"
-                                           value="SCL / SDA"
-                                           disabled="true">
-                                    <span class="help-inline">The sensor connects to the I2C bus: SDA to GPIO 2 (SDA), SCL to GPIO
-                                        3 (SCL)
-                                    </span>
-                                </div>
-                            </div>
-                            {{ text_control_group("temp_sensor_i2cbus", _("i2c Bus"), "This value should remain 1 unless you've used dtoverlay=i2c-gpio.") }}
-                            {% call text_control_group("temp_sensor_address", _("Sensor Address")) %}
-                                <span class="help-inline">Sensor address in HEX value, you can find it by running
-                                    <code>i2cdetect -y 1</code> on your Raspberry Pi</span>
-                            {% endcall %}
-                        </div>
-                        <div data-bind="if: temp_sensor_type() == 'max31855'">
-                            <div class="control-group">
-                                <label class="control-label">{{ _("GPIO") }}</label>
-                                <div class="controls">
-                                    <input type="text"
-                                           class="input-block-level"
-                                           value="MISO / SCLK"
-                                           disabled="true">
-                                    <span class="help-inline">The sensor connects to the SPI bus: SCLK to GPIO 11 (SCLK), MISO to GPIO
-                                        9 (MISO)
-                                    </span>
-                                </div>
-                            </div>
-                            {{ select_control_group("temp_sensor_address", _("Sensor Address (CE Select)"), [("0", "CE0"), ("1", "CE1")], "CE select: CE0 on GPIO 8 or CE1 on GPIO 7", placeholder="Select CE") }}
-                        </div>
-                        <div data-bind="if: temp_sensor_type() == '11' || temp_sensor_type() == '22' || temp_sensor_type() == '2302'">
-                            <div class="control-group">
-                                <div class="controls">
-                                    <span class="help-inline">
-                                        <span class="label label-important">Attention</span> These sensors need the
-                                        <code>libgpiod2</code> system package: <code>sudo apt install libgpiod2</code>
-                                    </span>
-                                </div>
-                            </div>
-                            {{ text_control_group("gpio_pin", _("GPIO"), "GPIO the data line of the sensor is connected to") }}
-                            {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("none", "None"), ("input_pull_up", "Input Pullup")], "Whether to enable the built-in pullup for this temperature sensor. If set, then no external pullup is needed.") }}
-                        </div>
-                    </div>
-                    <div data-bind="if: input_type() == 'gpio'">
-                        {{ text_control_group("gpio_pin", _("GPIO"), "GPIO that detects the event that triggers the automations. For example if you have a filament sensor you put the GPIO that the sensor is connected to. This can also be a press of a button or any other signal that you want to detect. You can not use GPIO 4 here if you are using temperature sensor DS18B20") }}
-                        {{ select_control_group("input_pull_resistor", _("Input Pull Resistor"), [("input_pull_up", "Input Pullup"), ("input_pull_down", "Input Pulldown")], "Choose what type of pull resistors that you want on the input. If your signal is active low, that means it should trigger the automations when receive a low signal (ground), you should choose PULL UP resistors.", placeholder="Select Pull Resistor") }}
-                    </div>
-                    <div data-bind="if: input_type() == 'temperature_sensor'">
-                        {{ checkbox_control_group("temp_sensor_navbar", _("Show temperature in navbar"), "Enable and disable temperature on navbar") }}
-                        {% call checkbox_control_group("show_graph_temp", _("Show temperature in graph")) %}
-                            <span class="help-inline">Enable to show temperature in temperature graph, when a printer is connected. Requires a
-                                graph plugin like
-                                <a href="https://github.com/jneilliii/OctoPrint-PlotlyTempGraph"
-                                   target="_blank">PlotlyTempGraph</a>.</span>
-                        {% endcall %}
-                        {% call checkbox_control_group("show_graph_humidity", _("Show humidity in graph")) %}
-                            <span class="help-inline">Enable to show humidity in temperature graph, when a printer is connected. Requires a
-                                graph plugin like
-                                <a href="https://github.com/jneilliii/OctoPrint-PlotlyTempGraph"
-                                   target="_blank">PlotlyTempGraph</a>.</span>
-                        {% endcall %}
-                    </div>
+                    {{ form_fields(plugin_enclosure_settings_forms.rpi_inputs) }}
                     <div class="control-group">
-                        <a title="Delete IO"
+                        <a title="Delete input"
                            class="btn btn-danger pull-right"
                            data-bind="click: function() { $parent.removeRpiInput($data) }">
                             <i class="icon-trash"></i>
@@ -149,10 +47,11 @@
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
-                            data-bind="click: function() { $root.addRpiInput(); }">Add Inputs...</button>
+                            data-bind="click: function() { $root.addRpiInput(); }">Add input</button>
                 </div>
             </form>
         </div>
+        <!-- TAB OUTPUTS -->
         <div class="tab-pane" id="enclosure-settings-tab-outputs">
             <p>
                 Here you set up the hardware the plugin drives, such as relays, fans and LEDs. In the Automations tab you choose when it turns on and
@@ -161,100 +60,9 @@
             <hr />
             <form class="form-horizontal">
                 <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.rpi_outputs">
-                    <!--
-            <div class="controls">
-                <h5>IO <span data-bind="text: $index"> </span></h5>
-            </div>
-        -->
-                    {{ text_control_group("index_id", _("Id"), disabled=true) }}
-                    {{ text_control_group("label", _("Label")) }}
-                    {{ select_control_group("output_type", _("Output Type"), [
-                        ("regular", _("Regular IO")),
-                        ("pwm", _("PWM")),
-                        ("neopixel_indirect", _("NeoPixel Indirect")),
-                        ("neopixel_direct", _("NeoPixel Direct")),
-                        ("ledstrip", _("RGB LED Strip")),
-                        ("temp_hum_control", _("Thermostat")),
-                    ], placeholder="Select Output Type") }}
-                    <div data-bind="if: output_type() == 'regular' || output_type() == 'temp_hum_control'">
-                        <div class="control-group">
-                            <label class="control-label">{{ _("Connection") }}</label>
-                            <div class="controls">
-                                <select data-bind="options: $root.connectionOptions, optionsText: 'label', optionsValue: 'value', value: gpio_i2c_enabled">
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <div data-bind="if: output_type() == 'neopixel_indirect'">
-                        {% call text_control_group("microcontroller_address", _("Microcontroller Address")) %}
-                            <span class="help-inline">Microcontroller address in HEX value, you can find it by running
-                                <code>i2cdetect -y 1</code> on your Raspberry Pi</span>
-                        {% endcall %}
-                        {% call text_control_group("gpio_pin", _("Microcontroller Pin")) %}
-                            <span class="help-inline">
-                                <span class="label label-important">Attention</span> Neopixel requires a microcontroller (ex: arduino)
-                                connected to I2C bus. This is the pin on the
-                                microcontroller that is connected to the Neopixel.
-                            </span>
-                        {% endcall %}
-                    </div>
-                    <div data-bind="ifnot: output_type() == '' || output_type() == 'ledstrip' || output_type() == 'neopixel_indirect' || (output_type() == 'regular' && gpio_i2c_enabled())">
-                        {{ text_control_group("gpio_pin", _("GPIO"), "GPIO that is controlled") }}
-                    </div>
-                    <div data-bind="if: gpio_i2c_enabled()">
-                        {{ text_control_group("gpio_i2c_bus", _("I2C Bus"), "This value should remain 1 unless you've used dtoverlay=i2c-gpio or you are using another bus.") }}
-                        {% call text_control_group("gpio_i2c_address", _("I2C Address")) %}
-                            <span class="help-inline">I2C address in HEX value, you can find it by running
-                                <code>i2cdetect -y 1</code> on your Raspberry Pi</span>
-                        {% endcall %}
-                        {{ text_control_group("gpio_i2c_register", _("I2C Register"), "I2C register in HEX value") }}
-                        {{ text_control_group("gpio_i2c_data_on", _("I2C ON data"), "I2C data to write in HEX value when ON") }}
-                        {{ text_control_group("gpio_i2c_data_off", _("I2C OFF data"), "I2C data to write in HEX value when OFF") }}
-                        {{ text_control_group("gpio_i2c_register_status", _("I2C Register (read status)"), "I2C register for reading gpio state in HEX value") }}
-                    </div>
-                    <div data-bind="if: output_type() == 'regular' || output_type() == 'temp_hum_control'">
-                        <div class="control-group">
-                            <label class="control-label">{{ _("Active Level") }}</label>
-                            <div class="controls">
-                                <select data-bind="options: $root.activeLevelOptions, optionsText: 'label', optionsValue: 'value', optionsCaption: 'Select Active Level', optionsAfterRender: $root.disablePlaceholderOption, value: active_low, valueAllowUnset: true, placeholderWhenUnset: true">
-                                </select>
-                                <span class="help-inline">Active low means that the GPIO will turn on when receive a low signal (ground) from Raspberry PI</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div data-bind="if: output_type() == 'temp_hum_control'">
-                        {{ select_control_group("temp_ctr_type", _("Device Type"), [("heater", _("Heater")), ("cooler", _("Cooler")), ("dehumidifier", _("Dehumidifier"))], placeholder="Select Device Type") }}
-                        <div data-bind="if: temp_ctr_type() == 'heater' || temp_ctr_type() == 'cooler'">
-                            {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_temperature_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", placeholder="Select Sensor") }}
-                        </div>
-                        <div data-bind="if: temp_ctr_type() == 'dehumidifier'">
-                            {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_hum_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", placeholder="Select Sensor") }}
-                        </div>
-                        <div data-bind="ifnot: temp_ctr_type() == 'dehumidifier'">
-                            {{ temperature_control_group("temp_ctr_deadband", _("Value Deadband"), "Allowable drift of the thermostat below its target. Set it to zero to disable.", interval=true) }}
-                        </div>
-                        <div data-bind="if: temp_ctr_type() == 'heater'">
-                            {{ temperature_control_group("temp_ctr_max_temp", _("Maximum Temperature"), "Maximum temperature that the enclosure should reach, if this temperature is hit, the heater will be disabled until it's set temperature is set again. Leave it empty for no maximum.") }}
-                        </div>
-                    </div>
-                    <div data-bind="if: output_type() == 'pwm'">
-                        {{ text_control_group("pwm_frequency", _("PWM Frequency"), unit="Hz") }}
-                    </div>
-                    <div data-bind="if: output_type() == 'ledstrip'">
-                        {{ text_control_group("ledstrip_gpio_clk", _("CLK GPIO"), "GPIO of the clock line") }}
-                        {{ text_control_group("ledstrip_gpio_dat", _("DAT GPIO"), "GPIO of the data line") }}
-                    </div>
-                    <div data-bind="if: output_type() == 'neopixel_indirect' || output_type() == 'neopixel_direct'">
-                        {{ text_control_group("neopixel_count", _("Number of LEDS"), "Number of led's on strip") }}
-                        {{ text_control_group("neopixel_brightness", _("Brightness"), "Value between 0 and 255") }}
-                    </div>
-                    <div data-bind="if: output_type() == 'neopixel_direct'">
-                        {{ text_control_group("neopixel_dma", _("DMA Channel"), "DMA channel used to drive the NeoPixels.") }}
-                    </div>
-                    <div data-bind="ifnot: output_type() == ''">{{ checkbox_control_group("hide_btn_ui", _("Hide in tab")) }}</div>
-                    <div data-bind="if: output_type() == 'regular'">{{ checkbox_control_group("show_on_navbar", _("Show in navbar")) }}</div>
+                    {{ form_fields(plugin_enclosure_settings_forms.rpi_outputs) }}
                     <div class="control-group">
-                        <a title="Delete IO"
+                        <a title="Delete output"
                            class="btn btn-danger pull-right"
                            data-bind="click: function() { $parent.removeRpiOutput($data) }">
                             <i class="icon-trash"></i>
@@ -265,10 +73,11 @@
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
-                            data-bind="click: function() { $root.addRpiOutput(); }">Add Outputs...</button>
+                            data-bind="click: function() { $root.addRpiOutput(); }">Add output</button>
                 </div>
             </form>
         </div>
+        <!-- TAB ACTIONS -->
         <div class="tab-pane" id="enclosure-settings-tab-actions">
             <p>
                 Here you define the commands the plugin can run, such as sending G-code to the printer or running a script. In the Automations tab you
@@ -277,38 +86,9 @@
             <hr />
             <form class="form-horizontal">
                 <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.actions">
-                    {{ text_control_group("index_id", _("Id"), disabled=true) }}
-                    {{ text_control_group("label", _("Label")) }}
-                    {{ select_control_group("action_type", _("Action Type"), [
-                        ("gcode_output", _("Gcode")),
-                        ("shell_output", _("Shell Script")),
-                        ("printer", _("Printer")),
-                    ], placeholder="Select Action Type") }}
-                    <div data-bind="if: action_type() == 'shell_output'">{{ text_control_group("shell_script", _("Script")) }}</div>
-                    <div data-bind="if: action_type() == 'gcode_output'">
-                        <div class="control-group">
-                            <label class="control-label">{{ _("Gcode") }}</label>
-                            <div class="controls">
-                                <textarea rows="4" class="block" data-bind="value: gcode"></textarea>
-                            </div>
-                        </div>
-                    </div>
-                    <div data-bind="if: action_type() == 'printer'">
-                        {{ select_control_group("printer_action", _("Printer Action"), [
-                            ("resume", "Printer Resume"),
-                            ("pause", "Printer Pause"),
-                            ("cancel", "Printer Cancel"),
-                            ("start", "Start Print"),
-                            ("toggle", "Printer Toggle (Connect / Pause / Resume)"),
-                            ("toggle_job", "Job Toggle (Connect / Start / Cancel)"),
-                        ], placeholder="Select Printer Action") }}
-                    </div>
-                    <div data-bind="ifnot: action_type() == ''">
-                        {{ checkbox_control_group("hide_btn_ui", _("Hide in tab")) }}
-                        {{ checkbox_control_group("show_on_navbar", _("Show in navbar")) }}
-                    </div>
+                    {{ form_fields(plugin_enclosure_settings_forms.actions) }}
                     <div class="control-group">
-                        <a title="Delete Action"
+                        <a title="Delete action"
                            class="btn btn-danger pull-right"
                            data-bind="click: function() { $parent.removeAction($data) }">
                             <i class="icon-trash"></i>
@@ -319,10 +99,11 @@
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
-                            data-bind="click: function() { $root.addAction(); }">Add Actions...</button>
+                            data-bind="click: function() { $root.addAction(); }">Add action</button>
                 </div>
             </form>
         </div>
+        <!-- TAB AUTOMATIONS -->
         <div class="tab-pane" id="enclosure-settings-tab-automations">
             <p>
                 Here you set up the logic of your enclosure, connecting inputs to outputs and actions. For example: turn on the lights when a
@@ -332,181 +113,9 @@
             <hr />
             <form class="form-horizontal">
                 <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.automations">
-                    {{ text_control_group("index_id", _("Id"), disabled=true) }}
-                    {{ text_control_group("label", _("Label")) }}
-                    {% call select_control_group("automation_type", _("Automation Type"), [
-                        ("rule", _("Rule (Trigger-Reaction)")),
-                        ("filament", _("Filament Sensor")),
-                        ("pwm_temperature_linked", _("PWM Linked to Temperature")),
-                        ("toggle_timer", _("Toggle Timer")),
-                    ], placeholder="Select Automation Type") %}
-                        <span class="help-inline" data-bind="visible: automation_type() == 'rule'">
-                            <span class="label label-info">Info:</span> Does something when its trigger happens, for example controls an output when a button connected to a
-                            GPIO input is pressed, or when the temperature goes above a threshold.
-                        </span>
-                        <span class="help-inline"
-                              data-bind="visible: automation_type() == 'filament'">
-                            <span class="label label-info">Info:</span> Runs the selected action when the sensor detects the end of the filament during a print, for
-                            example a G-code action that changes the filament or a printer action that pauses the print. Set up the input GPIO according to
-                            your sensor, for example, if your filament sensor connects to ground when detects the end of the filament, you should choose
-                            PULL UP resistors and detect the event on the falling edge.
-                        </span>
-                        <span class="help-inline"
-                              data-bind="visible: automation_type() == 'pwm_temperature_linked'">
-                            <span class="label label-info">Info:</span> Sets the duty cycle of a PWM output from the temperature read by a sensor, interpolated between the
-                            point from duty A, temperature A -> duty B, temperature B, while its conditions are satisfied, for example only during a print;
-                            when they stop being satisfied the output is turned off.
-                        </span>
-                        <span class="help-inline"
-                              data-bind="visible: automation_type() == 'toggle_timer'">
-                            <span class="label label-info">Info:</span> Turns an output on and off in turn, on for the on time and off for the off time.
-                        </span>
-                    {% endcall %}
-                    {{ checkbox_control_group("enabled", _("Enabled"), "A disabled automation does nothing.") }}
-                    <div data-bind="if: automation_type() == 'rule'">
-                        {{ select_control_group("trigger_type", _("Trigger"), [
-                            ("gpio_input", _("GPIO Input")),
-                            ("temperature", _("Temperature")),
-                            ("octoprint_event", _("OctoPrint Event")),
-                        ], placeholder="Select Trigger") }}
-                    </div>
-                    <div data-bind="if: automation_type() == 'rule' && trigger_type() == 'octoprint_event'">
-                        <div class="control-group">
-                            <label class="control-label">{{ _("Events") }}</label>
-                            <div class="controls">
-                                <select multiple
-                                        size="10"
-                                        class="input-block-level"
-                                        data-bind="selectedOptions: octoprint_events">
-                                    {% for event in plugin_enclosure_octoprint_events %}
-                                        <option value="{{ event }}">{{ event }}</option>
-                                    {% endfor %}
-                                </select>
-                                <span class="help-inline">OctoPrint events that run the automation, for example PrintStarted or PrintDone. Hold Ctrl to select more than one.</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div data-bind="if: automation_type() == 'filament' || (automation_type() == 'rule' && trigger_type() == 'gpio_input')">
-                        {{ select_control_group("input", _("Input"), "$root.settings_gpio_inputs", "GPIO input that triggers the automation. Configured on the input side of the plugin.", placeholder="Select Input") }}
-                        {{ select_control_group("edge", _("Event Trigger"), [("rise", "Rise"), ("fall", "Fall")], "Do you want to trigger the event on the rise or falling edge? If you signal is active low, that means it should run the automation when it receives a low signal (ground), you should choose FALLING EDGE.", placeholder="Select Edge") }}
-                    </div>
-                    <div data-bind="if: automation_type() == 'rule' && trigger_type() == 'temperature'">
-                        {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_temperature_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", placeholder="Select Sensor") }}
-                        {{ temperature_control_group("alarm_set_temp", _("Set Temperature"), "Temperature above which the automation runs.") }}
-                        {{ checkbox_control_group("repeat_while_above", _("Repeat while above"), "Run the automation at every reading above the set temperature, instead of only when the temperature goes above it the first time.") }}
-                    </div>
-                    <div data-bind="if: automation_type() == 'toggle_timer'">
-                        {{ select_control_group("output", _("Controlled IO"), "$root.settingsViewModel.settings.plugins.enclosure.rpi_outputs", "Output to turn on and off in turn.", placeholder="Select Output") }}
-                        {{ setpoint_control_groups("output") }}
-                        {{ text_control_group("toggle_timer_on", _("On Time"), "Seconds the output stays on", unit="s") }}
-                        {{ text_control_group("toggle_timer_off", _("Off Time"), "Seconds the output stays off", unit="s") }}
-                    </div>
-                    <div data-bind="if: automation_type() == 'pwm_temperature_linked'">
-                        {{ select_control_group("output", _("Controlled IO"), "$root.settings_outputs_pwm", "PWM output whose duty cycle follows the temperature. Configured on the output side of the plugin.", placeholder="Select Output") }}
-                        {{ select_control_group("linked_temp_sensor", _("Temperature Sensor"), "$root.settings_temperature_sensors", "Temperature sensor responsible for getting the value to be used. Configured on the input side of the plugin.", placeholder="Select Sensor") }}
-                        {{ temperature_control_group("temperature_a", _("Temperature A")) }}
-                        {{ text_control_group("duty_a", _("Duty A")) }}
-                        {{ temperature_control_group("temperature_b", _("Temperature B")) }}
-                        {{ text_control_group("duty_b", _("Duty B")) }}
-                    </div>
-                    <div data-bind="if: automation_type() != '' && automation_type() != 'filament'">
-                        <div data-bind="foreach: conditions">
-                            {% call select_control_group("condition_type", _("Condition"), [
-                                ("print_job", _("Print Job")),
-                            ], placeholder="Select Condition") %}
-                                <span class="help-inline"
-                                      data-bind="visible: condition_type() == 'print_job'">
-                                    <span class="label label-info">Info:</span> The automation acts only while a print job is running, or only while none is.
-                                </span>
-                            {% endcall %}
-                            <div data-bind="if: condition_type() == 'print_job'">
-                                <div class="control-group">
-                                    <label class="control-label">{{ _("Print Job") }}</label>
-                                    <div class="controls">
-                                        <select data-bind="options: $root.printingOptions, optionsText: 'label', optionsValue: 'value', value: printing">
-                                        </select>
-                                        <span class="help-inline">Printing means a print job is running.</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="control-group">
-                                <div class="controls">
-                                    <a title="Remove Condition"
-                                       class="btn btn-small btn-danger"
-                                       data-bind="click: function() { $root.removeCondition($parent, $data) }">
-                                        <i class="icon-trash"></i>
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <div class="controls">
-                                <button type="button"
-                                        class="btn btn-small"
-                                        data-bind="click: function() { $root.addCondition($data) }">Add Condition...</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div data-bind="if: automation_type() == 'rule'">
-                        {{ select_control_group("$root.ruleTiming($data)", _("Run"), [
-                            ("now", _("Right away")),
-                            ("delay", _("After a delay")),
-                            ("at", _("At a time of day")),
-                        ], "When to run the reactions, once the trigger fires.") }}
-                        <div data-bind="if: $root.ruleTiming($data)() == 'delay'">{{ text_control_group("delay", _("Delay"), "Seconds to wait after the trigger before running the reactions.", unit="s") }}</div>
-                        <div data-bind="if: $root.ruleTiming($data)() == 'at'">
-                            {{ text_control_group("at", _("At"), "Time of day, as HH:MM: the reactions run the next time it comes after the trigger.") }}
-                        </div>
-                    </div>
-                    <div data-bind="if: automation_type() == 'rule'">
-                        <div data-bind="foreach: reactions">
-                            {% call select_control_group("reaction_type", _("Reaction"), [
-                                ("output_control", _("Output Control")),
-                                ("run_action", _("Run Action")),
-                            ], placeholder="Select Reaction") %}
-                                <span class="help-inline"
-                                      data-bind="visible: reaction_type() == 'output_control'">
-                                    <span class="label label-info">Info:</span> Will control an output when a condition is met, for example the press of a button: a
-                                    regular output turns on or off, a PWM goes to a duty cycle or to 0, LEDs to a color or off, a thermostat to a target or off.
-                                </span>
-                                <span class="help-inline"
-                                      data-bind="visible: reaction_type() == 'run_action'">
-                                    <span class="label label-info">Info:</span> Will run an action when a condition is met, for example send gcode or a command to the printer, or
-                                    run a shell script, when a button is pressed.
-                                </span>
-                            {% endcall %}
-                            <div data-bind="if: reaction_type() == 'output_control'">
-                                {{ select_control_group("controlled_io", _("Controlled IO"), "$root.settingsViewModel.settings.plugins.enclosure.rpi_outputs","When the event happens, do you want control of which OUTPUT?", placeholder="Select Output") }}
-                                {{ select_control_group("controlled_io_set_state", _("Set Controlled IO State"), [("on", "On"), ("off", "Off"), ("toggle", "Toggle")], "When the event happens, do you want to turn the controlled IO on, off, or toggle it?", placeholder="Select State") }}
-                                <div data-bind="ifnot: controlled_io_set_state() == 'off'">{{ setpoint_control_groups("controlled_io") }}</div>
-                            </div>
-                            <div data-bind="if: reaction_type() == 'run_action'">
-                                {{ select_control_group("action", _("Action"), "$root.settingsViewModel.settings.plugins.enclosure.actions", "Action to run when the event happens. Configured on the actions side of the plugin.", placeholder="Select Action") }}
-                            </div>
-                            <div class="control-group">
-                                <div class="controls">
-                                    <a title="Remove Reaction"
-                                       class="btn btn-small btn-danger"
-                                       data-bind="click: function() { $root.removeReaction($parent, $data) }">
-                                        <i class="icon-trash"></i>
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="control-group">
-                            <div class="controls">
-                                <button type="button"
-                                        class="btn btn-small"
-                                        data-bind="click: function() { $root.addReaction($data) }">Add Reaction...</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div data-bind="if: automation_type() == 'filament'">
-                        {{ select_control_group("action", _("Action"), "$root.settingsViewModel.settings.plugins.enclosure.actions", "Action run when the sensor detects the end of the filament, for example a G-code action that changes the filament or a printer action that pauses the print. Configured on the actions side of the plugin.", placeholder="Select Action") }}
-                    </div>
-                    {{ checkbox_control_group("show_in_tab", _("Show in tab"), "Shows the automation in the Enclosure tab, with a switch to enable or disable it.") }}
+                    {{ form_fields(plugin_enclosure_settings_forms.automations) }}
                     <div class="control-group">
-                        <a title="Delete Automation"
+                        <a title="Delete automation"
                            class="btn btn-danger pull-right"
                            data-bind="click: function() { $parent.removeAutomation($data) }">
                             <i class="icon-trash"></i>
@@ -517,15 +126,16 @@
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
-                            data-bind="click: function() { $root.addAutomation(); }">Add Automations...</button>
+                            data-bind="click: function() { $root.addAutomation(); }">Add automation</button>
                 </div>
             </form>
         </div>
+        <!-- TAB ADVANCED -->
         <div class="tab-pane" id="enclosure-settings-tab-advanced">
             <form class="form-horizontal">
                 <div data-bind="with: settingsViewModel.settings.plugins.enclosure">
                     {% call checkbox_control_group("gcode_control", _("Enable ENC commands")) %}
-                        <span class="help-inline">Lets <code>ENC</code> commands in the G-code control the outputs.
+                        <span class="help-block">Lets <code>ENC</code> commands in the G-code control the outputs.
                             <a data-toggle="modal" href="#enclosure-settings-enc-commands">Show the commands</a>.
                         </span>
                     {% endcall %}
@@ -557,6 +167,7 @@
         </div>
     </div>
 </div>
+<!-- ENC COMMANDS DIALOG -->
 <div id="enclosure-settings-enc-commands" class="modal hide fade">
     <div class="modal-header">
         <a href="#" class="close" data-dismiss="modal" title="{{ _('Close') }}">×</a>

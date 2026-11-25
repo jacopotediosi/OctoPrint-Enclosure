@@ -14,7 +14,7 @@ from .actions import Actions
 from .api import Api
 from .automations import Automations
 from .engine import ControlLoop, OutputExecutor, Scheduler
-from .frontend import Frontend, describe_settings_fields
+from .frontend import Frontend, SettingsForms
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
 from .inputs import GpioInputs, SensorPoller, Sensors
@@ -70,6 +70,7 @@ class EnclosurePlugin(
     _automations: Automations
     _api: Api
     _frontend: Frontend
+    _settings_forms: SettingsForms
     _control_loop: ControlLoop
     _scheduler: Scheduler
     _output_executor: OutputExecutor
@@ -136,6 +137,7 @@ class EnclosurePlugin(
             self._automations,
             self._logger,
         )
+        self._settings_forms = SettingsForms()
         self._actions = Actions(self._printer, self._frontend, self._logger)
 
         # Init notifications
@@ -353,7 +355,7 @@ class EnclosurePlugin(
             "gpio_import_error": str(gpio_import_error) if gpio_import_error is not None else None,
             "gpio_numbering_is_board": gpio_import_error is None and self._gpio.getmode() == self._gpio.BOARD,
             "octoprint_events": sorted(all_events()),
-            "settings_fields": describe_settings_fields(),
+            "settings_forms": self._settings_forms.forms,
         }
 
     @override

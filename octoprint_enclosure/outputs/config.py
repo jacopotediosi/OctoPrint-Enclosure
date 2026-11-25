@@ -21,7 +21,9 @@ class OutputType(LabeledEnum):
 class OutputConfig(BaseConfig):
     """The configuration shared by all the outputs."""
 
-    index_id: int = setting(label="Id")
+    type_field_name = "output_type"
+
+    index_id: int = setting(label="Id", widget="id")
     """The id of the output."""
 
     label: str = setting(optional=True, label="Label", compare=False)

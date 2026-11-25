@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from octoprint_enclosure.inputs.config import InputConfig, InputType
 
 from .edge import Edge
-from .gpio_input import GpioInput, GpioInputError
+from .gpio_input import GpioConfig, GpioInput, GpioInputError
 
 if TYPE_CHECKING:
     import logging
@@ -30,6 +30,9 @@ class _InvalidGpioInput:
 
 class GpioInputs:
     """The GPIO inputs."""
+
+    config_class = GpioConfig
+    """The dataclass of the configuration of a GPIO input."""
 
     _gpio: GpioBackend
     """The GPIO backend."""

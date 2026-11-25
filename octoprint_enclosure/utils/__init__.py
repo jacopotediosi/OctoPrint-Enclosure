@@ -1,7 +1,7 @@
 from .bool_utils import parse_bool
 from .color_utils import HEX_COLOR_PATTERN, Rgb, format_hex_color, parse_hex_color
 from .crc_utils import crc16_modbus
-from .enum_utils import LabeledEnum, LabeledValue
+from .enum_utils import LabeledEnum, LabeledValue, check_all_members_mapped
 from .gcode_utils import get_gcode_param
 from .measurement import MeasurementType, TemperatureUnit
 from .number_utils import clamp, is_number, parse_float, parse_hex
@@ -14,6 +14,7 @@ __all__ = [
     "MeasurementType",
     "Rgb",
     "TemperatureUnit",
+    "check_all_members_mapped",
     "clamp",
     "crc16_modbus",
     "format_hex_color",
