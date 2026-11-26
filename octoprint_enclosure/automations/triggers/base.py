@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from octoprint_enclosure.config import BaseConfig
-from octoprint_enclosure.utils import LabeledEnum, LabeledValue
+from octoprint_enclosure.utils import N_, LabeledEnum, LabeledValue
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -15,9 +15,9 @@ if TYPE_CHECKING:
 class TriggerType(LabeledEnum):
     """The type of an automation trigger."""
 
-    GPIO_INPUT = LabeledValue(value="gpio_input", label="GPIO Input")
-    TEMPERATURE = LabeledValue(value="temperature", label="Temperature")
-    OCTOPRINT_EVENT = LabeledValue(value="octoprint_event", label="OctoPrint Event")
+    GPIO_INPUT = LabeledValue(value="gpio_input", label=N_("GPIO Input"))
+    TEMPERATURE = LabeledValue(value="temperature", label=N_("Temperature"))
+    OCTOPRINT_EVENT = LabeledValue(value="octoprint_event", label=N_("OctoPrint Event"))
 
 
 _ConfigT = TypeVar("_ConfigT", bound=BaseConfig)

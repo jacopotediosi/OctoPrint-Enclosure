@@ -34,15 +34,14 @@
         <!-- TAB INPUTS -->
         <div class="tab-pane active" id="enclosure-settings-tab-inputs">
             <p>
-                Here you set up the hardware the plugin reads, such as sensors and buttons. In the Automations tab you choose what a reading or a
-                button press does.
+                {{ _("Here you set up the hardware the plugin reads, such as sensors and buttons. In the Automations tab you choose what a reading or a button press does.") }}
             </p>
             <hr />
             <form class="form-horizontal">
                 <div data-bind="foreach: pluginSettings().rpi_inputs">
                     {{ form_fields(plugin_enclosure_settings_forms.rpi_inputs) }}
                     <div class="control-group">
-                        <a title="Delete input"
+                        <a title="{{ _('Delete input') }}"
                            class="btn btn-danger pull-right"
                            data-bind="click: function() { $parent.removeItem('rpi_inputs', $data) }">
                             <i class="icon-trash"></i>
@@ -53,22 +52,21 @@
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
-                            data-bind="click: function() { $root.addItem('rpi_inputs', 'Input'); }">Add input</button>
+                            data-bind="click: function() { $root.addItem('rpi_inputs', '{{ _('Input')|esq }}'); }">{{ _("Add input") }}</button>
                 </div>
             </form>
         </div>
         <!-- TAB OUTPUTS -->
         <div class="tab-pane" id="enclosure-settings-tab-outputs">
             <p>
-                Here you set up the hardware the plugin drives, such as relays, fans and LEDs. In the Automations tab you choose when it turns on and
-                off.
+                {{ _("Here you set up the hardware the plugin drives, such as relays, fans and LEDs. In the Automations tab you choose when it turns on and off.") }}
             </p>
             <hr />
             <form class="form-horizontal">
                 <div data-bind="foreach: pluginSettings().rpi_outputs">
                     {{ form_fields(plugin_enclosure_settings_forms.rpi_outputs) }}
                     <div class="control-group">
-                        <a title="Delete output"
+                        <a title="{{ _('Delete output') }}"
                            class="btn btn-danger pull-right"
                            data-bind="click: function() { $parent.removeItem('rpi_outputs', $data) }">
                             <i class="icon-trash"></i>
@@ -79,22 +77,21 @@
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
-                            data-bind="click: function() { $root.addItem('rpi_outputs', 'Output'); }">Add output</button>
+                            data-bind="click: function() { $root.addItem('rpi_outputs', '{{ _('Output')|esq }}'); }">{{ _("Add output") }}</button>
                 </div>
             </form>
         </div>
         <!-- TAB ACTIONS -->
         <div class="tab-pane" id="enclosure-settings-tab-actions">
             <p>
-                Here you define the commands the plugin can run, such as sending G-code to the printer or running a script. In the Automations tab you
-                choose when they run.
+                {{ _("Here you define the commands the plugin can run, such as sending G-code to the printer or running a script. In the Automations tab you choose when they run.") }}
             </p>
             <hr />
             <form class="form-horizontal">
                 <div data-bind="foreach: pluginSettings().actions">
                     {{ form_fields(plugin_enclosure_settings_forms.actions) }}
                     <div class="control-group">
-                        <a title="Delete action"
+                        <a title="{{ _('Delete action') }}"
                            class="btn btn-danger pull-right"
                            data-bind="click: function() { $parent.removeItem('actions', $data) }">
                             <i class="icon-trash"></i>
@@ -105,23 +102,21 @@
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
-                            data-bind="click: function() { $root.addItem('actions', 'Action'); }">Add action</button>
+                            data-bind="click: function() { $root.addItem('actions', '{{ _('Action')|esq }}'); }">{{ _("Add action") }}</button>
                 </div>
             </form>
         </div>
         <!-- TAB AUTOMATIONS -->
         <div class="tab-pane" id="enclosure-settings-tab-automations">
             <p>
-                Here you set up the logic of your enclosure, connecting inputs to outputs and actions. For example: turn on the lights when a
-                button is pressed, start a fan when a sensor reads a high temperature, pause the print when a filament sensor detects the end
-                of the filament.
+                {{ _("Here you set up the logic of your enclosure, connecting inputs to outputs and actions. For example: turn on the lights when a button is pressed, start a fan when a sensor reads a high temperature, pause the print when a filament sensor detects the end of the filament.") }}
             </p>
             <hr />
             <form class="form-horizontal">
                 <div data-bind="foreach: pluginSettings().automations">
                     {{ form_fields(plugin_enclosure_settings_forms.automations) }}
                     <div class="control-group">
-                        <a title="Delete automation"
+                        <a title="{{ _('Delete automation') }}"
                            class="btn btn-danger pull-right"
                            data-bind="click: function() { $parent.removeItem('automations', $data) }">
                             <i class="icon-trash"></i>
@@ -132,7 +127,7 @@
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
-                            data-bind="click: function() { $root.addAutomation(); }">Add automation</button>
+                            data-bind="click: function() { $root.addAutomation(); }">{{ _("Add automation") }}</button>
                 </div>
             </form>
         </div>
@@ -141,18 +136,19 @@
             <form class="form-horizontal">
                 <div data-bind="with: pluginSettings()">
                     {% call checkbox_control_group("gcode_control", _("Enable ENC commands")) %}
-                        <span class="help-block">Lets <code>ENC</code> commands in the G-code control the outputs.
-                            <a data-toggle="modal" href="#enclosure-settings-enc-commands">Show the commands</a>.
+                        <span class="help-block">{{ _("Lets <code>ENC</code> commands in the G-code control the outputs.") }}
+                            <a data-toggle="modal"
+                               href="#enclosure-settings-enc-commands">{{ _("Show the commands") }}</a>.
                         </span>
                     {% endcall %}
                     {% set temperature_unit_options = [] %}
                     {% for value, unit in plugin_enclosure_temperature_units.items() %}
-                        {% do temperature_unit_options.append((value, unit.label ~ " (" ~ unit.symbol ~ ")")) %}
+                        {% do temperature_unit_options.append((value, _(unit.label) ~ " (" ~ unit.symbol ~ ")")) %}
                     {% endfor %}
                     {{ select_control_group("temperature_unit", _("Temperature Unit"), temperature_unit_options) }}
-                    {{ select_control_group("notification_provider", _("Notification Provider"), [("", "Disabled"), ("ifttt", "IFTTT")]) }}
+                    {{ select_control_group("notification_provider", _("Notification Provider"), [("", _("Disabled")), ("ifttt", "IFTTT")]) }}
                     <div data-bind="if: notification_provider() == 'ifttt'">
-                        {{ text_control_group("notification_event_name", _("Event Name"), "As configured on the maker channel of IFTTT, without spaces.") }}
+                        {{ text_control_group("notification_event_name", _("Event Name"), _("As configured on the maker channel of IFTTT, without spaces.")) }}
                         {{ text_control_group("notification_api_key", _("IFTTT API KEY")) }}
                         <div class="control-group" data-bind="foreach: notifications">
                             {% for key, label in [
@@ -171,7 +167,7 @@
                             {% endfor %}
                         </div>
                     </div>
-                    {{ checkbox_control_group("development_mode", _("Development mode"), "Simulates GPIO, I2C and sensors, to try the plugin without hardware. Needs a restart of OctoPrint.") }}
+                    {{ checkbox_control_group("development_mode", _("Development mode"), _("Simulates GPIO, I2C and sensors, to try the plugin without hardware. Needs a restart of OctoPrint.")) }}
                 </div>
             </form>
         </div>
@@ -185,23 +181,22 @@
     </div>
     <div class="modal-body">
         <p>
-            A command is a line of G-code: <code>ENC</code>, then <code>O</code> with the Id of the output, shown in the Outputs tab, then
-            the parameters of that kind of output. For example, <code>ENC O2 S1</code> turns output 2 on.
+            {{ _("A command is a line of G-code: <code>ENC</code>, then <code>O</code> with the Id of the output, shown in the Outputs tab, then the parameters of that kind of output. For example, <code>ENC O2 S1</code> turns output 2 on.") }}
         </p>
         <table class="table table-condensed">
             <thead>
                 <tr>
-                    <th>Output</th>
-                    <th>Command and parameters</th>
+                    <th>{{ _("Output") }}</th>
+                    <th>{{ _("Command and parameters") }}</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td>Regular IO</td>
+                    <td>{{ _("Regular IO") }}</td>
                     <td>
                         <code>ENC O&lt;id&gt; S&lt;0|1&gt;</code>
                         <br>
-                        <code>S1</code> turns it on, <code>S0</code> turns it off.
+                        {{ _("<code>S1</code> turns it on, <code>S0</code> turns it off.") }}
                     </td>
                 </tr>
                 <tr>
@@ -209,7 +204,7 @@
                     <td>
                         <code>ENC O&lt;id&gt; S&lt;duty&gt;</code>
                         <br>
-                        <code>S</code> is the duty cycle, from 0 to 100.
+                        {{ _("<code>S</code> is the duty cycle, from 0 to 100.") }}
                     </td>
                 </tr>
                 <tr>
@@ -217,18 +212,17 @@
                     <td>
                         <code>ENC O&lt;id&gt; R&lt;red&gt; G&lt;green&gt; B&lt;blue&gt;</code>
                         <br>
-                        <code>R</code>, <code>G</code> and <code>B</code> are the color, each from 0 to 255.
+                        {{ _("<code>R</code>, <code>G</code> and <code>B</code> are the color, each from 0 to 255.") }}
                     </td>
                 </tr>
                 <tr>
-                    <td>Thermostat</td>
+                    <td>{{ _("Thermostat") }}</td>
                     <td>
                         <code>ENC O&lt;id&gt; S&lt;target&gt; W&lt;0|1&gt;</code>
                         <br>
-                        <code>S</code> is the target: a temperature in the unit chosen in the Advanced tab, or a humidity. <code>S0</code> turns
-                        the thermostat off.
+                        {{ _("<code>S</code> is the target: a temperature in the unit chosen in the Advanced tab, or a humidity. <code>S0</code> turns the thermostat off.") }}
                         <br>
-                        <code>W1</code> pauses the print until the target is reached. It is optional.
+                        {{ _("<code>W1</code> pauses the print until the target is reached. It is optional.") }}
                     </td>
                 </tr>
             </tbody>

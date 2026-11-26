@@ -8,7 +8,7 @@ from smbus2 import SMBus
 from typing_extensions import override
 
 from octoprint_enclosure.config import HexInt, config_field
-from octoprint_enclosure.utils import MeasurementType
+from octoprint_enclosure.utils import N_, MeasurementType
 
 from .base import Reading, Sensor, SensorError, SensorInputConfig
 
@@ -17,29 +17,30 @@ from .base import Reading, Sensor, SensorError, SensorInputConfig
 class RawI2cConfig(SensorInputConfig):
     """The configuration of a device sending its readings over I2C as raw floats."""
 
-    type_help = (
+    type_help = N_(
         '<span class="label label-important">Attention</span> I2C needs to be enabled: run '
         "<code>sudo raspi-config</code> and enable I2C in the interface options. When the register is read, the device "
-        "must return two 4-byte little-endian floats: the temperature in °C then the humidity in % for Raw I2C "
-        "Temperature, the humidity then the temperature for Raw I2C Humidity. The second float can be <code>NaN</code>."
+        "must return two 4-byte little-endian floats: the temperature in °C then the humidity in %% for Raw I2C "
+        "Temperature, the humidity then the temperature for Raw I2C Humidity. The second float can be "
+        "<code>NaN</code>.",
     )
 
     temp_i2c_bus: int = config_field(
         default=1,
-        label="I2C Bus",
-        help_text=(
+        label=N_("I2C Bus"),
+        help_text=N_(
             "1 is the bus of GPIO 2 and 3. For a device on another bus, for example one made on other pins with "
-            "<code>dtoverlay=i2c-gpio</code>, use its number: <code>i2cdetect -l</code> lists the buses."
+            "<code>dtoverlay=i2c-gpio</code>, use its number: <code>i2cdetect -l</code> lists the buses.",
         ),
         min_value=0,
     )
     """The number of the I2C bus."""
 
     temp_i2c_address: HexInt = config_field(
-        label="I2C Address",
-        help_text=(
+        label=N_("I2C Address"),
+        help_text=N_(
             "Address of the device, in hexadecimal. Find it by running <code>i2cdetect -y 1</code> (from the "
-            "<code>i2c-tools</code> package) on your Raspberry Pi."
+            "<code>i2c-tools</code> package) on your Raspberry Pi.",
         ),
         min_value=0,
         max_value=127,
@@ -47,8 +48,8 @@ class RawI2cConfig(SensorInputConfig):
     """The I2C address of the device."""
 
     temp_i2c_register: HexInt = config_field(
-        label="I2C Register",
-        help_text="Register to read, in hexadecimal.",
+        label=N_("I2C Register"),
+        help_text=N_("Register to read, in hexadecimal."),
         min_value=0,
         max_value=255,
     )

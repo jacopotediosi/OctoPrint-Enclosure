@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 
 from octoprint_enclosure.config import BaseConfig, config_field
 from octoprint_enclosure.outputs import config_with_setpoint_from_settings
-from octoprint_enclosure.utils import LabeledEnum, LabeledValue
+from octoprint_enclosure.utils import N_, LabeledEnum, LabeledValue
 
 from .conditions import CONDITIONS, ConditionConfig, conditions_from_settings
 
@@ -27,10 +27,10 @@ class AutomationError(Exception):
 class AutomationType(LabeledEnum):
     """The type of an automation."""
 
-    RULE = LabeledValue(value="rule", label="Rule (Trigger-Reaction)")
-    FILAMENT = LabeledValue(value="filament", label="Filament Sensor")
-    PWM_TEMPERATURE_LINKED = LabeledValue(value="pwm_temperature_linked", label="PWM Linked to Temperature")
-    TOGGLE_TIMER = LabeledValue(value="toggle_timer", label="Toggle Timer")
+    RULE = LabeledValue(value="rule", label=N_("Rule (Trigger-Reaction)"))
+    FILAMENT = LabeledValue(value="filament", label=N_("Filament Sensor"))
+    PWM_TEMPERATURE_LINKED = LabeledValue(value="pwm_temperature_linked", label=N_("PWM Linked to Temperature"))
+    TOGGLE_TIMER = LabeledValue(value="toggle_timer", label=N_("Toggle Timer"))
 
 
 @dataclass(frozen=True)
@@ -39,26 +39,26 @@ class AutomationConfig(BaseConfig):
 
     type_field_name = "automation_type"
 
-    index_id: int = config_field(label="Id", widget="id")
+    index_id: int = config_field(label=N_("Id"), widget="id")
     """The id of the automation."""
 
-    label: str = config_field(optional=True, label="Label", compare=False)
+    label: str = config_field(optional=True, label=N_("Label"), compare=False)
     """The label of the automation."""
 
     enabled: bool = config_field(
         default=True,
-        label="Enabled",
+        label=N_("Enabled"),
         compare=False,
     )
     """Whether the automation is enabled."""
 
-    automation_type: AutomationType = config_field(label="Automation Type")
+    automation_type: AutomationType = config_field(label=N_("Automation Type"))
     """The type of the automation."""
 
     show_in_tab: bool = config_field(
         default=False,
-        label="Show in tab",
-        help_text="Shows the automation in the Enclosure tab, with a switch to enable or disable it.",
+        label=N_("Show in tab"),
+        help_text=N_("Shows the automation in the Enclosure tab, with a switch to enable or disable it."),
         compare=False,
     )
     """Whether the Enclosure tab shows the automation, with a switch to enable or disable it."""
@@ -99,7 +99,7 @@ class Automation(Generic[_ConfigT]):
     nested_item_lists: ClassVar[Sequence[NestedItemListDefinition]] = (
         NestedItemListDefinition(
             settings_key="conditions",
-            item_label="Condition",
+            item_label=N_("Condition"),
             shared_item_config_class=ConditionConfig,
             item_type_classes=CONDITIONS,
         ),

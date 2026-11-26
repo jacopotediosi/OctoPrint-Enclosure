@@ -5,6 +5,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from .enum_utils import LabeledEnum, LabeledValue
+from .translation_utils import N_
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -37,8 +38,8 @@ class TemperatureUnit(LabeledEnum):
     A temperature in a unit is its value in Celsius multiplied by the scale of the unit, plus the offset of the unit.
     """
 
-    CELSIUS = TemperatureUnitValue(value="celsius", label="Celsius", symbol="°C", scale=1, offset=0)
-    FAHRENHEIT = TemperatureUnitValue(value="fahrenheit", label="Fahrenheit", symbol="°F", scale=1.8, offset=32)
+    CELSIUS = TemperatureUnitValue(value="celsius", label=N_("Celsius"), symbol="°C", scale=1, offset=0)
+    FAHRENHEIT = TemperatureUnitValue(value="fahrenheit", label=N_("Fahrenheit"), symbol="°F", scale=1.8, offset=32)
 
     symbol: str
     """The symbol of the unit."""

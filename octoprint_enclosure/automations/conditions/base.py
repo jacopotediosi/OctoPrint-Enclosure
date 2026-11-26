@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from octoprint_enclosure.config import BaseConfig, config_field
-from octoprint_enclosure.utils import LabeledEnum, LabeledValue
+from octoprint_enclosure.utils import N_, LabeledEnum, LabeledValue
 
 if TYPE_CHECKING:
     from typing_extensions import Self
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class ConditionType(LabeledEnum):
     """The type of an automation condition."""
 
-    PRINT_JOB = LabeledValue(value="print_job", label="Print Job")
+    PRINT_JOB = LabeledValue(value="print_job", label=N_("Print Job"))
 
 
 @dataclass(frozen=True)
@@ -25,7 +25,7 @@ class ConditionConfig(BaseConfig):
 
     type_field_name = "condition_type"
 
-    condition_type: ConditionType = config_field(default=ConditionType.PRINT_JOB, label="Condition")
+    condition_type: ConditionType = config_field(default=ConditionType.PRINT_JOB, label=N_("Condition"))
     """The type of the condition."""
 
 

@@ -7,6 +7,7 @@ from typing_extensions import override
 
 from octoprint_enclosure.automations.events import OctoprintEvent
 from octoprint_enclosure.config import BaseConfig, config_field
+from octoprint_enclosure.utils import N_
 
 from .base import Trigger
 
@@ -19,8 +20,8 @@ class OctoprintEventTriggerConfig(BaseConfig):
     """The configuration of an automation trigger on the events of OctoPrint."""
 
     octoprint_events: FrozenSet[str] = config_field(  # noqa: UP006 - BaseConfig.from_settings evaluates, and frozenset[str] fails on Python < 3.9
-        label="Events",
-        help_text=("OctoPrint events that run the automation. Hold Ctrl to select more than one."),
+        label=N_("Events"),
+        help_text=N_("OctoPrint events that run the automation. Hold Ctrl to select more than one."),
         widget="octoprint_events",
     )
     """The names of the OctoPrint events that start the automation."""

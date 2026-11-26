@@ -6,9 +6,11 @@ from .gcode_utils import get_gcode_param
 from .measurement import MeasurementType, TemperatureUnit
 from .number_utils import clamp, format_hex, is_number, parse_float, parse_hex
 from .time_utils import parse_hhmm, seconds_until_next
+from .translation_utils import N_
 
 __all__ = [
     "HEX_COLOR_PATTERN",
+    "N_",
     "LabeledEnum",
     "LabeledValue",
     "MeasurementType",

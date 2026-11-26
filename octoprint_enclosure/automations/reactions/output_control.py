@@ -5,7 +5,7 @@ from typing import Any, ClassVar, Mapping, Sequence
 
 from octoprint_enclosure.config import OutputId, config_field
 from octoprint_enclosure.outputs import OutputSetpointConfig
-from octoprint_enclosure.utils import LabeledEnum, LabeledValue
+from octoprint_enclosure.utils import N_, LabeledEnum, LabeledValue
 
 from .base import Reaction, ReactionConfig
 
@@ -13,9 +13,9 @@ from .base import Reaction, ReactionConfig
 class OutputSetState(LabeledEnum):
     """What to do with an output."""
 
-    ON = LabeledValue(value="on", label="On")
-    OFF = LabeledValue(value="off", label="Off")
-    TOGGLE = LabeledValue(value="toggle", label="Toggle")
+    ON = LabeledValue(value="on", label=N_("On"))
+    OFF = LabeledValue(value="off", label=N_("Off"))
+    TOGGLE = LabeledValue(value="toggle", label=N_("Toggle"))
 
 
 @dataclass(frozen=True)
@@ -27,14 +27,14 @@ class OutputControlConfig(OutputSetpointConfig, ReactionConfig):
     }
 
     controlled_io: OutputId = config_field(
-        label="Controlled IO",
-        help_text="Output to control when the event happens.",
+        label=N_("Controlled IO"),
+        help_text=N_("Output to control when the event happens."),
     )
     """The id of the output to control."""
 
     controlled_io_set_state: OutputSetState = config_field(
-        label="Set Controlled IO State",
-        help_text="Whether to turn the controlled IO on or off, or to toggle it, when the event happens.",
+        label=N_("Set Controlled IO State"),
+        help_text=N_("Whether to turn the controlled IO on or off, or to toggle it, when the event happens."),
     )
     """What to do with the output."""
 

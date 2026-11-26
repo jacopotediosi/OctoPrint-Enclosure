@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional
 from typing_extensions import override
 
 from octoprint_enclosure.config import config_field
-from octoprint_enclosure.utils import LabeledEnum, LabeledValue, parse_hhmm, seconds_until_next
+from octoprint_enclosure.utils import N_, LabeledEnum, LabeledValue, parse_hhmm, seconds_until_next
 
 from .base import Automation, AutomationConfig, NestedItemListDefinition
 from .conditions import conditions_from_settings
@@ -29,36 +29,36 @@ if TYPE_CHECKING:
 class RuleTiming(LabeledEnum):
     """When a rule runs its reactions, once its trigger fires."""
 
-    NOW = LabeledValue(value="now", label="Right away")
-    DELAY = LabeledValue(value="delay", label="After a delay")
-    AT = LabeledValue(value="at", label="At a time of day")
+    NOW = LabeledValue(value="now", label=N_("Right away"))
+    DELAY = LabeledValue(value="delay", label=N_("After a delay"))
+    AT = LabeledValue(value="at", label=N_("At a time of day"))
 
 
 @dataclass(frozen=True)
 class RuleConfig(AutomationConfig):
     """The configuration of an automation rule."""
 
-    type_help = (
+    type_help = N_(
         '<span class="label label-info">Info:</span> Does something when its trigger happens, for example controls an '
-        "output when a button connected to a GPIO input is pressed, or when the temperature goes above a threshold."
+        "output when a button connected to a GPIO input is pressed, or when the temperature goes above a threshold.",
     )
 
     type_field_name = "trigger_type"
 
-    trigger_type: TriggerType = config_field(label="Trigger")
+    trigger_type: TriggerType = config_field(label=N_("Trigger"))
     """The type of the trigger of the rule."""
 
     timing: RuleTiming = config_field(
         default=RuleTiming.NOW,
-        label="Run",
-        help_text="When to run the reactions, once the trigger fires.",
+        label=N_("Run"),
+        help_text=N_("When to run the reactions, once the trigger fires."),
     )
     """When to run the reactions, once the trigger fires."""
 
     delay: Optional[float] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
         default=0,
-        label="Delay",
-        help_text="Seconds to wait after the trigger before running the reactions.",
+        label=N_("Delay"),
+        help_text=N_("Seconds to wait after the trigger before running the reactions."),
         unit="s",
         min_value=0,
         visible_if={"timing": ["delay"]},
@@ -68,8 +68,8 @@ class RuleConfig(AutomationConfig):
 
     at: str = config_field(
         optional=True,
-        label="At",
-        help_text="Time of day, as <code>HH:MM</code>: the reactions run the next time it comes after the trigger.",
+        label=N_("At"),
+        help_text=N_("Time of day, as <code>HH:MM</code>: the reactions run the next time it comes after the trigger."),
         visible_if={"timing": ["at"]},
     )
     """The time of day, as HH:MM, at which to run the reactions, or empty if the rule doesn't run at a time of day."""
@@ -109,7 +109,7 @@ class RuleAutomation(Automation[RuleConfig]):
         *Automation.nested_item_lists,
         NestedItemListDefinition(
             settings_key="reactions",
-            item_label="Reaction",
+            item_label=N_("Reaction"),
             shared_item_config_class=ReactionConfig,
             item_type_classes=REACTIONS,
         ),

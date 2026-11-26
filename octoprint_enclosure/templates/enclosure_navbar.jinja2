@@ -1,5 +1,5 @@
 <a href="#"
-   title="Raspberry Pi Outputs"
+   title="{{ _('Raspberry Pi Outputs') }}"
    class="dropdown-toggle"
    data-toggle="dropdown"
    data-bind="visible: $root.navbarItems().length > 0 && $root.hasStatusPermission()">
@@ -12,7 +12,7 @@
            data-bind="click: $root.hasOutputsControlPermission() ? $root.toggleOutput : function () {}">
             <span data-bind="text: label"></span>
             <span class="badge help-inline"
-                  data-bind="text: on() ? 'on' : 'off', css: {'badge-success': on(), 'badge-important': !on()}"></span>
+                  data-bind="text: on() ? '{{ _('on')|esq }}' : '{{ _('off')|esq }}', css: {'badge-success': on(), 'badge-important': !on()}"></span>
         </a>
     </li>
     <li data-bind="if: $root.navbarItemType($data) == 'gcode_output', css: {disabled: !$root.canSendGcode()}">
@@ -35,7 +35,7 @@
            data-bind="click: $root.hasActionsRunPermission() ? $root.runAction : function () {}">
             <span data-bind="text: label"></span>
             <span class="badge"
-                  data-bind="css: {'badge-info': $root.hasActionsRunPermission()}">printer</span>
+                  data-bind="css: {'badge-info': $root.hasActionsRunPermission()}">{{ _("printer") }}</span>
         </a>
     </li>
 </ul>

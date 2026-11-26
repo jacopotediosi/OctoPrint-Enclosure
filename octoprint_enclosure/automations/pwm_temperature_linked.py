@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from octoprint_enclosure.config import OutputId, SensorInputId, config_field
-from octoprint_enclosure.utils import clamp
+from octoprint_enclosure.utils import N_, clamp
 
 from .base import Automation, AutomationConfig
 
@@ -22,36 +22,36 @@ class PwmTemperatureLinkedConfig(AutomationConfig):
     Between the first and the second temperature, the duty cycle changes linearly from the first to the second one.
     """
 
-    type_help = (
+    type_help = N_(
         '<span class="label label-info">Info:</span> Sets the duty cycle of a PWM output from the temperature read by '
         "a sensor: duty A at temperature A, duty B at temperature B, in proportion between the two. It works while "
         "its conditions are satisfied, for example only during a print; when they stop being satisfied, the output "
-        "is turned off."
+        "is turned off.",
     )
 
     output: OutputId = config_field(
-        label="Controlled IO",
-        help_text=("PWM output whose duty cycle follows the temperature. Configured in the Outputs tab."),
+        label=N_("Controlled IO"),
+        help_text=N_("PWM output whose duty cycle follows the temperature. Configured in the Outputs tab."),
         widget="pwm_output",
     )
     """The id of the PWM output."""
 
     linked_temp_sensor: SensorInputId = config_field(
-        label="Temperature Sensor",
-        help_text="Sensor that reads the temperature. Configured in the Inputs tab.",
+        label=N_("Temperature Sensor"),
+        help_text=N_("Sensor that reads the temperature. Configured in the Inputs tab."),
     )
     """The id of the input of the sensor that reads the temperature."""
 
-    temperature_a: float = config_field(label="Temperature A", widget="temperature")
+    temperature_a: float = config_field(label=N_("Temperature A"), widget="temperature")
     """The temperature at which the output gets the first duty cycle."""
 
-    duty_a: float = config_field(label="Duty A", min_value=0, max_value=100)
+    duty_a: float = config_field(label=N_("Duty A"), min_value=0, max_value=100)
     """The duty cycle of the output at the first temperature, from 0 to 100."""
 
-    temperature_b: float = config_field(label="Temperature B", widget="temperature")
+    temperature_b: float = config_field(label=N_("Temperature B"), widget="temperature")
     """The temperature at which the output gets the second duty cycle."""
 
-    duty_b: float = config_field(label="Duty B", min_value=0, max_value=100)
+    duty_b: float = config_field(label=N_("Duty B"), min_value=0, max_value=100)
     """The duty cycle of the output at the second temperature, from 0 to 100."""
 
 

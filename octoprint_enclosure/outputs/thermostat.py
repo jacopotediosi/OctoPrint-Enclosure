@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Optional
 from typing_extensions import override
 
 from octoprint_enclosure.config import BaseConfig, SensorInputId, config_field
-from octoprint_enclosure.utils import LabeledEnum, LabeledValue, MeasurementType
+from octoprint_enclosure.utils import N_, LabeledEnum, LabeledValue, MeasurementType
 
 from .base import Output
 from .switch import Switch, SwitchConfig
@@ -21,9 +21,9 @@ if TYPE_CHECKING:
 class ThermostatDeviceType(LabeledEnum):
     """The type of the device a thermostat turns on and off."""
 
-    HEATER = LabeledValue(value="heater", label="Heater")
-    COOLER = LabeledValue(value="cooler", label="Cooler")
-    DEHUMIDIFIER = LabeledValue(value="dehumidifier", label="Dehumidifier")
+    HEATER = LabeledValue(value="heater", label=N_("Heater"))
+    COOLER = LabeledValue(value="cooler", label=N_("Cooler"))
+    DEHUMIDIFIER = LabeledValue(value="dehumidifier", label=N_("Dehumidifier"))
 
     @property
     def measurement_type(self) -> MeasurementType:
@@ -37,20 +37,20 @@ class ThermostatDeviceType(LabeledEnum):
 class ThermostatConfig(SwitchConfig):
     """The configuration of a thermostat."""
 
-    temp_ctr_type: ThermostatDeviceType = config_field(label="Device Type")
+    temp_ctr_type: ThermostatDeviceType = config_field(label=N_("Device Type"))
     """The type of the device that the output switch turns on and off."""
 
     linked_temp_sensor: SensorInputId = config_field(
-        label="Temperature Sensor",
-        help_text="Sensor the thermostat reads. Configured in the Inputs tab.",
+        label=N_("Temperature Sensor"),
+        help_text=N_("Sensor the thermostat reads. Configured in the Inputs tab."),
         widget="thermostat_sensor",
     )
     """The id of the input of the sensor that reads the temperature or the humidity."""
 
     temp_ctr_deadband: Optional[float] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
         default=2,
-        label="Value Deadband",
-        help_text="Allowable drift of the thermostat below its target. Set it to zero to disable.",
+        label=N_("Value Deadband"),
+        help_text=N_("Allowable drift of the thermostat below its target. Set it to zero to disable."),
         min_value=0,
         visible_if={"temp_ctr_type": ["heater", "cooler"]},
         widget="temperature_interval",
@@ -61,10 +61,10 @@ class ThermostatConfig(SwitchConfig):
     temp_ctr_max_temp: Optional[float] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
         default=65,
         optional=True,
-        label="Maximum Temperature",
-        help_text=(
+        label=N_("Maximum Temperature"),
+        help_text=N_(
             "Maximum temperature the sensor should read. Above it, the thermostat turns off until its target is set "
-            "again. Leave it empty for no maximum."
+            "again. Leave it empty for no maximum.",
         ),
         visible_if={"temp_ctr_type": ["heater"]},
         widget="temperature",

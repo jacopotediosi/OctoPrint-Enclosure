@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing_extensions import override
 
 from octoprint_enclosure.config import config_field
-from octoprint_enclosure.utils import LabeledEnum, LabeledValue
+from octoprint_enclosure.utils import N_, LabeledEnum, LabeledValue
 
 from .base import Action, ActionConfig
 
@@ -13,19 +13,19 @@ from .base import Action, ActionConfig
 class PrinterCommand(LabeledEnum):
     """A command for the printer."""
 
-    RESUME = LabeledValue(value="resume", label="Printer Resume")
-    PAUSE = LabeledValue(value="pause", label="Printer Pause")
-    CANCEL = LabeledValue(value="cancel", label="Printer Cancel")
-    START = LabeledValue(value="start", label="Start Print")
-    TOGGLE = LabeledValue(value="toggle", label="Printer Toggle (Connect / Pause / Resume)")
-    TOGGLE_JOB = LabeledValue(value="toggle_job", label="Job Toggle (Connect / Start / Cancel)")
+    RESUME = LabeledValue(value="resume", label=N_("Printer Resume"))
+    PAUSE = LabeledValue(value="pause", label=N_("Printer Pause"))
+    CANCEL = LabeledValue(value="cancel", label=N_("Printer Cancel"))
+    START = LabeledValue(value="start", label=N_("Start Print"))
+    TOGGLE = LabeledValue(value="toggle", label=N_("Printer Toggle (Connect / Pause / Resume)"))
+    TOGGLE_JOB = LabeledValue(value="toggle_job", label=N_("Job Toggle (Connect / Start / Cancel)"))
 
 
 @dataclass(frozen=True)
 class PrinterConfig(ActionConfig):
     """The configuration of an action that controls the printer."""
 
-    printer_action: PrinterCommand = config_field(label="Printer Action")
+    printer_action: PrinterCommand = config_field(label=N_("Printer Action"))
     """The command to send to the printer."""
 
 

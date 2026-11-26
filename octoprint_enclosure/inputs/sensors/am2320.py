@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from smbus2 import SMBus, i2c_msg
 from typing_extensions import override
 
-from octoprint_enclosure.utils import MeasurementType, crc16_modbus
+from octoprint_enclosure.utils import N_, MeasurementType, crc16_modbus
 
 from .base import Reading, Sensor, SensorError, SensorInputConfig
 
@@ -29,9 +29,9 @@ READ_RESPONSE_BYTES = 1 + 1 + REGISTER_COUNT + 2
 class Am2320Config(SensorInputConfig):
     """The configuration of an AM2320 sensor."""
 
-    type_help = (
+    type_help = N_(
         "The sensor connects to the I2C bus: SDA to GPIO 2 (SDA), SCL to GPIO 3 (SCL). I2C needs to be enabled: run "
-        "<code>sudo raspi-config</code> and enable I2C in the interface options."
+        "<code>sudo raspi-config</code> and enable I2C in the interface options.",
     )
 
 

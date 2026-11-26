@@ -101,7 +101,7 @@
         "options: " ~ options,
         "optionsValue: " ~ options_value,
         "optionsText: " ~ options_text,
-        "optionsCaption: " ~ ("Select " ~ field.label)|tojson|forceescape,
+        "optionsCaption: " ~ _("Select %(label)s", label=_(field.label))|tojson|forceescape,
         "optionsAfterRender: $root.disablePlaceholderOption",
         "value: " ~ field.name,
         "valueAllowUnset: true",
@@ -118,16 +118,20 @@
         "ActionId": "$root.pluginSettings().actions"
     } %}
     {% if field.choices is not none %}
+        {% set choices = [] %}
+        {% for value, label in field.choices %}
+            {% do choices.append([value, _(label)]) %}
+        {% endfor %}
         {{ select_input(
             field,
-            field.choices|tojson|forceescape,
+            choices|tojson|forceescape,
             options_value="function (choice) { return choice[0]; }",
             options_text="function (choice) { return choice[1]; }"
         ) }}
     {% elif field.type == "bool" %}
         <label class="checkbox">
             <input type="checkbox" data-bind="checked: {{ field.name }}">
-            {{ field.label }}
+            {{ _(field.label) }}
         </label>
     {% elif field.type in linked_items %}
         {{ select_input(field, linked_items[field.type], options_value="'index_id'", options_text="'label'") }}
@@ -232,14 +236,14 @@
     {% set visible = visible_binding(field) %}
     <div class="control-group{% if is_required %} enclosure-required{% endif %}"
          {% if visible %}data-bind="visible: {{ visible }}"{% endif %}>
-        {% if not is_checkbox %}<label class="control-label">{{ field.label }}</label>{% endif %}
+        {% if not is_checkbox %}<label class="control-label">{{ _(field.label) }}</label>{% endif %}
         <div class="controls">
             {{ field_widget(field) }}
-            {% if field.help_text %}<span class="help-block">{{ field.help_text|safe }}</span>{% endif %}
+            {% if field.help_text %}<span class="help-block">{{ _(field.help_text) }}</span>{% endif %}
             {% for variant in field.variants|default([]) %}
                 {% if variant.help_text %}
                     <span class="help-block"
-                          data-bind="visible: {{ field.name }}() == {{ variant.value|tojson|forceescape }}">{{ variant.help_text|safe }}</span>
+                          data-bind="visible: {{ field.name }}() == {{ variant.value|tojson|forceescape }}">{{ _(variant.help_text) }}</span>
                 {% endif %}
             {% endfor %}
         </div>
@@ -251,7 +255,7 @@
         <div class="well well-small">
             {{ form_fields(list_field.list_item_form) }}
             <div class="clearfix">
-                <a title="Remove {{ list_field.label }}"
+                <a title="{{ _('Remove %(label)s', label=_(list_field.label)) }}"
                    class="btn btn-small btn-danger pull-right"
                    data-bind="click: function() { $parent.{{ list_field.name }}.remove($data) }">
                     <i class="icon-trash"></i>
@@ -264,7 +268,7 @@
             <button type="button"
                     class="btn btn-small"
                     data-bind="click: function() { $root.addNestedItem($data, '{{ list_field.name }}') }">
-                Add {{ list_field.label }}...
+                {{ _("Add %(label)s...", label=_(list_field.label)) }}
             </button>
         </div>
     </div>

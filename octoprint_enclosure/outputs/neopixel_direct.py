@@ -9,7 +9,7 @@ from pathlib import Path
 from typing_extensions import override
 
 from octoprint_enclosure.config import config_field
-from octoprint_enclosure.utils import Rgb, get_gcode_param
+from octoprint_enclosure.utils import N_, Rgb, get_gcode_param
 
 from .base import OutputError
 from .color import ColorOutput, ColorSetpoint
@@ -26,16 +26,20 @@ SPI_PIN = 10
 class NeopixelDirectConfig(OutputConfig):
     """The configuration of NeoPixels connected directly to the Raspberry Pi."""
 
-    gpio_pin: int = config_field(label="GPIO", help_text="GPIO the output is connected to.", min_value=0)
+    gpio_pin: int = config_field(label=N_("GPIO"), help_text=N_("GPIO the output is connected to."), min_value=0)
     """The GPIO pin the NeoPixels are connected to."""
 
-    neopixel_count: int = config_field(label="Number of LEDs", help_text="Number of LEDs on the strip.", min_value=1)
+    neopixel_count: int = config_field(
+        label=N_("Number of LEDs"),
+        help_text=N_("Number of LEDs on the strip."),
+        min_value=1,
+    )
     """The number of NeoPixels."""
 
     neopixel_brightness: int = config_field(
         default=255,
-        label="Brightness",
-        help_text="Value between 0 and 255.",
+        label=N_("Brightness"),
+        help_text=N_("Value between 0 and 255."),
         min_value=0,
         max_value=255,
     )
@@ -43,8 +47,8 @@ class NeopixelDirectConfig(OutputConfig):
 
     neopixel_dma: int = config_field(
         default=10,
-        label="DMA Channel",
-        help_text="DMA channel used to drive the NeoPixels.",
+        label=N_("DMA Channel"),
+        help_text=N_("DMA channel used to drive the NeoPixels."),
         min_value=0,
         max_value=15,
     )

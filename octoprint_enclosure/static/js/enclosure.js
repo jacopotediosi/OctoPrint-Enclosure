@@ -1,4 +1,4 @@
-/* global $, ko, OctoPrint, OCTOPRINT_VIEWMODELS, PNotify */
+/* global $, gettext, ko, OctoPrint, OCTOPRINT_VIEWMODELS, PNotify */
 
 $(function () {
   // ##########
@@ -104,7 +104,7 @@ $(function () {
     }
 
     self.notifyRequestError = function (response) {
-      const errors = (response.responseJSON && response.responseJSON.errors) || ['The request failed.']
+      const errors = (response.responseJSON && response.responseJSON.errors) || [gettext('The request failed.')]
       self.notify(errors.join(' '), 'error')
     }
 
@@ -233,7 +233,7 @@ $(function () {
     }
 
     self.addAutomation = function () {
-      self.addNestedItem(self.addItem('automations', 'Automation'), 'reactions')
+      self.addNestedItem(self.addItem('automations', gettext('Automation')), 'reactions')
     }
 
     self.addNestedItem = function (automation, listName) {
@@ -514,12 +514,12 @@ $(function () {
 
     self.shownTarget = function (thermostat) {
       const target = thermostat.target()
-      if (target === null) return 'off'
+      if (target === null) return gettext('off')
       return thermostat.measurement() === 'temperature' ? self.fromCelsius(target) : target
     }
 
     self.shownDutyCycle = function (dutyCycle) {
-      return dutyCycle === 0 ? 'off' : dutyCycle
+      return dutyCycle === 0 ? gettext('off') : dutyCycle
     }
 
     // ##########

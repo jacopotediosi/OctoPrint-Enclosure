@@ -7,7 +7,7 @@ from bme680 import BME680, constants
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.utils import MeasurementType, clamp
+from octoprint_enclosure.utils import N_, MeasurementType, clamp
 
 from .base import Reading, Sensor, SensorInputConfig
 
@@ -32,9 +32,9 @@ GAS_OHM_UPPER_LIMIT = 50000
 class Bme680Config(SensorInputConfig):
     """The configuration of a BME680 sensor."""
 
-    type_help = (
+    type_help = N_(
         "The sensor connects to the I2C bus: SDA to GPIO 2 (SDA), SCL to GPIO 3 (SCL). I2C needs to be enabled: run "
-        "<code>sudo raspi-config</code> and enable I2C in the interface options."
+        "<code>sudo raspi-config</code> and enable I2C in the interface options.",
     )
 
 

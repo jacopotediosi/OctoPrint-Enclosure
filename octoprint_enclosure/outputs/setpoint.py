@@ -6,7 +6,7 @@ from typing import Any, ClassVar, Mapping, Optional, Sequence, TypeVar, get_type
 from typing_extensions import override
 
 from octoprint_enclosure.config import BaseConfig, OutputId, config_field
-from octoprint_enclosure.utils import Rgb
+from octoprint_enclosure.utils import N_, Rgb
 
 from .color import ColorSetpoint
 from .pwm import PwmSetpoint
@@ -26,8 +26,8 @@ class OutputSetpointConfig(BaseConfig):
     """When the setpoint is used: each field it names must have one of the values listed for it. Empty if always."""
 
     duty_cycle: Optional[float] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
-        label="Duty Cycle",
-        help_text="Duty cycle the PWM is set to when it is turned on, between 0 and 100.",
+        label=N_("Duty Cycle"),
+        help_text=N_("Duty cycle the PWM is set to when it is turned on, between 0 and 100."),
         min_value=0,
         max_value=100,
         widget="output_setpoint",
@@ -36,15 +36,15 @@ class OutputSetpointConfig(BaseConfig):
 
     color: Optional[Rgb] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and Rgb | None fails on Python < 3.10
         default=Rgb(0, 0, 0),
-        label="Color",
-        help_text="Color the LEDs are set to when they are turned on.",
+        label=N_("Color"),
+        help_text=N_("Color the LEDs are set to when they are turned on."),
         widget="output_setpoint",
     )
     """The color LEDs are turned on to."""
 
     target: Optional[float] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
-        label="Target",
-        help_text="Value the thermostat is set to when it is turned on.",
+        label=N_("Target"),
+        help_text=N_("Value the thermostat is set to when it is turned on."),
         widget="output_setpoint",
     )
     """The target a thermostat is turned on to."""

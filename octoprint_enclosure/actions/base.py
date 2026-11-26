@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
 from octoprint_enclosure.config import BaseConfig, config_field
-from octoprint_enclosure.utils import LabeledEnum, LabeledValue
+from octoprint_enclosure.utils import N_, LabeledEnum, LabeledValue
 
 if TYPE_CHECKING:
     import logging
@@ -22,9 +22,9 @@ class ActionError(Exception):
 class ActionType(LabeledEnum):
     """The type of an action."""
 
-    GCODE = LabeledValue(value="gcode_output", label="Gcode")
-    SHELL = LabeledValue(value="shell_output", label="Shell Script")
-    PRINTER = LabeledValue(value="printer", label="Printer")
+    GCODE = LabeledValue(value="gcode_output", label=N_("Gcode"))
+    SHELL = LabeledValue(value="shell_output", label=N_("Shell Script"))
+    PRINTER = LabeledValue(value="printer", label=N_("Printer"))
 
 
 @dataclass(frozen=True)
@@ -33,19 +33,19 @@ class ActionConfig(BaseConfig):
 
     type_field_name = "action_type"
 
-    index_id: int = config_field(label="Id", widget="id")
+    index_id: int = config_field(label=N_("Id"), widget="id")
     """The id of the action."""
 
-    label: str = config_field(optional=True, label="Label", compare=False)
+    label: str = config_field(optional=True, label=N_("Label"), compare=False)
     """The label of the action."""
 
-    action_type: ActionType = config_field(label="Action Type")
+    action_type: ActionType = config_field(label=N_("Action Type"))
     """The type of the action."""
 
-    hide_btn_ui: bool = config_field(default=False, label="Hide in tab", compare=False)
+    hide_btn_ui: bool = config_field(default=False, label=N_("Hide in tab"), compare=False)
     """Whether the button of the action is hidden in the Enclosure tab."""
 
-    show_on_navbar: bool = config_field(default=False, label="Show in navbar", compare=False)
+    show_on_navbar: bool = config_field(default=False, label=N_("Show in navbar"), compare=False)
     """Whether the action has a button in the navbar."""
 
 

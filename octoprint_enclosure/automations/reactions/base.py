@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 from octoprint_enclosure.config import BaseConfig, config_field
 from octoprint_enclosure.outputs import config_with_setpoint_from_settings
-from octoprint_enclosure.utils import LabeledEnum, LabeledValue
+from octoprint_enclosure.utils import N_, LabeledEnum, LabeledValue
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 class ReactionType(LabeledEnum):
     """The type of an automation reaction."""
 
-    OUTPUT_CONTROL = LabeledValue(value="output_control", label="Output Control")
-    RUN_ACTION = LabeledValue(value="run_action", label="Run Action")
+    OUTPUT_CONTROL = LabeledValue(value="output_control", label=N_("Output Control"))
+    RUN_ACTION = LabeledValue(value="run_action", label=N_("Run Action"))
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,7 @@ class ReactionConfig(BaseConfig):
 
     type_field_name = "reaction_type"
 
-    reaction_type: ReactionType = config_field(label="Reaction")
+    reaction_type: ReactionType = config_field(label=N_("Reaction"))
     """The type of the reaction."""
 
 

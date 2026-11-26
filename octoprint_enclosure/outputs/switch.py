@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from octoprint_enclosure.config import HexInt, config_field
-from octoprint_enclosure.utils import LabeledValue
+from octoprint_enclosure.utils import N_, LabeledValue
 
 from .config import OutputConfig
 
@@ -20,14 +20,14 @@ class SwitchConfig(OutputConfig):
 
     gpio_i2c_enabled: bool = config_field(
         default=False,
-        label="Connection",
-        choices=[LabeledValue(value=False, label="GPIO pin"), LabeledValue(value=True, label="I2C")],
+        label=N_("Connection"),
+        choices=[LabeledValue(value=False, label=N_("GPIO pin")), LabeledValue(value=True, label="I2C")],
     )
     """Whether the output switch is driven by a device on the I2C bus, instead of a GPIO pin."""
 
     gpio_pin: Optional[int] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and int | None fails on Python < 3.10
-        label="GPIO",
-        help_text="GPIO the output is connected to.",
+        label=N_("GPIO"),
+        help_text=N_("GPIO the output is connected to."),
         min_value=0,
         visible_if={"gpio_i2c_enabled": [False]},
     )
@@ -35,11 +35,11 @@ class SwitchConfig(OutputConfig):
 
     gpio_i2c_bus: Optional[int] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and int | None fails on Python < 3.10
         default=1,
-        label="I2C Bus",
-        help_text=(
+        label=N_("I2C Bus"),
+        help_text=N_(
             "1 is the bus of GPIO 2 and 3. For a device on another bus, for example one made on other pins with "
             "<code>dtoverlay=i2c-gpio</code>, use its number: <code>i2cdetect -l</code> lists the buses. I2C needs to "
-            "be enabled: run <code>sudo raspi-config</code> and enable I2C in the interface options."
+            "be enabled: run <code>sudo raspi-config</code> and enable I2C in the interface options.",
         ),
         min_value=0,
         visible_if={"gpio_i2c_enabled": [True]},
@@ -47,10 +47,10 @@ class SwitchConfig(OutputConfig):
     """The number of the I2C bus, or None if the output switch is on a GPIO pin."""
 
     gpio_i2c_address: Optional[HexInt] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and HexInt | None fails on Python < 3.10
-        label="I2C Address",
-        help_text=(
+        label=N_("I2C Address"),
+        help_text=N_(
             "Address of the device, in hexadecimal. Find it by running <code>i2cdetect -y 1</code> (from the "
-            "<code>i2c-tools</code> package) on your Raspberry Pi."
+            "<code>i2c-tools</code> package) on your Raspberry Pi.",
         ),
         min_value=0,
         max_value=127,
@@ -59,8 +59,8 @@ class SwitchConfig(OutputConfig):
     """The I2C address of the device, or None if the output switch is on a GPIO pin."""
 
     gpio_i2c_register: Optional[HexInt] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and HexInt | None fails on Python < 3.10
-        label="I2C Register",
-        help_text="Register to write, in hexadecimal.",
+        label=N_("I2C Register"),
+        help_text=N_("Register to write, in hexadecimal."),
         min_value=0,
         max_value=255,
         visible_if={"gpio_i2c_enabled": [True]},
@@ -68,8 +68,8 @@ class SwitchConfig(OutputConfig):
     """The I2C register written to set the output switch high or low, or None if it is on a GPIO pin."""
 
     gpio_i2c_data_on: Optional[HexInt] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and HexInt | None fails on Python < 3.10
-        label="I2C ON data",
-        help_text="Value written to turn the output on, in hexadecimal.",
+        label=N_("I2C ON data"),
+        help_text=N_("Value written to turn the output on, in hexadecimal."),
         min_value=0,
         max_value=255,
         visible_if={"gpio_i2c_enabled": [True]},
@@ -77,8 +77,8 @@ class SwitchConfig(OutputConfig):
     """The value of the I2C registers when the output switch is high, or None if it is on a GPIO pin."""
 
     gpio_i2c_data_off: Optional[HexInt] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and HexInt | None fails on Python < 3.10
-        label="I2C OFF data",
-        help_text="Value written to turn the output off, in hexadecimal.",
+        label=N_("I2C OFF data"),
+        help_text=N_("Value written to turn the output off, in hexadecimal."),
         min_value=0,
         max_value=255,
         visible_if={"gpio_i2c_enabled": [True]},
@@ -86,8 +86,8 @@ class SwitchConfig(OutputConfig):
     """The value written via I2C to set the output switch low, or None if it is on a GPIO pin."""
 
     gpio_i2c_register_status: Optional[HexInt] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and HexInt | None fails on Python < 3.10
-        label="I2C Register (read status)",
-        help_text="Register read to know the state of the output, in hexadecimal.",
+        label=N_("I2C Register (read status)"),
+        help_text=N_("Register read to know the state of the output, in hexadecimal."),
         min_value=0,
         max_value=255,
         visible_if={"gpio_i2c_enabled": [True]},
@@ -95,9 +95,11 @@ class SwitchConfig(OutputConfig):
     """The I2C register read to know whether the output switch is high, or None if it is on a GPIO pin."""
 
     active_low: bool = config_field(
-        label="Active Level",
-        help_text="Choose Low if your device turns on when the pin is connected to ground, as most relay modules do.",
-        choices=[LabeledValue(value=False, label="High"), LabeledValue(value=True, label="Low")],
+        label=N_("Active Level"),
+        help_text=N_(
+            "Choose Low if your device turns on when the pin is connected to ground, as most relay modules do.",
+        ),
+        choices=[LabeledValue(value=False, label=N_("High")), LabeledValue(value=True, label=N_("Low"))],
     )
     """Whether the output switch is on when it is low."""
 

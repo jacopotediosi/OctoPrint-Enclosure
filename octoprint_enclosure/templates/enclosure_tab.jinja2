@@ -3,7 +3,7 @@
 <!-- <pre data-bind="text: ko.toJSON($root.rpi_outputs(), null, 2)"></pre> -->
 <div class="row-fluid"
      data-bind="visible: $root.temperatureSensors().length > 0">
-    <h4>Temperature</h4>
+    <h4>{{ _("Temperature") }}</h4>
     <!-- <pre data-bind="text: ko.toJSON($root.temperatureSensors(), null, 2)"></pre> -->
     <table id="enclosure-table" class="table table-bordered table-hover">
         <thead>
@@ -35,7 +35,7 @@
                     <span class="add-on">%</span>
                 </td>
                 <td class="humidity_actual"
-                    data-bind="visible: first && $root.hasAnySensorWithHumidity() && !$root.measuresHumidity(sensor.temp_sensor_type()), attr: {rowspan: rowspan}">N/A</td>
+                    data-bind="visible: first && $root.hasAnySensorWithHumidity() && !$root.measuresHumidity(sensor.temp_sensor_type()), attr: {rowspan: rowspan}">{{ _("N/A") }}</td>
                 <th class="thermostat"
                     data-bind="visible: $root.hasAnyThermostat(), text: thermostat && thermostat.label(), attr: {title: thermostat && thermostat.label()}">
                 </th>
@@ -83,20 +83,20 @@
         <div data-bind="if: output_type() == 'regular'">
             <h4>
                 <span data-bind="text: label"></span>
-                <span class="badge">regular gpio</span>
+                <span class="badge">{{ _("regular gpio") }}</span>
                 <span class="badge help-inline"
-                      data-bind="text: on() ? 'on' : 'off', css: {'badge-success': on(), 'badge-important': !on()}"></span>
+                      data-bind="text: on() ? '{{ _('on')|esq }}' : '{{ _('off')|esq }}', css: {'badge-success': on(), 'badge-important': !on()}"></span>
             </h4>
             <div>
                 <button type="button"
-                        data-bind="enable: $root.hasOutputsControlPermission(), click: $root.toggleOutput, text: on() ? 'Turn off' : 'Turn on'"
+                        data-bind="enable: $root.hasOutputsControlPermission(), click: $root.toggleOutput, text: on() ? '{{ _('Turn off')|esq }}' : '{{ _('Turn on')|esq }}'"
                         class="btn"></button>
             </div>
         </div>
         <div data-bind="if: output_type() == 'ledstrip'">
             <h4>
                 <span data-bind="text: label"></span>
-                <span class="badge">ledstrip</span>
+                <span class="badge">{{ _("ledstrip") }}</span>
             </h4>
             <div class="input-append ledstrip-div">
                 <input type="color"
@@ -104,7 +104,7 @@
                        data-bind="enable: $root.hasOutputsControlPermission(), value: shown_color">
                 <button type="submit"
                         class="btn btn-input-inc"
-                        title="Set Color"
+                        title="{{ _('Set Color') }}"
                         data-bind="enable: $root.hasOutputsControlPermission(), click: $root.setColor">
                     <i class="fa fa-check"></i>
                 </button>
@@ -124,7 +124,7 @@
                        data-bind="enable: $root.hasOutputsControlPermission(), value: typed_duty_cycle, valueUpdate: 'input', attr: {placeholder: $root.shownDutyCycle(duty_cycle())}">
                 <button type="button"
                         class="btn btn-input-inc"
-                        data-bind="enable: $root.hasOutputsControlPermission() && !$root.hasActiveTemperatureCurve(index_id()) && typed_duty_cycle() !== '', click: $root.setDutyCycle, attr: {title: $root.hasActiveTemperatureCurve(index_id()) ? 'Temperature controlled PWM' : 'Set PWM'}">
+                        data-bind="enable: $root.hasOutputsControlPermission() && !$root.hasActiveTemperatureCurve(index_id()) && typed_duty_cycle() !== '', click: $root.setDutyCycle, attr: {title: $root.hasActiveTemperatureCurve(index_id()) ? '{{ _('Temperature controlled PWM')|esq }}' : '{{ _('Set PWM')|esq }}'}">
                     <i class="fa fa-check"></i>
                 </button>
             </div>
@@ -140,7 +140,7 @@
                        data-bind="enable: $root.hasOutputsControlPermission(), value: shown_color">
                 <button type="submit"
                         class="btn btn-input-inc"
-                        title="Set Color"
+                        title="{{ _('Set Color') }}"
                         data-bind="enable: $root.hasOutputsControlPermission(), click: $root.setColor">
                     <i class="fa fa-check"></i>
                 </button>
@@ -149,31 +149,30 @@
         <div data-bind="if: output_type() == 'temp_hum_control'">
             <h4>
                 <span data-bind="text: label"></span>
-                <span class="badge">thermostat</span>
+                <span class="badge">{{ _("thermostat") }}</span>
                 <span class="badge badge-warning"
-                      data-bind="visible: temp_ctr_type() == 'heater'">Heater</span>
+                      data-bind="visible: temp_ctr_type() == 'heater'">{{ _("Heater") }}</span>
                 <span class="badge badge-warning"
-                      data-bind="visible: temp_ctr_type() == 'cooler'">Cooler</span>
+                      data-bind="visible: temp_ctr_type() == 'cooler'">{{ _("Cooler") }}</span>
                 <span class="badge badge-warning"
-                      data-bind="visible: temp_ctr_type() == 'dehumidifier'">Dehumidifier</span>
+                      data-bind="visible: temp_ctr_type() == 'dehumidifier'">{{ _("Dehumidifier") }}</span>
                 <span class="badge help-inline"
-                      data-bind="text: on() ? 'on' : 'off', css: {'badge-success': on(), 'badge-important': !on()}"></span>
+                      data-bind="text: on() ? '{{ _('on')|esq }}' : '{{ _('off')|esq }}', css: {'badge-success': on(), 'badge-important': !on()}"></span>
             </h4>
         </div>
         <div data-bind="foreach: $root.tabAutomationsOfOutput(index_id())">
             <h5>
-                <span>Automation: <span data-bind="text: label"></span></span>
+                <span>{{ _("Automation:") }} <span data-bind="text: label"></span></span>
                 <a href="#"
-                   data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.toggleAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
+                   data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.toggleAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? '{{ _('Disable')|esq }}' : '{{ _('Enable')|esq }}'}"
                    class="fa enclosure-link"></a>
-                <span data-bind="visible: !$root.hasAutomationsEnablePermission(), css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Enabled' : 'Disabled'}"
+                <span data-bind="visible: !$root.hasAutomationsEnablePermission(), css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? '{{ _('Enabled')|esq }}' : '{{ _('Disabled')|esq }}'}"
                       class="fa muted"></span>
             </h5>
         </div>
         <span data-bind="visible: output_type() == 'temp_hum_control' && temp_ctr_type() == 'heater' && !$root.isTurnedOffAtPrintEnd(index_id())">
-            <span class="label label-important">Warning:</span>
-            <span> Nothing turns this
-                <b>heater</b> off when the print ends: add an automation on PrintDone that turns it off, for safety.</span>
+            <span class="label label-important">{{ _("Warning:") }}</span>
+            <span>{{ _("Nothing turns this <b>heater</b> off when the print ends: add an automation on PrintDone that turns it off, for safety.") }}</span>
         </span>
     </div>
 </div>
@@ -182,34 +181,34 @@
         <div data-bind="if: action_type() == 'gcode_output'">
             <h4>
                 <span data-bind="text: label"></span>
-                <span class="badge">gcode output</span>
+                <span class="badge">{{ _("gcode output") }}</span>
             </h4>
             <div>
                 <button type="button"
                         data-bind="enable: $root.canSendGcode(), click: $root.runAction"
-                        class="btn">Send gcode</button>
+                        class="btn">{{ _("Send gcode") }}</button>
             </div>
         </div>
         <div data-bind="if: action_type() == 'shell_output'">
             <h4>
                 <span data-bind="text: label"></span>
-                <span class="badge">Shell Script</span>
+                <span class="badge">{{ _("Shell Script") }}</span>
             </h4>
             <div>
                 <button type="button"
                         data-bind="enable: $root.hasActionsRunPermission(), click: $root.runAction"
-                        class="btn">Execute Script</button>
+                        class="btn">{{ _("Execute Script") }}</button>
             </div>
         </div>
         <div data-bind="if: action_type() == 'printer'">
             <h4>
                 <span data-bind="text: label"></span>
-                <span class="badge">printer action</span>
+                <span class="badge">{{ _("printer action") }}</span>
             </h4>
             <div>
                 <button type="button"
                         data-bind="enable: $root.hasActionsRunPermission(), click: $root.runAction"
-                        class="btn">Send command</button>
+                        class="btn">{{ _("Send command") }}</button>
             </div>
         </div>
     </div>
@@ -217,22 +216,22 @@
 <div data-bind="foreach: $root.tabFilamentSensors()">
     <h4>
         <span data-bind="text: label"></span>
-        <span class="badge">filament sensor</span>
+        <span class="badge">{{ _("filament sensor") }}</span>
         <a href="#"
-           data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.toggleAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable Filament Sensor' : 'Enable Filament Sensor'}"
+           data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.toggleAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? '{{ _('Disable Filament Sensor')|esq }}' : '{{ _('Enable Filament Sensor')|esq }}'}"
            class="fa enclosure-link"></a>
-        <span data-bind="visible: !$root.hasAutomationsEnablePermission(), css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Enabled' : 'Disabled'}"
+        <span data-bind="visible: !$root.hasAutomationsEnablePermission(), css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? '{{ _('Enabled')|esq }}' : '{{ _('Disabled')|esq }}'}"
               class="fa muted"></span>
     </h4>
 </div>
 <div data-bind="foreach: $root.tabAutomations()">
     <h4>
         <span data-bind="text: label"></span>
-        <span class="badge">automation</span>
+        <span class="badge">{{ _("automation") }}</span>
         <a href="#"
-           data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.toggleAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
+           data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.toggleAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? '{{ _('Disable')|esq }}' : '{{ _('Enable')|esq }}'}"
            class="fa enclosure-link"></a>
-        <span data-bind="visible: !$root.hasAutomationsEnablePermission(), css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Enabled' : 'Disabled'}"
+        <span data-bind="visible: !$root.hasAutomationsEnablePermission(), css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? '{{ _('Enabled')|esq }}' : '{{ _('Disabled')|esq }}'}"
               class="fa muted"></span>
     </h4>
 </div>
