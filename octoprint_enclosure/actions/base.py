@@ -36,7 +36,7 @@ class ActionConfig(BaseConfig):
     index_id: int = config_field(label=N_("Id"), widget="id")
     """The id of the action."""
 
-    label: str = config_field(optional=True, label=N_("Label"), compare=False)
+    label: str = config_field(label=N_("Label"), compare=False)
     """The label of the action."""
 
     action_type: ActionType = config_field(label=N_("Action Type"))

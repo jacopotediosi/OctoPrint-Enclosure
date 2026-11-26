@@ -42,7 +42,7 @@ class AutomationConfig(BaseConfig):
     index_id: int = config_field(label=N_("Id"), widget="id")
     """The id of the automation."""
 
-    label: str = config_field(optional=True, label=N_("Label"), compare=False)
+    label: str = config_field(label=N_("Label"), compare=False)
     """The label of the automation."""
 
     enabled: bool = config_field(

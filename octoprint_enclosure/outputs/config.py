@@ -27,7 +27,7 @@ class OutputConfig(BaseConfig):
     index_id: int = config_field(label=N_("Id"), widget="id")
     """The id of the output."""
 
-    label: str = config_field(optional=True, label=N_("Label"), compare=False)
+    label: str = config_field(label=N_("Label"), compare=False)
     """The name of the output."""
 
     output_type: OutputType = config_field(label=N_("Output Type"))

@@ -52,6 +52,7 @@ def migrate(settings: PluginSettings, logger: logging.Logger) -> None:
     _convert_gpio_input_effects_to_automations(rpi_inputs, rpi_outputs, actions, automations)
     _move_filament_gcode_to_action(automations, actions, settings)
     _move_temperature_alarms_to_automations(rpi_outputs, automations)
+    _fill_empty_labels(rpi_inputs, rpi_outputs, actions, automations)
     _move_pwm_temperature_curves_to_automations(rpi_outputs, automations)
     _move_toggle_timers_to_automations(rpi_outputs, automations)
     _replace_thermostat_no_maximum_temperature_with_null(rpi_outputs)
@@ -336,6 +337,28 @@ def _move_temperature_alarms_to_automations(rpi_outputs: list[dict], automations
                 reaction[key] = alarm.pop(key)
         alarm["reactions"] = [reaction]
         automations.append(alarm)
+
+
+def _fill_empty_labels(
+    rpi_inputs: list[dict],
+    rpi_outputs: list[dict],
+    actions: list[dict],
+    automations: list[dict],
+) -> None:
+    """Give a label to every input, output, action and automation saved without one.
+
+    The label could be left empty. Version 11 needs it and would reject the item, so an empty or missing label becomes
+    the kind of the item and its id, e.g. "Output 3".
+    """
+    for kind, items in (
+        ("Input", rpi_inputs),
+        ("Output", rpi_outputs),
+        ("Action", actions),
+        ("Automation", automations),
+    ):
+        for item in items:
+            if item.get("label") in ("", None):
+                item["label"] = f"{kind} {_to_int(item.get('index_id'))}"
 
 
 def _move_pwm_temperature_curves_to_automations(rpi_outputs: list[dict], automations: list[dict]) -> None:

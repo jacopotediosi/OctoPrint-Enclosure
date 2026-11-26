@@ -30,7 +30,7 @@ class InputConfig(BaseConfig):
     index_id: int = config_field(label=N_("Id"), widget="id")
     """The id of the input."""
 
-    label: str = config_field(optional=True, label=N_("Label"), compare=False)
+    label: str = config_field(label=N_("Label"), compare=False)
     """The name of the input."""
 
     input_type: InputType = config_field(label=N_("Input Type"))
