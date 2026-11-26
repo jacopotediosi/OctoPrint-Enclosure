@@ -59,7 +59,6 @@ def migrate(settings: PluginSettings, logger: logging.Logger) -> None:
     _convert_auto_startup_shutdown_to_automations(rpi_outputs, automations)
     _remove_keys_of_other_item_kinds(rpi_outputs, actions, automations)
     _replace_empty_numbers_with_zero(rpi_outputs, automations)
-    _add_keys_of_every_type_with_defaults(actions, automations)
     _move_neopixel_dma_to_each_output(rpi_outputs, settings)
     _remove_use_sudo(settings)
     _convert_board_pins_to_bcm(rpi_inputs, rpi_outputs, settings)
@@ -210,6 +209,7 @@ def _convert_gpio_input_effects_to_automations(
             "automation_type": "rule",
             "trigger_type": "gpio_input",
             "input": rpi_input.get("index_id"),
+            "timing": "now",
         }
         if edge is not None:
             automation["edge"] = edge
@@ -327,7 +327,9 @@ def _move_temperature_alarms_to_automations(rpi_outputs: list[dict], automations
 
         del alarm["output_type"]
         alarm["index_id"] = _new_id(automations)
-        alarm.update({"automation_type": "rule", "trigger_type": "temperature", "repeat_while_above": True})
+        alarm.update(
+            {"automation_type": "rule", "trigger_type": "temperature", "repeat_while_above": True, "timing": "now"},
+        )
         reaction = {"reaction_type": "output_control"}
         for key in ("controlled_io", "controlled_io_set_state"):
             if key in alarm:
@@ -635,7 +637,8 @@ def _remove_keys_of_other_item_kinds(rpi_outputs: list[dict], actions: list[dict
 
     Version 10 gave every output every key, because the settings page needed them all. From version 11 an output holds
     only its hardware: it drops the keys of the actions, alarms, curves, toggle timers and automatic fields, which now
-    live in `actions` and `automations`, and the actions and the automations keep only the keys of their own kind.
+    live in `actions` and `automations`. Each action and each automation keeps only the keys of its own type, e.g. a
+    G-code action keeps `gcode` but not `shell_script`.
     """
     output_keys_to_remove = (
         "gcode",
@@ -667,52 +670,46 @@ def _remove_keys_of_other_item_kinds(rpi_outputs: list[dict], actions: list[dict
         for key in output_keys_to_remove:
             rpi_output.pop(key, None)
 
-    action_keys_to_keep = {
-        "index_id",
-        "label",
-        "action_type",
-        "gcode",
-        "shell_script",
-        "printer_action",
-        "hide_btn_ui",
-        "show_on_navbar",
+    common_action_keys = {"index_id", "label", "action_type", "hide_btn_ui", "show_on_navbar"}
+    action_keys_by_type = {
+        "gcode_output": {"gcode"},
+        "shell_output": {"shell_script"},
+        "printer": {"printer_action"},
     }
     for action in actions:
-        for key in set(action) - action_keys_to_keep:
+        keys_to_keep = common_action_keys | action_keys_by_type[action["action_type"]]
+        for key in set(action) - keys_to_keep:
             del action[key]
 
-    automation_keys_to_keep = {
-        "index_id",
-        "label",
-        "automation_type",
-        "trigger_type",
-        "input",
-        "edge",
-        "linked_temp_sensor",
-        "alarm_set_temp",
-        "repeat_while_above",
-        "reactions",
-        "octoprint_events",
-        "timing",
-        "delay",
-        "at",
-        "conditions",
-        "enabled",
-        "show_in_tab",
-        "action",
-        "output",
-        "temperature_a",
-        "duty_a",
-        "temperature_b",
-        "duty_b",
-        "toggle_timer_on",
-        "toggle_timer_off",
-        "duty_cycle",
-        "color",
-        "target",
+    common_automation_keys = {"index_id", "label", "automation_type", "enabled", "show_in_tab", "conditions"}
+    automation_keys_by_type = {
+        "rule": {
+            "trigger_type",
+            "input",
+            "edge",
+            "linked_temp_sensor",
+            "alarm_set_temp",
+            "repeat_while_above",
+            "octoprint_events",
+            "timing",
+            "delay",
+            "at",
+            "reactions",
+        },
+        "filament": {"input", "edge", "action"},
+        "pwm_temperature_linked": {
+            "output",
+            "linked_temp_sensor",
+            "temperature_a",
+            "duty_a",
+            "temperature_b",
+            "duty_b",
+        },
+        "toggle_timer": {"output", "toggle_timer_on", "toggle_timer_off", "duty_cycle", "color", "target"},
     }
     for automation in automations:
-        for key in set(automation) - automation_keys_to_keep:
+        keys_to_keep = common_automation_keys | automation_keys_by_type[automation["automation_type"]]
+        for key in set(automation) - keys_to_keep:
             del automation[key]
 
 
@@ -732,61 +729,6 @@ def _replace_empty_numbers_with_zero(rpi_outputs: list[dict], automations: list[
         for key in number_keys_by_item_type.get(item_type, ()):
             if item_settings.get(key) in ("", None):
                 item_settings[key] = 0
-
-
-def _add_keys_of_every_type_with_defaults(actions: list[dict], automations: list[dict]) -> None:
-    """Add to each action the keys of every action type, and to each automation those of every automation type.
-
-    The settings page binds every key of every type when it loads, so changing the type of an item needs all of
-    them present.
-    """
-    action_defaults = {"gcode": "", "shell_script": "", "printer_action": "pause"}
-    for action in actions:
-        for key, value in action_defaults.items():
-            action.setdefault(key, value)
-
-    automation_defaults = {
-        "trigger_type": "gpio_input",
-        "input": "",
-        "edge": "fall",
-        "linked_temp_sensor": "",
-        "alarm_set_temp": "",
-        "repeat_while_above": False,
-        "octoprint_events": [],
-        "timing": "now",
-        "delay": 0,
-        "at": "",
-        "conditions": [],
-        "enabled": True,
-        "show_in_tab": False,
-        "action": "",
-        "output": "",
-        "temperature_a": 0,
-        "duty_a": 0,
-        "temperature_b": 0,
-        "duty_b": 0,
-        "toggle_timer_on": 0,
-        "toggle_timer_off": 0,
-        "duty_cycle": 0,
-        "color": "#000000",
-        "target": None,
-    }
-    reaction_defaults = {
-        "reaction_type": "output_control",
-        "controlled_io": "",
-        "controlled_io_set_state": "on",
-        "duty_cycle": 0,
-        "color": "#000000",
-        "target": None,
-        "action": "",
-    }
-    for automation in automations:
-        for key, value in automation_defaults.items():
-            automation.setdefault(key, value)
-        automation.setdefault("reactions", [{}])
-        for reaction in automation["reactions"]:
-            for key, value in reaction_defaults.items():
-                reaction.setdefault(key, value)
 
 
 def _move_neopixel_dma_to_each_output(rpi_outputs: list[dict], settings: PluginSettings) -> None:
@@ -885,11 +827,11 @@ def _replace_empty_values_with_defaults(
     }
     output_defaults = {"hide_btn_ui": False, "show_on_navbar": False, "neopixel_dma": 10}
     action_defaults = {"hide_btn_ui": False, "show_on_navbar": False}
-    automation_defaults = {"enabled": True, "show_in_tab": False, "delay": 0, "duty_cycle": 0, "color": "#000000"}
+    automation_defaults = {"enabled": True, "show_in_tab": False}
     reaction_defaults = {"duty_cycle": 0, "color": "#000000"}
 
     sensor_inputs = [rpi_input for rpi_input in rpi_inputs if rpi_input.get("input_type") == "temperature_sensor"]
-    reactions = [reaction for automation in automations for reaction in automation["reactions"]]
+    reactions = [reaction for automation in automations for reaction in automation.get("reactions", [])]
 
     for items, defaults in (
         (sensor_inputs, sensor_input_defaults),
