@@ -492,7 +492,7 @@ class EnclosurePlugin(
         self._gpio_inputs.load(inputs_settings)
         self._output_executor.load_outputs(outputs_settings, wait=True)
         self._actions.load(actions_settings)
-        self._automations.load(automations_settings)
+        self._automations.load(automations_settings, self._outputs)
 
         # Check the links of the automations to the other entries
         self._automations.check_links(self._sensors, self._gpio_inputs, self._outputs, self._actions)

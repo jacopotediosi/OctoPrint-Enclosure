@@ -201,6 +201,20 @@ class Outputs:
         """
         return set(self._outputs)
 
+    def get_setpoint_classes(self) -> dict[int, type[BaseConfig]]:
+        """Get the classes of the setpoints of the outputs.
+
+        Returns:
+            dict[int, type[BaseConfig]]: The class of the setpoint of each output that is set up, by the id of the
+                output.
+
+        """
+        return {
+            index_id: output.setpoint_class
+            for index_id, output in self._outputs.items()
+            if not isinstance(output, _InvalidOutput)
+        }
+
     def run_enc_command(self, index_id: int, command: str) -> str | None:
         """Apply an ENC command to an output.
 

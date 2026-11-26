@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import fields
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from octoprint_enclosure.outputs import Output, OutputError
 from octoprint_enclosure.settings import ActionId, GpioInputId, OutputId, SensorInputId
 
 from .base import Automation, AutomationConfig, AutomationError
@@ -12,11 +10,12 @@ from .triggers import GpioInputTrigger
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
 
     from octoprint_enclosure.actions import Actions
     from octoprint_enclosure.inputs import Edge, GpioInputs, Sensors
     from octoprint_enclosure.outputs import Outputs
+    from octoprint_enclosure.settings import BaseConfig
 
     from .events import AutomationEvent
 
@@ -54,15 +53,17 @@ class Automations:
         self._logger = logger.getChild("Automations")
         self._automations = {}
 
-    def load(self, automations_settings: Iterable[dict]) -> None:
+    def load(self, automations_settings: Iterable[dict], outputs: Outputs) -> None:
         """Load some automations from their settings.
 
         An automation whose settings didn't change is kept as it is, with its state.
 
         Args:
             automations_settings (Iterable[dict]): The settings of the automations.
+            outputs (Outputs): The outputs, already loaded.
 
         """
+        setpoint_classes = outputs.get_setpoint_classes()
         automations: dict[int, Automation] = {}
 
         for automation_settings in automations_settings:
@@ -76,15 +77,13 @@ class Automations:
                 AUTOMATIONS[automation_config.automation_type],
                 automation_config,
                 automation_settings,
+                setpoint_classes,
             )
 
         self._automations = automations
 
     def check_links(self, sensors: Sensors, gpio_inputs: GpioInputs, outputs: Outputs, actions: Actions) -> None:
-        """Check the links of the automations to the other entries, and log a warning for each problem.
-
-        E.g., a problem is a link to an entry that doesn't exist, or an output turned on without a value its setpoint
-        needs.
+        """Check the links of the automations to the other entries, and log a warning for each one that doesn't exist.
 
         Args:
             sensors (Sensors): The sensors inputs.
@@ -102,7 +101,6 @@ class Automations:
         }
 
         for index_id, automation in self._automations.items():
-            # A link to an entry that doesn't exist
             for id_type, (name, ids) in known_ids.items():
                 linked_ids = {
                     linked_id for config in automation.configs for linked_id in config.get_linked_ids(id_type)
@@ -114,22 +112,6 @@ class Automations:
                         name,
                         linked_id,
                     )
-
-            # An output turned on without a value its setpoint needs
-            for output_id, setpoint_config in automation.get_output_setpoints():
-                try:
-                    output = outputs.get(output_id, Output)
-                except OutputError:
-                    continue
-
-                for field in fields(output.setpoint_class):
-                    if getattr(setpoint_config, field.name) is None:
-                        self._logger.warning(
-                            "Automation %s turns on output %s without a %s",
-                            index_id,
-                            output_id,
-                            field.name,
-                        )
 
     def get(self, index_id: int, automation_class: type[_AutomationT]) -> _AutomationT:
         """Get an automation.
@@ -209,12 +191,14 @@ class Automations:
         automation_class: type[_AutomationT],
         automation_config: AutomationConfig,
         automation_settings: dict,
+        setpoint_classes: Mapping[int, type[BaseConfig]],
     ) -> _AutomationT | _InvalidAutomation:
         index_id = automation_config.index_id
         try:
             automation = automation_class.from_settings(
                 automation_settings,
                 self._get_automation_logger(automation_class, index_id),
+                setpoint_classes,
             )
         except ValueError as error:
             return self._create_invalid_automation(automation_config, f"Invalid settings: {error}")

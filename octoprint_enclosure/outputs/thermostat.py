@@ -47,7 +47,7 @@ class ThermostatConfig(SwitchConfig):
     )
     """The id of the input of the sensor that reads the temperature or the humidity."""
 
-    temp_ctr_deadband: float = setting(
+    temp_ctr_deadband: Optional[float] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
         default=2,
         label="Value Deadband",
         help_text="Allowable drift of the thermostat below its target. Set it to zero to disable.",
@@ -56,7 +56,7 @@ class ThermostatConfig(SwitchConfig):
         widget="temperature_interval",
     )
     """How far below the target the value can go before a heater turns on, or a cooler turns off. Between there and
-    the target, the device stays as it is. A dehumidifier ignores it."""
+    the target, the device stays as it is. None for a dehumidifier, which has none."""
 
     temp_ctr_max_temp: Optional[float] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
         default=65,
@@ -270,7 +270,7 @@ class Thermostat:
         if config.temp_ctr_type is ThermostatDeviceType.DEHUMIDIFIER:
             read_value, deadband = humidity, 0.0
         else:
-            read_value, deadband = temperature, config.temp_ctr_deadband
+            read_value, deadband = temperature, config.temp_ctr_deadband or 0.0
 
         # Update the status
         if self._target is None:

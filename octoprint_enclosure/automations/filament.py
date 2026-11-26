@@ -14,8 +14,11 @@ from .triggers import GpioInputTrigger, GpioInputTriggerConfig
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Mapping
 
     from typing_extensions import Self
+
+    from octoprint_enclosure.settings import BaseConfig
 
 
 MIN_PRESENCE_SECONDS = 90
@@ -74,7 +77,12 @@ class FilamentAutomation(Automation[FilamentConfig]):
 
     @classmethod
     @override
-    def from_settings(cls, settings: dict, logger: logging.Logger) -> Self:
+    def from_settings(
+        cls,
+        settings: dict,
+        logger: logging.Logger,
+        setpoint_classes: Mapping[int, type[BaseConfig]],
+    ) -> Self:
         config = FilamentConfig.from_settings(settings)
         return cls(config, GpioInputTrigger(config), logger)
 

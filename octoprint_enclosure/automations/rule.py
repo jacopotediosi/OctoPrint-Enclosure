@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from typing_extensions import override
 
@@ -10,16 +10,16 @@ from octoprint_enclosure.utils import LabeledEnum, LabeledValue, parse_hhmm, sec
 
 from .base import Automation, AutomationConfig, NestedItemListDefinition
 from .conditions import conditions_from_settings
-from .reactions import REACTIONS, OutputControlReaction, OutputSetState, ReactionConfig
+from .reactions import REACTIONS, ReactionConfig
 from .triggers import TRIGGERS, TriggerType
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Mapping
 
     from typing_extensions import Self
 
-    from octoprint_enclosure.outputs import OutputSetpointConfig
-    from octoprint_enclosure.settings import BaseConfig, OutputId
+    from octoprint_enclosure.settings import BaseConfig
 
     from .conditions import Condition
     from .reactions.base import Reaction
@@ -55,7 +55,7 @@ class RuleConfig(AutomationConfig):
     )
     """When to run the reactions, once the trigger fires."""
 
-    delay: float = setting(
+    delay: Optional[float] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
         default=0,
         label="Delay",
         help_text="Seconds to wait after the trigger before running the reactions.",
@@ -63,7 +63,8 @@ class RuleConfig(AutomationConfig):
         min_value=0,
         visible_if={"timing": ["delay"]},
     )
-    """The seconds to wait after the trigger before running the reactions, for a rule that runs after a delay."""
+    """The seconds to wait after the trigger before running the reactions, or None if the rule doesn't run after a
+    delay."""
 
     at: str = setting(
         optional=True,
@@ -71,7 +72,7 @@ class RuleConfig(AutomationConfig):
         help_text="Time of day, as <code>HH:MM</code>: the reactions run the next time it comes after the trigger.",
         visible_if={"timing": ["at"]},
     )
-    """The time of day, as HH:MM, at which to run the reactions, for a rule that runs at a time of day."""
+    """The time of day, as HH:MM, at which to run the reactions, or empty if the rule doesn't run at a time of day."""
 
     def __post_init__(self) -> None:
         """Check the rule config correctness.
@@ -94,7 +95,7 @@ class RuleConfig(AutomationConfig):
         time_of_day = parse_hhmm(self.at) if self.timing is RuleTiming.AT else None
         if time_of_day is not None:
             return seconds_until_next(time_of_day)
-        return self.delay if self.timing is RuleTiming.DELAY else 0
+        return self.delay or 0
 
 
 class RuleAutomation(Automation[RuleConfig]):
@@ -155,15 +156,6 @@ class RuleAutomation(Automation[RuleConfig]):
         return [*super().configs, self.trigger.config, *(reaction.config for reaction in self.reactions)]
 
     @override
-    def get_output_setpoints(self) -> list[tuple[OutputId, OutputSetpointConfig]]:
-        return [
-            (reaction.config.controlled_io, reaction.config)
-            for reaction in self.reactions
-            if isinstance(reaction, OutputControlReaction)
-            and reaction.config.controlled_io_set_state is not OutputSetState.OFF
-        ]
-
-    @override
     def has_same_config(self, other: Automation) -> bool:
         return (
             isinstance(other, RuleAutomation)
@@ -179,7 +171,12 @@ class RuleAutomation(Automation[RuleConfig]):
 
     @classmethod
     @override
-    def from_settings(cls, settings: dict, logger: logging.Logger) -> Self:
+    def from_settings(
+        cls,
+        settings: dict,
+        logger: logging.Logger,
+        setpoint_classes: Mapping[int, type[BaseConfig]],
+    ) -> Self:
         config = RuleConfig.from_settings(settings)
 
         reactions_settings = settings.get("reactions")
@@ -194,7 +191,8 @@ class RuleAutomation(Automation[RuleConfig]):
         reactions = []
         for reaction_settings in reactions_settings:
             reaction_config = ReactionConfig.from_settings(reaction_settings)
-            reactions.append(REACTIONS[reaction_config.reaction_type].from_settings(reaction_settings))
+            reaction_class = REACTIONS[reaction_config.reaction_type]
+            reactions.append(reaction_class.from_settings(reaction_settings, setpoint_classes))
 
         trigger = TRIGGERS[config.trigger_type].from_settings(settings)
         return cls(config, trigger, conditions_from_settings(settings), reactions, logger)

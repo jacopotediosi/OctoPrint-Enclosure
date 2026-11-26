@@ -7,7 +7,7 @@ from .neopixel_indirect import NeopixelIndirectOutput
 from .outputs import Outputs
 from .pwm import PwmOutput, PwmSetpoint
 from .regular import RegularOutput, RegularSetpoint
-from .setpoint import OutputSetpointConfig
+from .setpoint import OutputSetpointConfig, config_with_setpoint_from_settings
 from .thermostat import Thermostat, ThermostatDeviceType, ThermostatOutput, ThermostatSetpoint, ThermostatStatus
 
 __all__ = [
@@ -31,4 +31,5 @@ __all__ = [
     "ThermostatOutput",
     "ThermostatSetpoint",
     "ThermostatStatus",
+    "config_with_setpoint_from_settings",
 ]

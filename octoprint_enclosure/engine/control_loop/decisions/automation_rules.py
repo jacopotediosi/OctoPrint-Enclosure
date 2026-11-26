@@ -143,9 +143,7 @@ class AutomationRuleDecision(Decision):
         for rule in self._automations.get_all(RuleAutomation):
             # Skip the rules that are not on a GPIO input, and the delayed ones, that act some time after an edge
             trigger = rule.trigger
-            is_delayed = rule.config.timing is RuleTiming.AT or (
-                rule.config.timing is RuleTiming.DELAY and rule.config.delay > 0
-            )
+            is_delayed = rule.config.timing is RuleTiming.AT or (rule.config.delay or 0) > 0
             if not isinstance(trigger, GpioInputTrigger) or is_delayed:
                 continue
 

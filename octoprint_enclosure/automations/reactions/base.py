@@ -3,10 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+from octoprint_enclosure.outputs import config_with_setpoint_from_settings
 from octoprint_enclosure.settings import BaseConfig, setting
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from typing_extensions import Self
 
 
@@ -49,11 +52,17 @@ class Reaction(Generic[_ConfigT]):
         self.config = config
 
     @classmethod
-    def from_settings(cls, settings: dict) -> Self:
+    def from_settings(
+        cls,
+        settings: dict,
+        setpoint_classes: Mapping[int, type[BaseConfig]],
+    ) -> Self:
         """Create the reaction from the settings of its automation.
 
         Args:
             settings (dict): The settings of the automation.
+            setpoint_classes (Mapping[int, type[BaseConfig]]): The class of the setpoint of each output, by the id of
+                the output.
 
         Returns:
             Self: The automation reaction.
@@ -62,4 +71,4 @@ class Reaction(Generic[_ConfigT]):
             ValueError: If the settings are not valid.
 
         """
-        return cls(cls.config_class.from_settings(settings))
+        return cls(config_with_setpoint_from_settings(cls.config_class, settings, setpoint_classes))

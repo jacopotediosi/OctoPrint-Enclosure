@@ -67,8 +67,7 @@ class OutputControl:
             log_level (int): The level at which the change of the output is logged.
 
         Returns:
-            bool: Whether the output has been successfully controlled: False if it is not set up, or if the setpoint to
-                turn a thermostat on is not set.
+            bool: Whether the output has been successfully controlled: False if it is not set up.
 
         """
         try:
@@ -86,9 +85,6 @@ class OutputControl:
 
             if state is OutputSetState.OFF or (state is OutputSetState.TOGGLE and thermostat.is_on()):
                 self._thermostat_decision.set_target(index_id, None, origin, log_level=log_level)
-            elif None in setpoint_values.values():
-                self._logger.debug("Can't turn on output %s: its setpoint is not set", index_id)
-                return False
             else:
                 self._thermostat_decision.set_target(index_id, setpoint_values["target"], origin, log_level=log_level)
         elif state is OutputSetState.ON:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 from octoprint_enclosure.settings import BaseConfig, setting
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue
@@ -35,10 +36,10 @@ class OutputConfig(BaseConfig):
     hide_btn_ui: bool = setting(default=False, label="Hide in tab", compare=False)
     """Whether the button of the output is hidden in the Enclosure tab."""
 
-    show_on_navbar: bool = setting(
+    show_on_navbar: Optional[bool] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and bool | None fails on Python < 3.10
         default=False,
         label="Show in navbar",
         visible_if={"output_type": ["regular"]},
         compare=False,
     )
-    """Whether the output has a button in the navbar."""
+    """Whether the output has a button in the navbar, or None if it is of a type that can't have one."""

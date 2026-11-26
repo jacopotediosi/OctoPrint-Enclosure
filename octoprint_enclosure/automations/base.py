@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 
+from octoprint_enclosure.outputs import config_with_setpoint_from_settings
 from octoprint_enclosure.settings import BaseConfig, setting
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
@@ -13,9 +14,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from typing_extensions import Self
-
-    from octoprint_enclosure.outputs import OutputSetpointConfig
-    from octoprint_enclosure.settings import OutputId
 
     from .conditions import Condition
     from .conditions_state import ConditionsState
@@ -143,15 +141,6 @@ class Automation(Generic[_ConfigT]):
         """The configurations the automation is made of."""
         return [self.config, *(condition.config for condition in self.conditions)]
 
-    def get_output_setpoints(self) -> list[tuple[OutputId, OutputSetpointConfig]]:
-        """Get the outputs the automation turns on, each with the setpoint it reads from its settings.
-
-        Returns:
-            list[tuple[OutputId, OutputSetpointConfig]]: The id of each output, with its setpoint.
-
-        """
-        return []
-
     def has_same_config(self, other: Automation) -> bool:
         """Check whether another automation has the same configuration.
 
@@ -185,12 +174,19 @@ class Automation(Generic[_ConfigT]):
         return all(condition.is_satisfied(conditions_state) for condition in self.conditions)
 
     @classmethod
-    def from_settings(cls, settings: dict, logger: logging.Logger) -> Self:
+    def from_settings(
+        cls,
+        settings: dict,
+        logger: logging.Logger,
+        setpoint_classes: Mapping[int, type[BaseConfig]],
+    ) -> Self:
         """Create the automation from its settings.
 
         Args:
             settings (dict): The settings of the automation.
             logger (logging.Logger): The logger to write to.
+            setpoint_classes (Mapping[int, type[BaseConfig]]): The class of the setpoint of each output, by the id of
+                the output.
 
         Returns:
             Self: The automation.
@@ -199,4 +195,5 @@ class Automation(Generic[_ConfigT]):
             ValueError: If the settings are not valid.
 
         """
-        return cls(cls.config_class.from_settings(settings), logger, conditions_from_settings(settings))
+        config = config_with_setpoint_from_settings(cls.config_class, settings, setpoint_classes)
+        return cls(config, logger, conditions_from_settings(settings))
