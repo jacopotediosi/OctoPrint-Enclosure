@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import setting
+from octoprint_enclosure.config import config_field
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue, parse_hhmm, seconds_until_next
 
 from .base import Automation, AutomationConfig, NestedItemListDefinition
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import Self
 
-    from octoprint_enclosure.settings import BaseConfig
+    from octoprint_enclosure.config import BaseConfig
 
     from .conditions import Condition
     from .reactions.base import Reaction
@@ -45,17 +45,17 @@ class RuleConfig(AutomationConfig):
 
     type_field_name = "trigger_type"
 
-    trigger_type: TriggerType = setting(label="Trigger")
+    trigger_type: TriggerType = config_field(label="Trigger")
     """The type of the trigger of the rule."""
 
-    timing: RuleTiming = setting(
+    timing: RuleTiming = config_field(
         default=RuleTiming.NOW,
         label="Run",
         help_text="When to run the reactions, once the trigger fires.",
     )
     """When to run the reactions, once the trigger fires."""
 
-    delay: Optional[float] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
+    delay: Optional[float] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
         default=0,
         label="Delay",
         help_text="Seconds to wait after the trigger before running the reactions.",
@@ -66,7 +66,7 @@ class RuleConfig(AutomationConfig):
     """The seconds to wait after the trigger before running the reactions, or None if the rule doesn't run after a
     delay."""
 
-    at: str = setting(
+    at: str = config_field(
         optional=True,
         label="At",
         help_text="Time of day, as <code>HH:MM</code>: the reactions run the next time it comes after the trigger.",

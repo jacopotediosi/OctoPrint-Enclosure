@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, ClassVar, Mapping, Sequence
 
+from octoprint_enclosure.config import OutputId, config_field
 from octoprint_enclosure.outputs import OutputSetpointConfig
-from octoprint_enclosure.settings import OutputId, setting
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 from .base import Reaction, ReactionConfig
@@ -26,13 +26,13 @@ class OutputControlConfig(OutputSetpointConfig, ReactionConfig):
         "controlled_io_set_state": [OutputSetState.ON.value, OutputSetState.TOGGLE.value],
     }
 
-    controlled_io: OutputId = setting(
+    controlled_io: OutputId = config_field(
         label="Controlled IO",
         help_text="Output to control when the event happens.",
     )
     """The id of the output to control."""
 
-    controlled_io_set_state: OutputSetState = setting(
+    controlled_io_set_state: OutputSetState = config_field(
         label="Set Controlled IO State",
         help_text="Whether to turn the controlled IO on or off, or to toggle it, when the event happens.",
     )

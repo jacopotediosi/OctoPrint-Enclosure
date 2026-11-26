@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import spidev  # ty: ignore[unresolved-import] - spidev is a compiled module without type stubs
 from typing_extensions import override
 
-from octoprint_enclosure.settings import HexInt, setting
+from octoprint_enclosure.config import HexInt, config_field
 from octoprint_enclosure.utils import LabeledValue
 
 from .base import Reading, Sensor, SensorError, SensorInputConfig
@@ -32,7 +32,7 @@ class Max31855Config(SensorInputConfig):
         "run <code>sudo raspi-config</code> and enable SPI in the interface options."
     )
 
-    temp_sensor_address: HexInt = setting(
+    temp_sensor_address: HexInt = config_field(
         label="Sensor Address (CE Select)",
         help_text="CE select: CE0 on GPIO 8 or CE1 on GPIO 7.",
         choices=[LabeledValue(value="0", label="CE0"), LabeledValue(value="1", label="CE1")],

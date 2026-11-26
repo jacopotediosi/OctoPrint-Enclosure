@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from octoprint_enclosure.settings import ActionId, GpioInputId, OutputId, SensorInputId
+from octoprint_enclosure.config import ActionId, GpioInputId, OutputId, SensorInputId
 
 from .base import Automation, AutomationConfig, AutomationError
 from .registry import AUTOMATIONS
@@ -13,9 +13,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from octoprint_enclosure.actions import Actions
+    from octoprint_enclosure.config import BaseConfig
     from octoprint_enclosure.inputs import Edge, GpioInputs, Sensors
     from octoprint_enclosure.outputs import Outputs
-    from octoprint_enclosure.settings import BaseConfig
 
     from .events import AutomationEvent
 

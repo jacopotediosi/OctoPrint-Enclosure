@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Generic, TypeVar
 
 from typing_extensions import override
 
+from octoprint_enclosure.config import HexInt, config_field
 from octoprint_enclosure.inputs.config import InputConfig, PullResistor
-from octoprint_enclosure.settings import HexInt, setting
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 if TYPE_CHECKING:
@@ -73,13 +73,13 @@ class SensorInputConfig(InputConfig):
 
     type_field_name = "temp_sensor_type"
 
-    temp_sensor_type: SensorType = setting(label="Sensor Type")
+    temp_sensor_type: SensorType = config_field(label="Sensor Type")
     """The type of the sensor."""
 
-    temp_sensor_navbar: bool = setting(default=True, label="Show temperature in navbar", compare=False)
+    temp_sensor_navbar: bool = config_field(default=True, label="Show temperature in navbar", compare=False)
     """Whether the temperature is shown in the navbar."""
 
-    show_graph_temp: bool = setting(
+    show_graph_temp: bool = config_field(
         default=False,
         label="Show temperature in graph",
         help_text=(
@@ -90,7 +90,7 @@ class SensorInputConfig(InputConfig):
     )
     """Whether the temperature is shown in the temperature graph."""
 
-    show_graph_humidity: bool = setting(
+    show_graph_humidity: bool = config_field(
         default=False,
         label="Show humidity in graph",
         help_text=(
@@ -167,10 +167,14 @@ class Sensor(ABC, Generic[_ConfigT]):
 class PinSensorConfig(SensorInputConfig):
     """The configuration shared by the sensors with a data line on a GPIO pin."""
 
-    gpio_pin: int = setting(label="GPIO", help_text="GPIO the data line of the sensor is connected to.", min_value=0)
+    gpio_pin: int = config_field(
+        label="GPIO",
+        help_text="GPIO the data line of the sensor is connected to.",
+        min_value=0,
+    )
     """The GPIO pin of the data line."""
 
-    input_pull_resistor: PullResistor = setting(
+    input_pull_resistor: PullResistor = config_field(
         default=PullResistor.UP,
         label="Input Pull Resistor",
         help_text=(
@@ -227,7 +231,7 @@ class I2cSensorConfig(SensorInputConfig):
         "<code>sudo raspi-config</code> and enable I2C in the interface options."
     )
 
-    temp_sensor_i2cbus: int = setting(
+    temp_sensor_i2cbus: int = config_field(
         default=1,
         label="i2c Bus",
         help_text=(
@@ -238,7 +242,7 @@ class I2cSensorConfig(SensorInputConfig):
     )
     """The number of the I2C bus."""
 
-    temp_sensor_address: HexInt = setting(
+    temp_sensor_address: HexInt = config_field(
         label="Sensor Address",
         help_text=(
             "Address of the sensor, in hexadecimal. Find it by running <code>i2cdetect -y 1</code> (from the "

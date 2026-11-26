@@ -6,7 +6,7 @@ from pathlib import Path
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import setting
+from octoprint_enclosure.config import config_field
 
 from .base import PinSensor, PinSensorConfig, Reading, SensorError
 
@@ -22,14 +22,14 @@ class Ds18b20Config(PinSensorConfig):
         "<code>sudo raspi-config</code>, enable 1-Wire in the interface options and reboot."
     )
 
-    gpio_pin: int = setting(
+    gpio_pin: int = config_field(
         label="GPIO",
         help_text="GPIO the data line is connected to, usually 4 unless you changed the 1-Wire overlay.",
         min_value=0,
     )
     """The GPIO pin of the data line."""
 
-    ds18b20_serial: str = setting(
+    ds18b20_serial: str = config_field(
         optional=True,
         label="DS18B20 Serial Number",
         help_text=(

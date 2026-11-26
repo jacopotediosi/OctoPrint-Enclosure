@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import BaseConfig
+from octoprint_enclosure.config import BaseConfig
 from octoprint_enclosure.utils import clamp, get_gcode_param
 
 from .base import Output

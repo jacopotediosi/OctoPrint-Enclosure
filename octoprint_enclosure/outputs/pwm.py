@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import BaseConfig, setting
+from octoprint_enclosure.config import BaseConfig, config_field
 from octoprint_enclosure.utils import clamp, get_gcode_param
 
 from .base import Output, OutputError
@@ -21,10 +21,10 @@ if TYPE_CHECKING:
 class PwmConfig(OutputConfig):
     """The configuration of a PWM output."""
 
-    gpio_pin: int = setting(label="GPIO", help_text="GPIO the output is connected to.", min_value=0)
+    gpio_pin: int = config_field(label="GPIO", help_text="GPIO the output is connected to.", min_value=0)
     """The GPIO pin of the PWM."""
 
-    pwm_frequency: int = setting(default=50, label="PWM Frequency", unit="Hz", min_value=1)
+    pwm_frequency: int = config_field(default=50, label="PWM Frequency", unit="Hz", min_value=1)
     """The frequency of the PWM, in Hz."""
 
 

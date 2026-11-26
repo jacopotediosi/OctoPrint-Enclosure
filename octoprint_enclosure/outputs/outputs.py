@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import BaseConfig, SensorInputId
+from octoprint_enclosure.config import BaseConfig, SensorInputId
 
 from .base import Output, OutputError
 from .config import OutputConfig

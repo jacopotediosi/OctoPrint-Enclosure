@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import HexInt, setting
+from octoprint_enclosure.config import HexInt, config_field
 from octoprint_enclosure.utils import Rgb, get_gcode_param
 
 from .color import ColorOutput, ColorSetpoint
@@ -17,7 +17,7 @@ BUS = 1
 class NeopixelIndirectConfig(OutputConfig):
     """The configuration of NeoPixels driven by a microcontroller on the I2C bus."""
 
-    microcontroller_address: HexInt = setting(
+    microcontroller_address: HexInt = config_field(
         label="Microcontroller Address",
         help_text=(
             "Address of the microcontroller, in hexadecimal. Find it by running <code>i2cdetect -y 1</code> (from the "
@@ -28,7 +28,7 @@ class NeopixelIndirectConfig(OutputConfig):
     )
     """The I2C address of the microcontroller."""
 
-    gpio_pin: int = setting(
+    gpio_pin: int = config_field(
         label="Microcontroller Pin",
         help_text=(
             '<span class="label label-important">Attention</span> NeoPixels need a microcontroller (e.g., an Arduino) '
@@ -40,7 +40,7 @@ class NeopixelIndirectConfig(OutputConfig):
     )
     """The pin of the microcontroller the NeoPixels are connected to."""
 
-    neopixel_count: int = setting(
+    neopixel_count: int = config_field(
         label="Number of LEDs",
         help_text="Number of LEDs on the strip.",
         min_value=1,
@@ -48,7 +48,7 @@ class NeopixelIndirectConfig(OutputConfig):
     )
     """The number of NeoPixels."""
 
-    neopixel_brightness: int = setting(
+    neopixel_brightness: int = config_field(
         default=255,
         label="Brightness",
         help_text="Value between 0 and 255.",

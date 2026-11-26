@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import BaseConfig, SensorInputId, setting
+from octoprint_enclosure.config import BaseConfig, SensorInputId, config_field
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue, MeasurementType
 
 from .base import Output
@@ -37,17 +37,17 @@ class ThermostatDeviceType(LabeledEnum):
 class ThermostatConfig(SwitchConfig):
     """The configuration of a thermostat."""
 
-    temp_ctr_type: ThermostatDeviceType = setting(label="Device Type")
+    temp_ctr_type: ThermostatDeviceType = config_field(label="Device Type")
     """The type of the device that the output switch turns on and off."""
 
-    linked_temp_sensor: SensorInputId = setting(
+    linked_temp_sensor: SensorInputId = config_field(
         label="Temperature Sensor",
         help_text="Sensor the thermostat reads. Configured in the Inputs tab.",
         widget="thermostat_sensor",
     )
     """The id of the input of the sensor that reads the temperature or the humidity."""
 
-    temp_ctr_deadband: Optional[float] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
+    temp_ctr_deadband: Optional[float] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
         default=2,
         label="Value Deadband",
         help_text="Allowable drift of the thermostat below its target. Set it to zero to disable.",
@@ -58,7 +58,7 @@ class ThermostatConfig(SwitchConfig):
     """How far below the target the value can go before a heater turns on, or a cooler turns off. Between there and
     the target, the device stays as it is. None for a dehumidifier, which has none."""
 
-    temp_ctr_max_temp: Optional[float] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
+    temp_ctr_max_temp: Optional[float] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
         default=65,
         optional=True,
         label="Maximum Temperature",
@@ -76,7 +76,7 @@ class ThermostatConfig(SwitchConfig):
 class ThermostatSetpoint(BaseConfig):
     """The setpoint a thermostat is turned on to."""
 
-    target: float = setting()
+    target: float = config_field()
     """The target temperature in Celsius, or the target humidity for a dehumidifier."""
 
 

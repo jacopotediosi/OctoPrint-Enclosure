@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 from typing_extensions import override
 
 from octoprint_enclosure.automations.events import GpioEdgeEvent
+from octoprint_enclosure.config import BaseConfig, GpioInputId, config_field
 from octoprint_enclosure.inputs import Edge
-from octoprint_enclosure.settings import BaseConfig, GpioInputId, setting
 
 from .base import Trigger
 
@@ -19,13 +19,13 @@ if TYPE_CHECKING:
 class GpioInputTriggerConfig(BaseConfig):
     """The configuration of an automation trigger on the edges of a GPIO input."""
 
-    input: GpioInputId = setting(
+    input: GpioInputId = config_field(
         label="Input",
         help_text="GPIO input that triggers the automation. Configured in the Inputs tab.",
     )
     """The id of the GPIO input."""
 
-    edge: Edge = setting(
+    edge: Edge = config_field(
         default=Edge.FALL,
         label="Edge",
         help_text=(

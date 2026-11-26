@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
+from octoprint_enclosure.config import BaseConfig, config_field
 from octoprint_enclosure.outputs import config_with_setpoint_from_settings
-from octoprint_enclosure.settings import BaseConfig, setting
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ class ReactionConfig(BaseConfig):
 
     type_field_name = "reaction_type"
 
-    reaction_type: ReactionType = setting(label="Reaction")
+    reaction_type: ReactionType = config_field(label="Reaction")
     """The type of the reaction."""
 
 

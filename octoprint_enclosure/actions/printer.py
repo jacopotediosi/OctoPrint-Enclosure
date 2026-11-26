@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import setting
+from octoprint_enclosure.config import config_field
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 from .base import Action, ActionConfig
@@ -25,7 +25,7 @@ class PrinterCommand(LabeledEnum):
 class PrinterConfig(ActionConfig):
     """The configuration of an action that controls the printer."""
 
-    printer_action: PrinterCommand = setting(label="Printer Action")
+    printer_action: PrinterCommand = config_field(label="Printer Action")
     """The command to send to the printer."""
 
 

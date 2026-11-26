@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 
+from octoprint_enclosure.config import BaseConfig, config_field
 from octoprint_enclosure.outputs import config_with_setpoint_from_settings
-from octoprint_enclosure.settings import BaseConfig, setting
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 from .conditions import CONDITIONS, ConditionConfig, conditions_from_settings
@@ -39,23 +39,23 @@ class AutomationConfig(BaseConfig):
 
     type_field_name = "automation_type"
 
-    index_id: int = setting(label="Id", widget="id")
+    index_id: int = config_field(label="Id", widget="id")
     """The id of the automation."""
 
-    label: str = setting(optional=True, label="Label", compare=False)
+    label: str = config_field(optional=True, label="Label", compare=False)
     """The label of the automation."""
 
-    enabled: bool = setting(
+    enabled: bool = config_field(
         default=True,
         label="Enabled",
         compare=False,
     )
     """Whether the automation is enabled."""
 
-    automation_type: AutomationType = setting(label="Automation Type")
+    automation_type: AutomationType = config_field(label="Automation Type")
     """The type of the automation."""
 
-    show_in_tab: bool = setting(
+    show_in_tab: bool = config_field(
         default=False,
         label="Show in tab",
         help_text="Shows the automation in the Enclosure tab, with a switch to enable or disable it.",

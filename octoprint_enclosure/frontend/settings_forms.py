@@ -7,18 +7,18 @@ from octoprint_enclosure.actions.base import ActionConfig
 from octoprint_enclosure.actions.registry import ACTIONS
 from octoprint_enclosure.automations.base import AutomationConfig
 from octoprint_enclosure.automations.registry import AUTOMATIONS
+from octoprint_enclosure.config import WIDGET_TYPES, OutputId
 from octoprint_enclosure.inputs.config import InputConfig
 from octoprint_enclosure.inputs.registry import INPUTS
 from octoprint_enclosure.outputs import ThermostatDeviceType, ThermostatSetpoint
 from octoprint_enclosure.outputs.config import OutputConfig
 from octoprint_enclosure.outputs.registry import OUTPUTS
-from octoprint_enclosure.settings import WIDGET_TYPES, OutputId
 from octoprint_enclosure.utils import MeasurementType
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from octoprint_enclosure.settings import BaseConfig
+    from octoprint_enclosure.config import BaseConfig
 
 
 _DEVICE_TYPES_BY_MEASUREMENT_TYPE = {

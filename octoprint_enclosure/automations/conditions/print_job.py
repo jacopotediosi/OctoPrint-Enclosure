@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import setting
+from octoprint_enclosure.config import config_field
 from octoprint_enclosure.utils import LabeledValue
 
 from .base import Condition, ConditionConfig
@@ -23,7 +23,7 @@ class PrintJobConditionConfig(ConditionConfig):
         "while none is."
     )
 
-    printing: bool = setting(
+    printing: bool = config_field(
         default=True,
         label="Print Job",
         choices=[

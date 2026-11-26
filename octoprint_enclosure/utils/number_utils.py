@@ -29,6 +29,23 @@ def parse_hex(value: Any) -> int:  # noqa: ANN401 - value is purposely untyped
     return int(str(value), 16)
 
 
+def format_hex(value: int) -> str:
+    """Convert an int to a hexadecimal value.
+
+    Args:
+        value (int): The value.
+
+    Returns:
+        str: The value in hexadecimal, without the 0x prefix.
+
+    Examples:
+        >>> format_hex(72)
+        '48'
+
+    """
+    return f"{value:x}"
+
+
 def parse_float(value: Any) -> float:  # noqa: ANN401 - value is purposely untyped
     """Convert a value to a finite float.
 

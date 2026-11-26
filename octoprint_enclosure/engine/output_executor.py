@@ -15,9 +15,9 @@ if TYPE_CHECKING:
 
     from typing_extensions import Protocol
 
+    from octoprint_enclosure.config import BaseConfig
     from octoprint_enclosure.frontend import Frontend
     from octoprint_enclosure.outputs import Outputs
-    from octoprint_enclosure.settings import BaseConfig
 
 _T = TypeVar("_T")
 _T_co = TypeVar("_T_co", covariant=True)

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from octoprint_enclosure.settings import BaseConfig, setting
+from octoprint_enclosure.config import BaseConfig, config_field
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 if TYPE_CHECKING:
@@ -25,7 +25,7 @@ class ConditionConfig(BaseConfig):
 
     type_field_name = "condition_type"
 
-    condition_type: ConditionType = setting(default=ConditionType.PRINT_JOB, label="Condition")
+    condition_type: ConditionType = config_field(default=ConditionType.PRINT_JOB, label="Condition")
     """The type of the condition."""
 
 

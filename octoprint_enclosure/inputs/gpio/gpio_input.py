@@ -4,8 +4,8 @@ import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from octoprint_enclosure.config import config_field
 from octoprint_enclosure.inputs.config import InputConfig, PullResistor
-from octoprint_enclosure.settings import setting
 
 if TYPE_CHECKING:
     import logging
@@ -21,10 +21,10 @@ class GpioInputError(Exception):
 class GpioConfig(InputConfig):
     """The configuration of a GPIO input."""
 
-    gpio_pin: int = setting(label="GPIO", min_value=0)
+    gpio_pin: int = config_field(label="GPIO", min_value=0)
     """The GPIO pin of the input."""
 
-    input_pull_resistor: PullResistor = setting(
+    input_pull_resistor: PullResistor = config_field(
         default=PullResistor.UP,
         label="Input Pull Resistor",
         help_text=(

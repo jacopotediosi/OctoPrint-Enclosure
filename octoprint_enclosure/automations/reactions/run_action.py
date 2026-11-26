@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from octoprint_enclosure.settings import ActionId, setting
+from octoprint_enclosure.config import ActionId, config_field
 
 from .base import Reaction, ReactionConfig
 
@@ -11,7 +11,7 @@ from .base import Reaction, ReactionConfig
 class RunActionConfig(ReactionConfig):
     """The configuration of an automation reaction that runs an action."""
 
-    action: ActionId = setting(
+    action: ActionId = config_field(
         label="Action",
         help_text="Action to run when the event happens. Configured in the Actions tab.",
     )

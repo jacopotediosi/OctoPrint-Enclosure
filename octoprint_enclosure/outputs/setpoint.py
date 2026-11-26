@@ -5,7 +5,7 @@ from typing import Any, ClassVar, Mapping, Optional, Sequence, TypeVar, get_type
 
 from typing_extensions import override
 
-from octoprint_enclosure.settings import BaseConfig, OutputId, setting
+from octoprint_enclosure.config import BaseConfig, OutputId, config_field
 from octoprint_enclosure.utils import Rgb
 
 from .color import ColorSetpoint
@@ -25,7 +25,7 @@ class OutputSetpointConfig(BaseConfig):
     setpoint_visible_if: ClassVar[Mapping[str, Sequence[Any]]] = {}
     """When the setpoint is used: each field it names must have one of the values listed for it. Empty if always."""
 
-    duty_cycle: Optional[float] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
+    duty_cycle: Optional[float] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
         label="Duty Cycle",
         help_text="Duty cycle the PWM is set to when it is turned on, between 0 and 100.",
         min_value=0,
@@ -34,7 +34,7 @@ class OutputSetpointConfig(BaseConfig):
     )
     """The duty cycle a PWM output is turned on to."""
 
-    color: Optional[Rgb] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and Rgb | None fails on Python < 3.10
+    color: Optional[Rgb] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and Rgb | None fails on Python < 3.10
         default=Rgb(0, 0, 0),
         label="Color",
         help_text="Color the LEDs are set to when they are turned on.",
@@ -42,7 +42,7 @@ class OutputSetpointConfig(BaseConfig):
     )
     """The color LEDs are turned on to."""
 
-    target: Optional[float] = setting(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
+    target: Optional[float] = config_field(  # noqa: UP045 - BaseConfig.from_settings evaluates, and float | None fails on Python < 3.10
         label="Target",
         help_text="Value the thermostat is set to when it is turned on.",
         widget="output_setpoint",

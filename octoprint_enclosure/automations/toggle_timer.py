@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from octoprint_enclosure.config import OutputId, config_field
 from octoprint_enclosure.outputs import OutputSetpointConfig
-from octoprint_enclosure.settings import OutputId, setting
 
 from .base import Automation, AutomationConfig
 
@@ -24,13 +24,13 @@ class ToggleTimerConfig(AutomationConfig, OutputSetpointConfig):
         "for the off time."
     )
 
-    output: OutputId = setting(label="Controlled IO", help_text="Output to turn on and off in turn.")
+    output: OutputId = config_field(label="Controlled IO", help_text="Output to turn on and off in turn.")
     """The id of the output to control."""
 
-    toggle_timer_on: float = setting(label="On Time", help_text="Seconds the output stays on.", unit="s")
+    toggle_timer_on: float = config_field(label="On Time", help_text="Seconds the output stays on.", unit="s")
     """The seconds the output stays on."""
 
-    toggle_timer_off: float = setting(label="Off Time", help_text="Seconds the output stays off.", unit="s")
+    toggle_timer_off: float = config_field(label="Off Time", help_text="Seconds the output stays off.", unit="s")
     """The seconds the output stays off."""
 
     def __post_init__(self) -> None:

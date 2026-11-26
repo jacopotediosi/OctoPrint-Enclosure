@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from octoprint_enclosure.settings import OutputId, SensorInputId, setting
+from octoprint_enclosure.config import OutputId, SensorInputId, config_field
 from octoprint_enclosure.utils import clamp
 
 from .base import Automation, AutomationConfig
@@ -29,29 +29,29 @@ class PwmTemperatureLinkedConfig(AutomationConfig):
         "is turned off."
     )
 
-    output: OutputId = setting(
+    output: OutputId = config_field(
         label="Controlled IO",
         help_text=("PWM output whose duty cycle follows the temperature. Configured in the Outputs tab."),
         widget="pwm_output",
     )
     """The id of the PWM output."""
 
-    linked_temp_sensor: SensorInputId = setting(
+    linked_temp_sensor: SensorInputId = config_field(
         label="Temperature Sensor",
         help_text="Sensor that reads the temperature. Configured in the Inputs tab.",
     )
     """The id of the input of the sensor that reads the temperature."""
 
-    temperature_a: float = setting(label="Temperature A", widget="temperature")
+    temperature_a: float = config_field(label="Temperature A", widget="temperature")
     """The temperature at which the output gets the first duty cycle."""
 
-    duty_a: float = setting(label="Duty A", min_value=0, max_value=100)
+    duty_a: float = config_field(label="Duty A", min_value=0, max_value=100)
     """The duty cycle of the output at the first temperature, from 0 to 100."""
 
-    temperature_b: float = setting(label="Temperature B", widget="temperature")
+    temperature_b: float = config_field(label="Temperature B", widget="temperature")
     """The temperature at which the output gets the second duty cycle."""
 
-    duty_b: float = setting(label="Duty B", min_value=0, max_value=100)
+    duty_b: float = config_field(label="Duty B", min_value=0, max_value=100)
     """The duty cycle of the output at the second temperature, from 0 to 100."""
 
 

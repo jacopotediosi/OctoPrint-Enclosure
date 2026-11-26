@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Generic, TypeVar
 
-from octoprint_enclosure.settings import BaseConfig, setting
+from octoprint_enclosure.config import BaseConfig, config_field
 from octoprint_enclosure.utils import LabeledEnum, LabeledValue
 
 if TYPE_CHECKING:
@@ -33,19 +33,19 @@ class ActionConfig(BaseConfig):
 
     type_field_name = "action_type"
 
-    index_id: int = setting(label="Id", widget="id")
+    index_id: int = config_field(label="Id", widget="id")
     """The id of the action."""
 
-    label: str = setting(optional=True, label="Label", compare=False)
+    label: str = config_field(optional=True, label="Label", compare=False)
     """The label of the action."""
 
-    action_type: ActionType = setting(label="Action Type")
+    action_type: ActionType = config_field(label="Action Type")
     """The type of the action."""
 
-    hide_btn_ui: bool = setting(default=False, label="Hide in tab", compare=False)
+    hide_btn_ui: bool = config_field(default=False, label="Hide in tab", compare=False)
     """Whether the button of the action is hidden in the Enclosure tab."""
 
-    show_on_navbar: bool = setting(default=False, label="Show in navbar", compare=False)
+    show_on_navbar: bool = config_field(default=False, label="Show in navbar", compare=False)
     """Whether the action has a button in the navbar."""
 
 
