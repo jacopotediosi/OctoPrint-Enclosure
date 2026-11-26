@@ -7,7 +7,7 @@ from bme680 import BME680, constants
 from smbus2 import SMBus
 from typing_extensions import override
 
-from octoprint_enclosure.utils import clamp
+from octoprint_enclosure.utils import MeasurementType, clamp
 
 from .base import Reading, Sensor, SensorInputConfig
 
@@ -42,6 +42,7 @@ class Bme680Sensor(Sensor[Bme680Config]):
     """A BME680 temperature, humidity and air quality sensor."""
 
     config_class = Bme680Config
+    measurement_types = frozenset({MeasurementType.TEMPERATURE, MeasurementType.HUMIDITY})
 
     @override
     def read(self) -> Reading:

@@ -2,11 +2,11 @@
    title="Raspberry Pi Outputs"
    class="dropdown-toggle"
    data-toggle="dropdown"
-   data-bind="visible: $root.navbar_items().length > 0 && $root.hasStatusPermission()">
+   data-bind="visible: $root.navbarItems().length > 0 && $root.hasStatusPermission()">
     <i class="fa fa-codepen"></i>
     <b class="caret"></b>
 </a>
-<ul class="dropdown-menu" data-bind="foreach: $root.navbar_items()">
+<ul class="dropdown-menu" data-bind="foreach: $root.navbarItems()">
     <li data-bind="if: $root.navbarItemType($data) == 'regular', css: {disabled: !$root.hasOutputsControlPermission()}">
         <a href="#"
            data-bind="click: $root.hasOutputsControlPermission() ? $root.toggleOutput : function () {}">
@@ -15,11 +15,11 @@
                   data-bind="text: on() ? 'on' : 'off', css: {'badge-success': on(), 'badge-important': !on()}"></span>
         </a>
     </li>
-    <li data-bind="if: $root.navbarItemType($data) == 'gcode_output', css: {disabled: !$root.isOperational()}">
+    <li data-bind="if: $root.navbarItemType($data) == 'gcode_output', css: {disabled: !$root.canSendGcode()}">
         <a href="#"
-           data-bind="click: $root.isOperational() ? $root.runAction : function () {}">
+           data-bind="click: $root.canSendGcode() ? $root.runAction : function () {}">
             <span data-bind="text: label"></span>
-            <span class="badge" data-bind="css: {'badge-info': $root.isOperational()}">gcode</span>
+            <span class="badge" data-bind="css: {'badge-info': $root.canSendGcode()}">gcode</span>
         </a>
     </li>
     <li data-bind="if: $root.navbarItemType($data) == 'shell_output', css: {disabled: !$root.hasActionsRunPermission()}">

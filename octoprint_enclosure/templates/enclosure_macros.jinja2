@@ -90,9 +90,10 @@
 {% endmacro %}
 {% macro temperature_input(field, is_interval) %}
     <div class="input-append">
-        <input type="text"
+        <input type="number"
+               step="any"
                data-bind="temperature: {{ field.name }}{% if is_interval %}, temperatureInterval: true{% endif %}">
-        <span class="add-on" data-bind="text: $root.temperatureUnitLabel()"></span>
+        <span class="add-on" data-bind="text: $root.temperatureUnitSymbol()"></span>
     </div>
 {% endmacro %}
 {% macro select_input(field, options, options_value, options_text) %}
@@ -111,10 +112,10 @@
 {# GENERATED FORMS: WIDGETS #}
 {% macro default_widget(field) %}
     {% set linked_items = {
-        "SensorInputId": "$root.settings_temperature_sensors",
-        "GpioInputId": "$root.settings_gpio_inputs",
-        "OutputId": "$root.settingsViewModel.settings.plugins.enclosure.rpi_outputs",
-        "ActionId": "$root.settingsViewModel.settings.plugins.enclosure.actions"
+        "SensorInputId": "$root.settingsTemperatureSensors",
+        "GpioInputId": "$root.settingsGpioInputs",
+        "OutputId": "$root.pluginSettings().rpi_outputs",
+        "ActionId": "$root.pluginSettings().actions"
     } %}
     {% if field.choices is not none %}
         {{ select_input(
@@ -174,7 +175,7 @@
     {% endif %}
 {% endmacro %}
 {% macro pwm_output_widget(field) %}
-    {{ select_input(field, "$root.settings_outputs_pwm", options_value="'index_id'", options_text="'label'") }}
+    {{ select_input(field, "$root.settingsPwmOutputs", options_value="'index_id'", options_text="'label'") }}
 {% endmacro %}
 {% macro temperature_widget(field) %}
     {{ temperature_input(field, false) }}
@@ -189,9 +190,9 @@
     {% set device_types = field.device_types_by_measurement_type %}
     {% set options = [
         device_types.temperature|tojson|forceescape ~ ".indexOf(" ~ field.device_type_field ~ "()) >= 0",
-        "? $root.settings_temperature_sensors()",
+        "? $root.settingsTemperatureSensors()",
         ": " ~ device_types.humidity|tojson|forceescape ~ ".indexOf(" ~ field.device_type_field ~ "()) >= 0",
-        "? $root.settings_hum_sensors()",
+        "? $root.settingsHumiditySensors()",
         ": []",
     ]|join(" ") %}
     {{ select_input(field, options, options_value="'index_id'", options_text="'label'") }}

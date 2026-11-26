@@ -8,6 +8,7 @@ from smbus2 import SMBus
 from typing_extensions import override
 
 from octoprint_enclosure.config import HexInt, config_field
+from octoprint_enclosure.utils import MeasurementType
 
 from .base import Reading, Sensor, SensorError, SensorInputConfig
 
@@ -58,6 +59,7 @@ class _RawI2cSensor(Sensor[RawI2cConfig]):
     """A device sending two readings over I2C as raw floats."""
 
     config_class = RawI2cConfig
+    measurement_types = frozenset({MeasurementType.TEMPERATURE, MeasurementType.HUMIDITY})
 
     def _read_floats(self) -> tuple[float | None, float | None]:
         with SMBus(self.config.temp_i2c_bus) as bus:

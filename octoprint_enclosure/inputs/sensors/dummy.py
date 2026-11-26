@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import override
 
-from octoprint_enclosure.utils import clamp
+from octoprint_enclosure.utils import MeasurementType, clamp
 
 from .base import Reading, Sensor, SensorError, SensorInputConfig
 
@@ -96,6 +96,7 @@ class DummySensor(Sensor[DummyConfig]):
     """A fake sensor for development purposes."""
 
     config_class = DummyConfig
+    measurement_types = frozenset({MeasurementType.TEMPERATURE, MeasurementType.HUMIDITY})
 
     temperature: DummyValue
     """The temperature, in Celsius."""

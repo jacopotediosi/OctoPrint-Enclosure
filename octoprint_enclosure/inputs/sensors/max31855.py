@@ -6,7 +6,7 @@ import spidev  # ty: ignore[unresolved-import] - spidev is a compiled module wit
 from typing_extensions import override
 
 from octoprint_enclosure.config import HexInt, config_field
-from octoprint_enclosure.utils import LabeledValue
+from octoprint_enclosure.utils import LabeledValue, MeasurementType
 
 from .base import Reading, Sensor, SensorError, SensorInputConfig
 
@@ -55,6 +55,7 @@ class Max31855Sensor(Sensor[Max31855Config]):
     """A MAX31855 thermocouple sensor."""
 
     config_class = Max31855Config
+    measurement_types = frozenset({MeasurementType.TEMPERATURE})
 
     @override
     def read(self) -> Reading:

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing_extensions import override
 
 from octoprint_enclosure.config import config_field
+from octoprint_enclosure.utils import MeasurementType
 
 from .base import PinSensor, PinSensorConfig, Reading, SensorError
 
@@ -44,6 +45,7 @@ class Ds18b20Sensor(PinSensor[Ds18b20Config]):
     """A DS18B20 temperature sensor, read through the 1-Wire driver of the kernel."""
 
     config_class = Ds18b20Config
+    measurement_types = frozenset({MeasurementType.TEMPERATURE})
 
     @override
     def read(self) -> Reading:

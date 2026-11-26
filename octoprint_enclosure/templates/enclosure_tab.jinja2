@@ -2,9 +2,9 @@
 {{ gpio_alert(plugin_enclosure_development_mode, plugin_enclosure_gpio_import_error, plugin_enclosure_gpio_numbering_is_board) }}
 <!-- <pre data-bind="text: ko.toJSON($root.rpi_outputs(), null, 2)"></pre> -->
 <div class="row-fluid"
-     data-bind="visible: $root.rpi_inputs_temperature_sensors().length > 0">
+     data-bind="visible: $root.temperatureSensors().length > 0">
     <h4>Temperature</h4>
-    <!-- <pre data-bind="text: ko.toJSON($root.rpi_inputs_temperature_sensors(), null, 2)"></pre> -->
+    <!-- <pre data-bind="text: ko.toJSON($root.temperatureSensors(), null, 2)"></pre> -->
     <table id="enclosure-table" class="table table-bordered table-hover">
         <thead>
             <tr>
@@ -20,22 +20,22 @@
                     data-bind="visible: $root.hasAnyThermostat()">{{ _("Target") }}</th>
             </tr>
         </thead>
-        <tbody data-bind="foreach: $root.tab_temperature_table_rows()">
+        <tbody data-bind="foreach: $root.tabTemperatureTableRows()">
             <tr>
                 <th class="temperature_sensor"
                     data-bind="visible: first, text: sensor.label, attr: {title: sensor.label, rowspan: rowspan}"></th>
                 <td class="temperature_actual"
                     data-bind="visible: first, attr: {rowspan: rowspan}, with: sensor">
                     <span data-bind="text: $root.fromCelsius(temperature()), attr: {title: $root.fromCelsius(temperature())}"></span>
-                    <span class="add-on" data-bind="text: $root.temperatureUnitLabel()"></span>
+                    <span class="add-on" data-bind="text: $root.temperatureUnitSymbol()"></span>
                 </td>
                 <td class="humidity_actual"
-                    data-bind="visible: first && $root.humidityCapableSensor(sensor.temp_sensor_type()), attr: {rowspan: rowspan}, with: sensor">
+                    data-bind="visible: first && $root.measuresHumidity(sensor.temp_sensor_type()), attr: {rowspan: rowspan}, with: sensor">
                     <span data-bind="text: humidity, attr: {title: humidity}"></span>
                     <span class="add-on">%</span>
                 </td>
                 <td class="humidity_actual"
-                    data-bind="visible: first && $root.hasAnySensorWithHumidity() && !$root.humidityCapableSensor(sensor.temp_sensor_type()), attr: {rowspan: rowspan}">N/A</td>
+                    data-bind="visible: first && $root.hasAnySensorWithHumidity() && !$root.measuresHumidity(sensor.temp_sensor_type()), attr: {rowspan: rowspan}">N/A</td>
                 <th class="thermostat"
                     data-bind="visible: $root.hasAnyThermostat(), text: thermostat && thermostat.label(), attr: {title: thermostat && thermostat.label()}">
                 </th>
@@ -49,13 +49,13 @@
                                    min="0"
                                    max="999"
                                    class="input-mini input-nospin"
-                                   data-bind="enable: $root.hasOutputsControlPermission(), value: new_target, valueUpdate: 'input', attr: {placeholder: $root.shownTarget($data)}">
+                                   data-bind="enable: $root.hasOutputsControlPermission() && measurement() !== null, value: typed_target, valueUpdate: 'input', attr: {placeholder: $root.shownTarget($data)}">
                             <span class="add-on"
-                                  data-bind="text: temp_ctr_type() == 'dehumidifier' ? '%' : $root.temperatureUnitLabel()"></span>
+                                  data-bind="text: $root.measurementSymbol(measurement())"></span>
                         </div>
                         <div class="btn-group">
                             <button type="submit"
-                                    data-bind="enable: $root.hasOutputsControlPermission()"
+                                    data-bind="enable: $root.hasOutputsControlPermission() && measurement() !== null && typed_target() !== ''"
                                     class="btn btn-primary"
                                     title="{{ _('Set') }}">
                                 <i class="fa fa-check"></i>
@@ -78,7 +78,7 @@
         </tbody>
     </table>
 </div>
-<div data-bind="foreach: $root.tab_outputs()">
+<div data-bind="foreach: $root.tabOutputs()">
     <div style="margin-bottom: 20px">
         <div data-bind="if: output_type() == 'regular'">
             <h4>
@@ -116,12 +116,15 @@
                 <span class="badge">pwm</span>
             </h4>
             <div class="input-append">
-                <input type="text"
-                       class="input-mini"
-                       data-bind="enable: $root.hasOutputsControlPermission(), value: new_duty_cycle, valueUpdate: 'input', attr: {placeholder: $root.shownDutyCycle(duty_cycle())}">
+                <input type="number"
+                       min="0"
+                       max="100"
+                       step="1"
+                       class="input-mini input-nospin"
+                       data-bind="enable: $root.hasOutputsControlPermission(), value: typed_duty_cycle, valueUpdate: 'input', attr: {placeholder: $root.shownDutyCycle(duty_cycle())}">
                 <button type="button"
                         class="btn btn-input-inc"
-                        data-bind="enable: $root.hasOutputsControlPermission() && !$root.isPwmLinked(index_id()), click: $root.setDutyCycle, attr: {title: $root.isPwmLinked(index_id()) ? 'Temperature controlled PWM' : 'Set PWM'}">
+                        data-bind="enable: $root.hasOutputsControlPermission() && !$root.hasActiveTemperatureCurve(index_id()) && typed_duty_cycle() !== '', click: $root.setDutyCycle, attr: {title: $root.hasActiveTemperatureCurve(index_id()) ? 'Temperature controlled PWM' : 'Set PWM'}">
                     <i class="fa fa-check"></i>
                 </button>
             </div>
@@ -157,11 +160,11 @@
                       data-bind="text: on() ? 'on' : 'off', css: {'badge-success': on(), 'badge-important': !on()}"></span>
             </h4>
         </div>
-        <div data-bind="foreach: $root.automationsOn(index_id())">
+        <div data-bind="foreach: $root.tabAutomationsOfOutput(index_id())">
             <h5>
                 <span>Automation: <span data-bind="text: label"></span></span>
                 <a href="#"
-                   data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
+                   data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.toggleAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
                    class="fa enclosure-link"></a>
                 <span data-bind="visible: !$root.hasAutomationsEnablePermission(), css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Enabled' : 'Disabled'}"
                       class="fa muted"></span>
@@ -174,7 +177,7 @@
         </span>
     </div>
 </div>
-<div data-bind="foreach: $root.tab_actions()">
+<div data-bind="foreach: $root.tabActions()">
     <div style="margin-bottom: 20px">
         <div data-bind="if: action_type() == 'gcode_output'">
             <h4>
@@ -183,7 +186,7 @@
             </h4>
             <div>
                 <button type="button"
-                        data-bind="enable: $root.isOperational(), click: $root.runAction"
+                        data-bind="enable: $root.canSendGcode(), click: $root.runAction"
                         class="btn">Send gcode</button>
             </div>
         </div>
@@ -211,23 +214,23 @@
         </div>
     </div>
 </div>
-<div data-bind="foreach: $root.tab_filament_sensors()">
+<div data-bind="foreach: $root.tabFilamentSensors()">
     <h4>
         <span data-bind="text: label"></span>
         <span class="badge">filament sensor</span>
         <a href="#"
-           data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable Filament Sensor' : 'Enable Filament Sensor'}"
+           data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.toggleAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable Filament Sensor' : 'Enable Filament Sensor'}"
            class="fa enclosure-link"></a>
         <span data-bind="visible: !$root.hasAutomationsEnablePermission(), css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Enabled' : 'Disabled'}"
               class="fa muted"></span>
     </h4>
 </div>
-<div data-bind="foreach: $root.tab_automations()">
+<div data-bind="foreach: $root.tabAutomations()">
     <h4>
         <span data-bind="text: label"></span>
         <span class="badge">automation</span>
         <a href="#"
-           data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.switchAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
+           data-bind="visible: $root.hasAutomationsEnablePermission(), click: $root.toggleAutomation, css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Disable' : 'Enable'}"
            class="fa enclosure-link"></a>
         <span data-bind="visible: !$root.hasAutomationsEnablePermission(), css: {'fa-toggle-on': enabled(), 'fa-toggle-off': !enabled()}, attr: {title: enabled() ? 'Enabled' : 'Disabled'}"
               class="fa muted"></span>

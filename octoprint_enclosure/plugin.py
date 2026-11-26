@@ -14,7 +14,7 @@ from .actions import Actions
 from .api import Api
 from .automations import Automations
 from .engine import ControlLoop, OutputExecutor, Scheduler
-from .frontend import Frontend, SettingsForms
+from .frontend import SENSOR_TYPES_BY_MEASUREMENT_TYPE, TEMPERATURE_UNITS, Frontend, SettingsForms
 from .gcode_commands import EncDevHandler, EncHandler
 from .hardware import dummy_gpio, dummy_i2c, gpio
 from .inputs import GpioInputs, SensorPoller, Sensors
@@ -355,7 +355,9 @@ class EnclosurePlugin(
             "gpio_import_error": str(gpio_import_error) if gpio_import_error is not None else None,
             "gpio_numbering_is_board": gpio_import_error is None and self._gpio.getmode() == self._gpio.BOARD,
             "octoprint_events": sorted(all_events()),
+            "sensor_types_by_measurement_type": SENSOR_TYPES_BY_MEASUREMENT_TYPE,
             "settings_forms": self._settings_forms.forms,
+            "temperature_units": TEMPERATURE_UNITS,
         }
 
     @override

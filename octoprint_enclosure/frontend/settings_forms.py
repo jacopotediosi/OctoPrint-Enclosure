@@ -10,10 +10,11 @@ from octoprint_enclosure.automations.registry import AUTOMATIONS
 from octoprint_enclosure.config import WIDGET_TYPES, OutputId
 from octoprint_enclosure.inputs.config import InputConfig
 from octoprint_enclosure.inputs.registry import INPUTS
+from octoprint_enclosure.inputs.sensors.registry import SENSORS
 from octoprint_enclosure.outputs import ThermostatDeviceType, ThermostatSetpoint
 from octoprint_enclosure.outputs.config import OutputConfig
 from octoprint_enclosure.outputs.registry import OUTPUTS
-from octoprint_enclosure.utils import MeasurementType
+from octoprint_enclosure.utils import MeasurementType, TemperatureUnit
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -28,6 +29,22 @@ _DEVICE_TYPES_BY_MEASUREMENT_TYPE = {
     for measurement_type in MeasurementType
 }
 """The device types of a thermostat that act on each type of measurement."""
+
+SENSOR_TYPES_BY_MEASUREMENT_TYPE = {
+    measurement_type.value: [
+        sensor_type.value
+        for sensor_type, sensor_class in SENSORS.items()
+        if measurement_type in sensor_class.measurement_types
+    ]
+    for measurement_type in MeasurementType
+}
+"""The types of sensor that read each type of measurement."""
+
+TEMPERATURE_UNITS = {
+    unit.value: {"label": unit.label, "symbol": unit.symbol, "scale": unit.scale, "offset": unit.offset}
+    for unit in TemperatureUnit
+}
+"""The temperature units, each with its label, its symbol and how it converts from Celsius."""
 
 
 class SettingsForms:

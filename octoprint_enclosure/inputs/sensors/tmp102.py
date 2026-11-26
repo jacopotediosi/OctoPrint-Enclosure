@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from smbus2 import SMBus
 from typing_extensions import override
 
+from octoprint_enclosure.utils import MeasurementType
+
 from .base import I2cSensorConfig, Reading, Sensor
 
 TEMPERATURE_REGISTER = 0x00
@@ -21,6 +23,7 @@ class Tmp102Sensor(Sensor[Tmp102Config]):
     """A TMP102 temperature sensor."""
 
     config_class = Tmp102Config
+    measurement_types = frozenset({MeasurementType.TEMPERATURE})
 
     @override
     def read(self) -> Reading:

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from smbus2 import SMBus, i2c_msg
 from typing_extensions import override
 
+from octoprint_enclosure.utils import MeasurementType
+
 from .base import I2cSensorConfig, Reading, Sensor
 
 STATUS_COMMAND = 0x71
@@ -26,6 +28,7 @@ class Dht20Sensor(Sensor[Dht20Config]):
     """A DHT20 temperature and humidity sensor."""
 
     config_class = Dht20Config
+    measurement_types = frozenset({MeasurementType.TEMPERATURE, MeasurementType.HUMIDITY})
 
     @override
     def read(self) -> Reading:

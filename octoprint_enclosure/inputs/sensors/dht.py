@@ -8,6 +8,8 @@ from typing import ClassVar
 
 from typing_extensions import override
 
+from octoprint_enclosure.utils import MeasurementType
+
 from .base import PinSensor, PinSensorConfig, Reading, SensorError
 
 WORKER_PATH = Path(__file__).with_name("dht_worker.py")
@@ -28,6 +30,7 @@ class _DhtSensor(PinSensor[DhtConfig]):
     """A DHT temperature and humidity sensor."""
 
     config_class = DhtConfig
+    measurement_types = frozenset({MeasurementType.TEMPERATURE, MeasurementType.HUMIDITY})
 
     _model: ClassVar[str]
     """The model of the sensor."""

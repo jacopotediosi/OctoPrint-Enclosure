@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from gpiozero import CPUTemperature
 from typing_extensions import override
 
+from octoprint_enclosure.utils import MeasurementType
+
 from .base import Reading, Sensor, SensorInputConfig
 
 
@@ -17,6 +19,7 @@ class RpiCpuSensor(Sensor[RpiCpuConfig]):
     """A Raspberry Pi CPU temperature sensor."""
 
     config_class = RpiCpuConfig
+    measurement_types = frozenset({MeasurementType.TEMPERATURE})
 
     @override
     def read(self) -> Reading:

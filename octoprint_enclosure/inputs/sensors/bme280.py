@@ -6,6 +6,8 @@ import bme280
 from smbus2 import SMBus
 from typing_extensions import override
 
+from octoprint_enclosure.utils import MeasurementType
+
 from .base import I2cSensorConfig, Reading, Sensor
 
 
@@ -18,6 +20,7 @@ class Bme280Sensor(Sensor[Bme280Config]):
     """A BME280 temperature and humidity sensor."""
 
     config_class = Bme280Config
+    measurement_types = frozenset({MeasurementType.TEMPERATURE, MeasurementType.HUMIDITY})
 
     @override
     def read(self) -> Reading:

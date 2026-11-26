@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Generic, TypeVar
 
 from typing_extensions import override
 
@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     import logging
 
     from octoprint_enclosure.hardware import GpioBackend
+    from octoprint_enclosure.utils import MeasurementType
 
 
 ##########
@@ -110,6 +111,9 @@ class Sensor(ABC, Generic[_ConfigT]):
 
     config_class: type[_ConfigT]
     """The dataclass of the configuration, whose fields are named like the keys of the settings of the input."""
+
+    measurement_types: ClassVar[frozenset[MeasurementType]]
+    """What the sensor measures."""
 
     config: _ConfigT
     """The configuration of the sensor."""

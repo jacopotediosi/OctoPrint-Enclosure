@@ -69,10 +69,14 @@ class JsonType(NamedTuple):
 
 
 JSON_TYPES: dict[Any, JsonType] = {
-    bool: JsonType("bool", _parse_bool, {"type": "boolean"}),
-    Optional[float]: JsonType("number or null", _parse_number_or_null, {"type": ["number", "null"]}),
-    Percent: JsonType("percent", _parse_percent, {"type": "number", "minimum": 0, "maximum": 100}),
-    Rgb: JsonType("hex color", _parse_hex_color, {"type": "string", "pattern": f"^{HEX_COLOR_PATTERN.pattern}$"}),
+    bool: JsonType("true or false", _parse_bool, {"type": "boolean"}),
+    Optional[float]: JsonType("a number or null", _parse_number_or_null, {"type": ["number", "null"]}),
+    Percent: JsonType("a number from 0 to 100", _parse_percent, {"type": "number", "minimum": 0, "maximum": 100}),
+    Rgb: JsonType(
+        "a color like #rrggbb",
+        _parse_hex_color,
+        {"type": "string", "pattern": f"^{HEX_COLOR_PATTERN.pattern}$"},
+    ),
 }
 """How to read a JSON value, for each type a field of a body can have."""
 
@@ -112,7 +116,7 @@ class Body:
             ...     FanBody.from_json({"duty_cycle": 140, "speed": 1})
             ... except BodyError as error:
             ...     error.args
-            ("Unknown attributes: 'speed'.", "Invalid attributes: 'duty_cycle' is not percent.")
+            ("Unknown attributes: 'speed'.", "Invalid attributes: 'duty_cycle' is not a number from 0 to 100.")
 
         """
         if not isinstance(data, dict):

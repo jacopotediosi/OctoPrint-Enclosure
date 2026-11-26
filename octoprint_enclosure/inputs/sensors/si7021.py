@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from smbus2 import SMBus, i2c_msg
 from typing_extensions import override
 
+from octoprint_enclosure.utils import MeasurementType
+
 from .base import I2cSensorConfig, Reading, Sensor
 
 MEASURE_HUMIDITY_COMMAND = 0xF5
@@ -27,6 +29,7 @@ class Si7021Sensor(Sensor[Si7021Config]):
     """An SI7021 temperature and humidity sensor."""
 
     config_class = Si7021Config
+    measurement_types = frozenset({MeasurementType.TEMPERATURE, MeasurementType.HUMIDITY})
 
     @override
     def read(self) -> Reading:

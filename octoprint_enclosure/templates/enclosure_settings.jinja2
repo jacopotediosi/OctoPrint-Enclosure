@@ -3,6 +3,12 @@
 {{ gpio_alert(plugin_enclosure_development_mode, plugin_enclosure_gpio_import_error, plugin_enclosure_gpio_numbering_is_board) }}
 <!-- SETTINGS FORMS (READ BY THE JAVASCRIPT) -->
 <script type="application/json" id="enclosure-settings-forms">{{ plugin_enclosure_settings_forms|tojson }}</script>
+<!-- SENSOR TYPES BY MEASUREMENT TYPE (READ BY THE JAVASCRIPT) -->
+<script type="application/json"
+        id="enclosure-sensor-types-by-measurement-type">{{ plugin_enclosure_sensor_types_by_measurement_type|tojson }}</script>
+<!-- TEMPERATURE UNITS (READ BY THE JAVASCRIPT) -->
+<script type="application/json"
+        id="enclosure-temperature-units">{{ plugin_enclosure_temperature_units|tojson }}</script>
 <!-- TABS -->
 <div class="tabbable">
     <!-- TAB NAVIGATION BUTTONS -->
@@ -33,12 +39,12 @@
             </p>
             <hr />
             <form class="form-horizontal">
-                <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.rpi_inputs">
+                <div data-bind="foreach: pluginSettings().rpi_inputs">
                     {{ form_fields(plugin_enclosure_settings_forms.rpi_inputs) }}
                     <div class="control-group">
                         <a title="Delete input"
                            class="btn btn-danger pull-right"
-                           data-bind="click: function() { $parent.removeRpiInput($data) }">
+                           data-bind="click: function() { $parent.removeItem('rpi_inputs', $data) }">
                             <i class="icon-trash"></i>
                         </a>
                     </div>
@@ -47,7 +53,7 @@
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
-                            data-bind="click: function() { $root.addRpiInput(); }">Add input</button>
+                            data-bind="click: function() { $root.addItem('rpi_inputs', 'Input'); }">Add input</button>
                 </div>
             </form>
         </div>
@@ -59,12 +65,12 @@
             </p>
             <hr />
             <form class="form-horizontal">
-                <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.rpi_outputs">
+                <div data-bind="foreach: pluginSettings().rpi_outputs">
                     {{ form_fields(plugin_enclosure_settings_forms.rpi_outputs) }}
                     <div class="control-group">
                         <a title="Delete output"
                            class="btn btn-danger pull-right"
-                           data-bind="click: function() { $parent.removeRpiOutput($data) }">
+                           data-bind="click: function() { $parent.removeItem('rpi_outputs', $data) }">
                             <i class="icon-trash"></i>
                         </a>
                     </div>
@@ -73,7 +79,7 @@
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
-                            data-bind="click: function() { $root.addRpiOutput(); }">Add output</button>
+                            data-bind="click: function() { $root.addItem('rpi_outputs', 'Output'); }">Add output</button>
                 </div>
             </form>
         </div>
@@ -85,12 +91,12 @@
             </p>
             <hr />
             <form class="form-horizontal">
-                <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.actions">
+                <div data-bind="foreach: pluginSettings().actions">
                     {{ form_fields(plugin_enclosure_settings_forms.actions) }}
                     <div class="control-group">
                         <a title="Delete action"
                            class="btn btn-danger pull-right"
-                           data-bind="click: function() { $parent.removeAction($data) }">
+                           data-bind="click: function() { $parent.removeItem('actions', $data) }">
                             <i class="icon-trash"></i>
                         </a>
                     </div>
@@ -99,7 +105,7 @@
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
-                            data-bind="click: function() { $root.addAction(); }">Add action</button>
+                            data-bind="click: function() { $root.addItem('actions', 'Action'); }">Add action</button>
                 </div>
             </form>
         </div>
@@ -112,12 +118,12 @@
             </p>
             <hr />
             <form class="form-horizontal">
-                <div data-bind="foreach: settingsViewModel.settings.plugins.enclosure.automations">
+                <div data-bind="foreach: pluginSettings().automations">
                     {{ form_fields(plugin_enclosure_settings_forms.automations) }}
                     <div class="control-group">
                         <a title="Delete automation"
                            class="btn btn-danger pull-right"
-                           data-bind="click: function() { $parent.removeAutomation($data) }">
+                           data-bind="click: function() { $parent.removeItem('automations', $data) }">
                             <i class="icon-trash"></i>
                         </a>
                     </div>
@@ -133,13 +139,17 @@
         <!-- TAB ADVANCED -->
         <div class="tab-pane" id="enclosure-settings-tab-advanced">
             <form class="form-horizontal">
-                <div data-bind="with: settingsViewModel.settings.plugins.enclosure">
+                <div data-bind="with: pluginSettings()">
                     {% call checkbox_control_group("gcode_control", _("Enable ENC commands")) %}
                         <span class="help-block">Lets <code>ENC</code> commands in the G-code control the outputs.
                             <a data-toggle="modal" href="#enclosure-settings-enc-commands">Show the commands</a>.
                         </span>
                     {% endcall %}
-                    {{ select_control_group("temperature_unit", _("Temperature Unit"), [("celsius", "Celsius (°C)"), ("fahrenheit", "Fahrenheit (°F)")]) }}
+                    {% set temperature_unit_options = [] %}
+                    {% for value, unit in plugin_enclosure_temperature_units.items() %}
+                        {% do temperature_unit_options.append((value, unit.label ~ " (" ~ unit.symbol ~ ")")) %}
+                    {% endfor %}
+                    {{ select_control_group("temperature_unit", _("Temperature Unit"), temperature_unit_options) }}
                     {{ select_control_group("notification_provider", _("Notification Provider"), [("", "Disabled"), ("ifttt", "IFTTT")]) }}
                     <div data-bind="if: notification_provider() == 'ifttt'">
                         {{ text_control_group("notification_event_name", _("Event Name"), "As configured on the maker channel of IFTTT, without spaces.") }}

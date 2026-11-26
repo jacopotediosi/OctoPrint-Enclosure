@@ -2,20 +2,20 @@
    title="Enclosure Temperatures"
    class="dropdown-toggle"
    data-toggle="dropdown"
-   data-bind="visible: $root.navbar_temperature_sensors().length > 0 && $root.hasStatusPermission()">
+   data-bind="visible: $root.navbarTemperatureSensors().length > 0 && $root.hasStatusPermission()">
     <i class="fa fa-fire"></i>
     <b class="caret"></b>
 </a>
 <ul class="dropdown-menu"
-    data-bind="foreach: $root.navbar_temperature_sensors()">
+    data-bind="foreach: $root.navbarTemperatureSensors()">
     <li>
         <a>
             <span data-bind="text: label"></span>
             <span>
                 <span data-bind="text: $root.fromCelsius(temperature()), attr: {title: $root.fromCelsius(temperature())}"></span>
-                <span class="add-on" data-bind="text: $root.temperatureUnitLabel()"></span>
+                <span class="add-on" data-bind="text: $root.temperatureUnitSymbol()"></span>
             </span>
-            <span data-bind="visible: $root.humidityCapableSensor(temp_sensor_type())">
+            <span data-bind="visible: $root.measuresHumidity(temp_sensor_type())">
                 <span data-bind="text: humidity, attr: {title: humidity}"></span>
                 <span class="add-on">%</span>
             </span>

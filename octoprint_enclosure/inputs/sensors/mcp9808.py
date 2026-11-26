@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from smbus2 import SMBus
 from typing_extensions import override
 
+from octoprint_enclosure.utils import MeasurementType
+
 from .base import I2cSensorConfig, Reading, Sensor
 
 CONFIG_REGISTER = 0x01
@@ -28,6 +30,7 @@ class Mcp9808Sensor(Sensor[Mcp9808Config]):
     """An MCP9808 temperature sensor."""
 
     config_class = Mcp9808Config
+    measurement_types = frozenset({MeasurementType.TEMPERATURE})
 
     @override
     def read(self) -> Reading:

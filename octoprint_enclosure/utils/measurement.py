@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
+
+from .enum_utils import LabeledEnum, LabeledValue
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 
 class MeasurementType(Enum):
@@ -10,16 +17,55 @@ class MeasurementType(Enum):
     HUMIDITY = "humidity"
 
 
-class TemperatureUnit(Enum):
-    """The unit the temperatures are shown and entered in. The plugin works in Celsius, the base unit."""
+@dataclass(frozen=True)
+class TemperatureUnitValue(LabeledValue):
+    """A temperature unit, with its label, its symbol and how it converts from Celsius."""
 
-    CELSIUS = "celsius"
-    FAHRENHEIT = "fahrenheit"
+    symbol: str
+    """The symbol of the unit, e.g. "°F"."""
 
-    @property
-    def symbol(self) -> str:
-        """The symbol of the unit."""
-        return "°F" if self is TemperatureUnit.FAHRENHEIT else "°C"
+    scale: float
+    """How many degrees of the unit one degree Celsius is."""
+
+    offset: float
+    """The temperature that 0 °C is in the unit."""
+
+
+class TemperatureUnit(LabeledEnum):
+    """The unit the temperatures are shown and entered in. The plugin works in Celsius, the base unit.
+
+    A temperature in a unit is its value in Celsius multiplied by the scale of the unit, plus the offset of the unit.
+    """
+
+    CELSIUS = TemperatureUnitValue(value="celsius", label="Celsius", symbol="°C", scale=1, offset=0)
+    FAHRENHEIT = TemperatureUnitValue(value="fahrenheit", label="Fahrenheit", symbol="°F", scale=1.8, offset=32)
+
+    symbol: str
+    """The symbol of the unit."""
+
+    scale: float
+    """How many degrees of the unit one degree Celsius is."""
+
+    offset: float
+    """The temperature that 0 °C is in the unit."""
+
+    def __new__(cls, unit_value: TemperatureUnitValue) -> Self:
+        """Create a member.
+
+        Args:
+            unit_value (TemperatureUnitValue): The value, the label, the symbol and the conversion of the member.
+
+        Returns:
+            Self: The member.
+
+        """
+        member = object.__new__(cls)
+        member._value_ = unit_value.value
+        member.label = unit_value.label
+        member.symbol = unit_value.symbol
+        member.scale = unit_value.scale
+        member.offset = unit_value.offset
+        return member
 
     def from_celsius(self, celsius: float) -> float:
         """Convert a temperature from the plugin base unit, Celsius, to this unit.
@@ -37,9 +83,9 @@ class TemperatureUnit(Enum):
             22.5
 
         """
-        if self is TemperatureUnit.FAHRENHEIT:
-            return round(celsius * 1.8 + 32, 1)
-        return celsius
+        if self is TemperatureUnit.CELSIUS:
+            return celsius
+        return round(celsius * self.scale + self.offset, 1)
 
     def from_celsius_interval(self, interval: float) -> float:
         """Convert a temperature interval, a difference between two temperatures, from Celsius to this unit.
@@ -57,9 +103,9 @@ class TemperatureUnit(Enum):
             5
 
         """
-        if self is TemperatureUnit.FAHRENHEIT:
-            return round(interval * 1.8, 1)
-        return interval
+        if self is TemperatureUnit.CELSIUS:
+            return interval
+        return round(interval * self.scale, 1)
 
     def to_celsius(self, temperature: float) -> float:
         """Convert a temperature from this unit to the plugin base unit, Celsius.
@@ -79,9 +125,9 @@ class TemperatureUnit(Enum):
             22.5
 
         """
-        if self is TemperatureUnit.FAHRENHEIT:
-            return round((temperature - 32) / 1.8, 2)
-        return temperature
+        if self is TemperatureUnit.CELSIUS:
+            return temperature
+        return round((temperature - self.offset) / self.scale, 2)
 
     def to_celsius_interval(self, interval: float) -> float:
         """Convert a temperature interval, a difference between two temperatures, from this unit to Celsius.
@@ -99,6 +145,6 @@ class TemperatureUnit(Enum):
             5
 
         """
-        if self is TemperatureUnit.FAHRENHEIT:
-            return round(interval / 1.8, 2)
-        return interval
+        if self is TemperatureUnit.CELSIUS:
+            return interval
+        return round(interval / self.scale, 2)

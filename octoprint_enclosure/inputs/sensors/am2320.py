@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from smbus2 import SMBus, i2c_msg
 from typing_extensions import override
 
-from octoprint_enclosure.utils import crc16_modbus
+from octoprint_enclosure.utils import MeasurementType, crc16_modbus
 
 from .base import Reading, Sensor, SensorError, SensorInputConfig
 
@@ -39,6 +39,7 @@ class Am2320Sensor(Sensor[Am2320Config]):
     """An AM2320 temperature and humidity sensor."""
 
     config_class = Am2320Config
+    measurement_types = frozenset({MeasurementType.TEMPERATURE, MeasurementType.HUMIDITY})
 
     @override
     def read(self) -> Reading:
