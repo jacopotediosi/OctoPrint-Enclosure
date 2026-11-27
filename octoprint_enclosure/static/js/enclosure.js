@@ -1,4 +1,4 @@
-/* global $, gettext, ko, OctoPrint, OCTOPRINT_VIEWMODELS, PNotify */
+/* global $, _, gettext, ko, OctoPrint, OCTOPRINT_VIEWMODELS, PNotify, showConfirmationDialog */
 
 $(function () {
   // ##########
@@ -233,8 +233,14 @@ $(function () {
     }
 
     self.removeItem = function (listName, item) {
-      self.pluginSettings()[listName].remove(item)
-      self.openItems.remove(item)
+      showConfirmationDialog({
+        message: _.sprintf(gettext('"%(label)s" will be removed.'), { label: _.escape(item.label()) }),
+        proceed: gettext('Remove'),
+        onproceed: function () {
+          self.pluginSettings()[listName].remove(item)
+          self.openItems.remove(item)
+        }
+      })
     }
 
     self.isItemOpen = function (item) {
