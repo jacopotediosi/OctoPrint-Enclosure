@@ -148,6 +148,9 @@ $(function () {
     // "automations.automation_type=rule.reactions[]" for the form of an automation rule reaction
     self.settingsFormsByPath = {}
 
+    // The name of each settings item that is not valid
+    self.invalidSettingsItemNames = ko.observable([])
+
     // Types of sensor that read each kind of measurement, as the backend declares them
     self.sensorTypesByMeasurementType = {}
 
@@ -529,6 +532,31 @@ $(function () {
       })
     }
 
+    self.reportInvalidSettingsItems = function () {
+      // Find the items that are not valid, in every settings list, by their kind and id
+      const kindByListName = {
+        rpi_inputs: gettext('Input'),
+        rpi_outputs: gettext('Output'),
+        actions: gettext('Action'),
+        automations: gettext('Automation')
+      }
+      const names = []
+      Object.keys(kindByListName).forEach(function (listName) {
+        self.pluginSettings()[listName]().forEach(function (item) {
+          if (self.isSettingsInvalid(listName, item)) {
+            names.push(kindByListName[listName] + ' ' + ko.unwrap(item.index_id))
+          }
+        })
+      })
+      self.invalidSettingsItemNames(names)
+
+      // Notify the user
+      const invalidSettingsAlert = $('#enclosure-invalid-settings-alert')
+      if (names.length && invalidSettingsAlert.length) {
+        self.notify(invalidSettingsAlert.text(), 'error', { hide: false })
+      }
+    }
+
     // ##########
     // ### Runtime state
     // ##########
@@ -827,13 +855,17 @@ $(function () {
       self.loadItemsFromSettings()
     }
 
-    self.onSettingsBeforeSave = self.loadItemsFromSettings
+    self.onSettingsBeforeSave = function () {
+      self.loadItemsFromSettings()
+      self.reportInvalidSettingsItems()
+    }
 
     self.onStartupComplete = function () {
       const gpioAlert = $('.enclosure-gpio-alert').first()
       if (gpioAlert.length) {
         self.notify(gpioAlert.text(), 'error', { hide: false })
       }
+      self.reportInvalidSettingsItems()
     }
 
     self.onUserPermissionsChanged = self.onUserLoggedIn = self.onUserLoggedOut = self.onServerReconnect = self.refreshState

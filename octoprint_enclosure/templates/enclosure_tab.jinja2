@@ -1,5 +1,12 @@
 {% from "enclosure_macros.jinja2" import gpio_alert %}
 {{ gpio_alert(plugin_enclosure_development_mode, plugin_enclosure_gpio_import_error, plugin_enclosure_gpio_numbering_is_board) }}
+<div id="enclosure-invalid-settings-alert"
+     class="alert alert-error"
+     data-bind="visible: invalidSettingsItemNames().length">
+    <strong>{{ _("Some items have invalid settings and don't work:") }}</strong>
+    <span data-bind="text: invalidSettingsItemNames().join(', ')"></span>.
+    {{ _("Open the settings to see why.") }}
+</div>
 <!-- <pre data-bind="text: ko.toJSON($root.rpi_outputs(), null, 2)"></pre> -->
 <div class="row-fluid"
      data-bind="visible: $root.temperatureSensors().length > 0">
