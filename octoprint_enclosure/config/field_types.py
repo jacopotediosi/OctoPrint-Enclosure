@@ -13,6 +13,7 @@ from octoprint_enclosure.utils import (
     parse_float,
     parse_hex,
     parse_hex_color,
+    parse_hhmm,
 )
 
 NO_DEFAULT: Any = object()
@@ -38,6 +39,9 @@ OutputId = NewType("OutputId", int)
 
 ActionId = NewType("ActionId", int)
 """The id of an action."""
+
+TimeOfDay = NewType("TimeOfDay", str)
+"""A time of day, saved as "HH:MM", such as "07:30"."""
 
 
 ##########
@@ -83,6 +87,14 @@ def _format_str_set(value: frozenset[str]) -> list[str]:
     return sorted(value)
 
 
+def _parse_time_of_day(value: object) -> str:
+    """Convert a saved time of day to the time of day, kept as it is saved."""
+    if not isinstance(value, str) or parse_hhmm(value) is None:
+        msg = f"not a time of day as HH:MM: {value!r}"
+        raise ValueError(msg)
+    return value
+
+
 FIELD_TYPES: dict[Any, FieldType] = {
     str: FieldType(name="str", from_saved=str, value_types=(str,)),
     int: FieldType(name="int", from_saved=int, value_types=(int,)),
@@ -100,6 +112,7 @@ FIELD_TYPES: dict[Any, FieldType] = {
     GpioInputId: FieldType(name="GpioInputId", from_saved=int, value_types=(int,)),
     OutputId: FieldType(name="OutputId", from_saved=int, value_types=(int,)),
     ActionId: FieldType(name="ActionId", from_saved=int, value_types=(int,)),
+    TimeOfDay: FieldType(name="TimeOfDay", from_saved=_parse_time_of_day, value_types=(str,)),
 }
 """The types a field of a configuration can have, each also as Optional."""
 
@@ -135,7 +148,7 @@ def can_be_empty(type_hint: object) -> bool:
         type_hint (object): The type hint, e.g. `Optional[int]`, `str`, etc.
 
     Returns:
-        bool: Whether the type hint is a text or Optional.
+        bool: Whether the type hint is Optional or a type saved as text, such as str.
 
     Examples:
         >>> from typing import Optional
@@ -143,11 +156,16 @@ def can_be_empty(type_hint: object) -> bool:
         True
         >>> can_be_empty(str)
         True
+        >>> can_be_empty(TimeOfDay)
+        True
         >>> can_be_empty(int)
         False
 
     """
-    return type_hint is str or get_non_optional_type(type_hint) is not type_hint
+    if get_non_optional_type(type_hint) is not type_hint:
+        return True
+    field_type = FIELD_TYPES.get(type_hint)
+    return field_type is not None and str in field_type.value_types
 
 
 def get_non_optional_field_type(type_hint: object) -> FieldType:

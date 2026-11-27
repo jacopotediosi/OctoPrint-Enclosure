@@ -39,17 +39,6 @@ class Max31855Config(SensorInputConfig):
     )
     """The SPI chip select of the sensor, 0 for CE0 or 1 for CE1."""
 
-    def __post_init__(self) -> None:
-        """Check the chip select.
-
-        Raises:
-            ValueError: If the chip select is not CE0 or CE1.
-
-        """
-        if not 0 <= self.temp_sensor_address <= 1:
-            msg = f"The MAX31855 chip select must be 0 or 1, not {self.temp_sensor_address}"
-            raise ValueError(msg)
-
 
 class Max31855Sensor(Sensor[Max31855Config]):
     """A MAX31855 thermocouple sensor."""

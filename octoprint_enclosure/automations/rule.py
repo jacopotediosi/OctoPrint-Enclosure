@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 
 from typing_extensions import override
 
-from octoprint_enclosure.config import config_field
+from octoprint_enclosure.config import TimeOfDay, config_field
 from octoprint_enclosure.utils import N_, LabeledEnum, LabeledValue, parse_hhmm, seconds_until_next
 
 from .base import Automation, AutomationConfig, NestedItemListDefinition
@@ -66,24 +66,12 @@ class RuleConfig(AutomationConfig):
     """The seconds to wait after the trigger before running the reactions, or None if the rule doesn't run after a
     delay."""
 
-    at: str = config_field(
-        optional=True,
+    at: TimeOfDay = config_field(
         label=N_("At"),
-        help_text=N_("Time of day, as <code>HH:MM</code>: the reactions run the next time it comes after the trigger."),
+        help_text=N_("Time of day: the reactions run the next time it comes after the trigger."),
         visible_if={"timing": ["at"]},
     )
     """The time of day, as HH:MM, at which to run the reactions, or empty if the rule doesn't run at a time of day."""
-
-    def __post_init__(self) -> None:
-        """Check the rule config correctness.
-
-        Raises:
-            ValueError: If the rule runs at a time of day that is not HH:MM.
-
-        """
-        if self.timing is RuleTiming.AT and parse_hhmm(self.at) is None:
-            msg = "at must be a time of day as HH:MM"
-            raise ValueError(msg)
 
     def delay_seconds(self) -> float:
         """Get how long to wait before running the reactions, from now.

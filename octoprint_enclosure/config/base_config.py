@@ -173,6 +173,7 @@ class BaseConfig:
           named in `unused_field_names`.
         - A field that is used needs a value, unless it is optional: a key that is missing, empty or null leaves an
           optional field empty.
+        - The value of a field that is used must be one of its `choices`, if it has them, and within its limits.
         - A field left empty is "" if it is a text, None otherwise.
 
         Args:
@@ -218,7 +219,7 @@ class BaseConfig:
             type_hint = type_hints[name]
             field_type = get_non_optional_field_type(type_hint)
             field_types[name] = field_type
-            empty_value = "" if field_type.value_types == (str,) else None
+            empty_value = "" if str in field_type.value_types else None
 
             if name in unused_field_names and not can_be_empty(type_hint):
                 msg = f"{name} is not used but its type is not str nor Optional"
@@ -246,6 +247,11 @@ class BaseConfig:
             except (TypeError, ValueError, OverflowError) as error:
                 msg = f"{name}: {error}"
                 raise ValueError(msg) from error
+
+            choices = description["choices"]
+            if choices is not None and parsed_value not in [field_type.from_saved(value) for value, _ in choices]:
+                msg = f"{name}: {saved_value!r} is not one of the choices"
+                raise ValueError(msg)
 
             min_value = description["min_value"]
             if min_value is not None and parsed_value < min_value:

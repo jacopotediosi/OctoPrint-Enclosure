@@ -8,10 +8,6 @@ from typing_extensions import override
 from octoprint_enclosure.config import BaseConfig, OutputId, config_field
 from octoprint_enclosure.utils import N_, Rgb
 
-from .color import ColorSetpoint
-from .pwm import PwmSetpoint
-from .thermostat import ThermostatSetpoint
-
 _ConfigT = TypeVar("_ConfigT", bound=BaseConfig)
 
 
@@ -48,20 +44,6 @@ class OutputSetpointConfig(BaseConfig):
         widget="output_setpoint",
     )
     """The target a thermostat is turned on to."""
-
-    def __post_init__(self) -> None:
-        """Check the setpoints as the outputs read them.
-
-        Raises:
-            ValueError: If a setpoint is not valid for its output.
-
-        """
-        if self.duty_cycle is not None:
-            PwmSetpoint(self.duty_cycle)
-        if self.color is not None:
-            ColorSetpoint(self.color)
-        if self.target is not None:
-            ThermostatSetpoint(self.target)
 
     @classmethod
     @override

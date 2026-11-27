@@ -28,30 +28,21 @@ class ToggleTimerConfig(AutomationConfig, OutputSetpointConfig):
     output: OutputId = config_field(label=N_("Controlled IO"), help_text=N_("Output to turn on and off in turn."))
     """The id of the output to control."""
 
-    toggle_timer_on: float = config_field(label=N_("On Time"), help_text=N_("Seconds the output stays on."), unit="s")
+    toggle_timer_on: float = config_field(
+        label=N_("On Time"),
+        help_text=N_("Seconds the output stays on."),
+        unit="s",
+        min_value=1,
+    )
     """The seconds the output stays on."""
 
     toggle_timer_off: float = config_field(
         label=N_("Off Time"),
         help_text=N_("Seconds the output stays off."),
         unit="s",
+        min_value=1,
     )
     """The seconds the output stays off."""
-
-    def __post_init__(self) -> None:
-        """Check the automation configuration.
-
-        Raises:
-            ValueError: If the automation configuration is not valid.
-
-        """
-        if self.toggle_timer_on <= 0 or self.toggle_timer_off <= 0:
-            msg = (
-                "toggle_timer_on and toggle_timer_off must be above 0, "
-                f"not {self.toggle_timer_on} and {self.toggle_timer_off}"
-            )
-            raise ValueError(msg)
-        super().__post_init__()
 
 
 class ToggleTimerAutomation(Automation[ToggleTimerConfig]):
