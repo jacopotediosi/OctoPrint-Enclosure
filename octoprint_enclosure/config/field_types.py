@@ -14,6 +14,7 @@ from octoprint_enclosure.utils import (
     parse_hex,
     parse_hex_color,
     parse_hhmm,
+    parse_int,
 )
 
 NO_DEFAULT: Any = object()
@@ -97,7 +98,7 @@ def _parse_time_of_day(value: object) -> str:
 
 FIELD_TYPES: dict[Any, FieldType] = {
     str: FieldType(name="str", from_saved=str, value_types=(str,)),
-    int: FieldType(name="int", from_saved=int, value_types=(int,)),
+    int: FieldType(name="int", from_saved=parse_int, value_types=(int,)),
     float: FieldType(name="float", from_saved=parse_float, value_types=(int, float)),
     bool: FieldType(name="bool", from_saved=parse_bool, value_types=(bool,)),
     HexInt: FieldType(name="HexInt", from_saved=parse_hex, value_types=(int,), to_saved=format_hex),
@@ -108,10 +109,10 @@ FIELD_TYPES: dict[Any, FieldType] = {
         value_types=(frozenset,),
         to_saved=_format_str_set,
     ),
-    SensorInputId: FieldType(name="SensorInputId", from_saved=int, value_types=(int,)),
-    GpioInputId: FieldType(name="GpioInputId", from_saved=int, value_types=(int,)),
-    OutputId: FieldType(name="OutputId", from_saved=int, value_types=(int,)),
-    ActionId: FieldType(name="ActionId", from_saved=int, value_types=(int,)),
+    SensorInputId: FieldType(name="SensorInputId", from_saved=parse_int, value_types=(int,)),
+    GpioInputId: FieldType(name="GpioInputId", from_saved=parse_int, value_types=(int,)),
+    OutputId: FieldType(name="OutputId", from_saved=parse_int, value_types=(int,)),
+    ActionId: FieldType(name="ActionId", from_saved=parse_int, value_types=(int,)),
     TimeOfDay: FieldType(name="TimeOfDay", from_saved=_parse_time_of_day, value_types=(str,)),
 }
 """The types a field of a configuration can have, each also as Optional."""

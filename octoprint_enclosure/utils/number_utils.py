@@ -74,6 +74,53 @@ def parse_float(value: Any) -> float:  # noqa: ANN401 - value is purposely untyp
     return number
 
 
+def parse_int(value: Any) -> int:  # noqa: ANN401 - value is purposely untyped
+    """Convert a value to an integer, refusing a value that isn't one.
+
+    Args:
+        value (Any): The value: a number, or the text of a number, with no decimal part, e.g. 17, 17.0, "17" or
+            "17.0".
+
+    Returns:
+        int: The converted value.
+
+    Raises:
+        TypeError: If the value is not an int, a float or a str.
+        ValueError: If the value has a decimal part, or is a text that is not a number, e.g. 1.5, "1.5" or "x".
+        OverflowError: If the value is infinite.
+
+    Examples:
+        >>> parse_int("17")
+        17
+        >>> parse_int("17.0")
+        17
+        >>> parse_int(17.5)
+        Traceback (most recent call last):
+            ...
+        ValueError: not an integer: 17.5
+        >>> parse_int("17.5")
+        Traceback (most recent call last):
+            ...
+        ValueError: not an integer: '17.5'
+
+    """
+    if type(value) not in (int, float, str):
+        msg = f"not an integer: {value!r}"
+        raise TypeError(msg)
+
+    number = value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            number = float(value)
+
+    if isinstance(number, float) and math.isfinite(number) and not number.is_integer():
+        msg = f"not an integer: {value!r}"
+        raise ValueError(msg)
+    return int(number)
+
+
 def clamp(value: float, minimum: float, maximum: float) -> float:
     """Limit a value to the range between minimum and maximum."""
     return max(min(maximum, value), minimum)

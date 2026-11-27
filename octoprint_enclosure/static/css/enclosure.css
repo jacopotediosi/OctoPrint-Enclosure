@@ -60,6 +60,10 @@
     background-color: rgba(0, 0, 0, 0.02);
 }
 
+.enclosure-invalid-settings {
+    border-color: #b94a48;
+}
+
 .enclosure-item > .accordion-heading > .accordion-toggle:focus:not(:focus-visible) {
     outline: 0;
 }
@@ -136,6 +140,12 @@
 #settings_plugin_enclosure .controls > select ~ .help-block,
 .enclosure-multiselect + .help-block {
     margin-top: 10px;
+}
+
+#settings_plugin_enclosure .control-group.error input,
+#settings_plugin_enclosure .control-group.error select,
+#settings_plugin_enclosure .control-group.error textarea {
+    color: inherit;
 }
 
 #settings_plugin_enclosure .input-append {

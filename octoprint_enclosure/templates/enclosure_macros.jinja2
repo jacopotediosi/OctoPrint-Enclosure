@@ -111,12 +111,6 @@
 {% endmacro %}
 {# GENERATED FORMS: WIDGETS #}
 {% macro default_widget(field) %}
-    {% set linked_items = {
-        "SensorInputId": "$root.settingsTemperatureSensors",
-        "GpioInputId": "$root.settingsGpioInputs",
-        "OutputId": "$root.pluginSettings().rpi_outputs",
-        "ActionId": "$root.pluginSettings().actions"
-    } %}
     {% if field.choices is not none %}
         {% set choices = [] %}
         {% for value, label in field.choices %}
@@ -133,8 +127,6 @@
             <input type="checkbox" data-bind="checked: {{ field.name }}">
             {{ _(field.label) }}
         </label>
-    {% elif field.type in linked_items %}
-        {{ select_input(field, linked_items[field.type], options_value="'index_id'", options_text="'label'") }}
     {% elif field.type == "Rgb" %}
         <input type="color"
                class="input-block-level"
@@ -192,9 +184,6 @@
         {{ default_widget(field) }}
     {% endif %}
 {% endmacro %}
-{% macro pwm_output_widget(field) %}
-    {{ select_input(field, "$root.settingsPwmOutputs", options_value="'index_id'", options_text="'label'") }}
-{% endmacro %}
 {% macro temperature_widget(field) %}
     {{ temperature_input(field, false) }}
 {% endmacro %}
@@ -204,29 +193,23 @@
 {% macro textarea_widget(field) %}
     <textarea rows="4" class="block" data-bind="value: {{ field.name }}"></textarea>
 {% endmacro %}
-{% macro thermostat_sensor_widget(field) %}
-    {% set device_types = field.device_types_by_measurement_type %}
-    {% set options = [
-        device_types.temperature|tojson|forceescape ~ ".indexOf(" ~ field.device_type_field ~ "()) >= 0",
-        "? $root.settingsTemperatureSensors()",
-        ": " ~ device_types.humidity|tojson|forceescape ~ ".indexOf(" ~ field.device_type_field ~ "()) >= 0",
-        "? $root.settingsHumiditySensors()",
-        ": []",
-    ]|join(" ") %}
-    {{ select_input(field, options, options_value="'index_id'", options_text="'label'") }}
-{% endmacro %}
-{% macro field_widget(field) %}
+{% macro field_widget(field, field_path) %}
     {% set widgets = {
         "id": id_widget,
         "octoprint_events": octoprint_events_widget,
         "output_setpoint": output_setpoint_widget,
-        "pwm_output": pwm_output_widget,
         "temperature": temperature_widget,
         "temperature_interval": temperature_interval_widget,
         "textarea": textarea_widget,
-        "thermostat_sensor": thermostat_sensor_widget,
     } %}
-    {% if field.widget %}
+    {% if field.type in ["SensorInputId", "GpioInputId", "OutputId", "ActionId"] %}
+        {{ select_input(
+            field,
+            "$root.linkableSettingsItems('" ~ field_path ~ "', $data)",
+            options_value="'index_id'",
+            options_text="'label'"
+        ) }}
+    {% elif field.widget %}
         {{ widgets[field.widget](field) }}
     {% else %}
         {{ default_widget(field) }}
@@ -244,15 +227,16 @@
         {%- if not loop.last %} && {% endif -%}
     {%- endfor -%}
 {%- endmacro %}
-{% macro field_control_group(field) %}
+{% macro field_control_group(field, field_path) %}
     {% set is_checkbox = field.type == "bool" and field.choices is none %}
     {% set is_required = not field.optional and not is_checkbox %}
     {% set visible = visible_binding(field) %}
+    {% set field_problem = "$root.settingsFieldProblem('" ~ field_path ~ "', $data)" %}
     <div class="control-group{% if is_required %} enclosure-required{% endif %}"
-         {% if visible %}data-bind="visible: {{ visible }}"{% endif %}>
+         data-bind="{% if visible %}visible: {{ visible }}, {% endif %}css: {error: {{ field_problem }}}">
         {% if not is_checkbox %}<label class="control-label">{{ _(field.label) }}</label>{% endif %}
         <div class="controls">
-            {{ field_widget(field) }}
+            {{ field_widget(field, field_path) }}
             {% if field.help_text %}<span class="help-block">{{ _(field.help_text) }}</span>{% endif %}
             {% for variant in field.variants|default([]) %}
                 {% if variant.help_text %}
@@ -260,14 +244,17 @@
                           data-bind="visible: {{ field.name }}() == {{ variant.value|tojson|forceescape }}">{{ _(variant.help_text) }}</span>
                 {% endif %}
             {% endfor %}
+            <span class="help-block"
+                  data-bind="visible: {{ field_problem }}, text: {{ field_problem }}"></span>
         </div>
     </div>
 {% endmacro %}
 {# GENERATED FORMS: FORMS #}
-{% macro form_list(list_field) %}
+{% macro form_list(list_field, list_field_path) %}
     <div data-bind="foreach: {{ list_field.name }}">
-        <div class="well well-small">
-            {{ form_fields(list_field.list_item_form) }}
+        <div class="well well-small"
+             data-bind="css: {'enclosure-invalid-settings': $root.isSettingsInvalid('{{ list_field_path }}[]', $data)}">
+            {{ form_fields(list_field.list_item_form, list_field_path ~ "[]") }}
             <div class="clearfix">
                 <a title="{{ _('Remove %(label)s', label=_(list_field.label)) }}"
                    class="btn btn-small btn-danger pull-right"
@@ -287,14 +274,15 @@
         </div>
     </div>
 {% endmacro %}
-{% macro form_fields(form) %}
+{% macro form_fields(form, form_path) %}
     {% for field in form %}
+        {% set field_path = form_path ~ "." ~ field.name %}
         {% if field.list_item_form is defined %}
-            {{ form_list(field) }}
+            {{ form_list(field, field_path) }}
         {% else %}
-            {{ field_control_group(field) }}
+            {{ field_control_group(field, field_path) }}
             {% for variant in field.variants|default([]) %}
-                <div data-bind="if: {{ field.name }}() == {{ variant.value|tojson|forceescape }}">{{ form_fields(variant.form) }}</div>
+                <div data-bind="if: {{ field.name }}() == {{ variant.value|tojson|forceescape }}">{{ form_fields(variant.form, field_path ~ "=" ~ variant.value) }}</div>
             {% endfor %}
         {% endif %}
     {% endfor %}
@@ -330,7 +318,8 @@
 {% endmacro %}
 {% macro item_card(list_name) %}
     {% set form = plugin_enclosure_settings_forms[list_name] %}
-    <div class="accordion-group enclosure-item">
+    <div class="accordion-group enclosure-item"
+         data-bind="css: {'enclosure-invalid-settings': $root.isSettingsInvalid('{{ list_name }}', $data)}">
         <div class="accordion-heading">
             <a href="#" class="accordion-toggle" data-bind="click: $root.toggleItem">
                 <i class="icon-fixed-width text-info"
@@ -346,7 +335,7 @@
         </div>
         <!-- ko if: $root.isItemOpen($data) -->
         <div class="accordion-inner">
-            {{ form_fields(form) }}
+            {{ form_fields(form, list_name) }}
             <div class="control-group">
                 <a title="{{ _('Remove') }}"
                    class="btn btn-danger pull-right"

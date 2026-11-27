@@ -144,6 +144,10 @@ $(function () {
     // Fields that the items of each settings list have, as the backend describes them
     self.settingsFields = {}
 
+    // The settings forms as the backend describes them, by their path in the forms, e.g.
+    // "automations.automation_type=rule.reactions[]" for the form of an automation rule reaction
+    self.settingsFormsByPath = {}
+
     // Types of sensor that read each kind of measurement, as the backend declares them
     self.sensorTypesByMeasurementType = {}
 
@@ -373,6 +377,57 @@ $(function () {
       })
     }
 
+    self.registerSettingsForms = function (form, formPath) {
+      // Register the form
+      self.settingsFormsByPath[formPath] = form
+
+      // Register the forms that its fields contain
+      form.forEach(function (field) {
+        const fieldPath = formPath + '.' + field.name
+
+        // Register the form of the items of a list
+        if (field.list_item_form !== undefined) {
+          self.registerSettingsForms(field.list_item_form, fieldPath + '[]')
+        }
+
+        // Register the form that each choice of a field shows
+        ;(field.variants || []).forEach(function (variant) {
+          self.registerSettingsForms(variant.form, fieldPath + '=' + variant.value)
+        })
+      })
+    }
+
+    self.findSettingsField = function (fieldPath) {
+      const formPath = fieldPath.slice(0, fieldPath.lastIndexOf('.'))
+      const fieldName = fieldPath.slice(fieldPath.lastIndexOf('.') + 1)
+      return self.settingsFormsByPath[formPath].filter(function (field) {
+        return field.name === fieldName
+      })[0]
+    }
+
+    self.linkableSettingsItems = function (fieldPath, item) {
+      const field = self.findSettingsField(fieldPath)
+
+      // Give the sensors that read what the device of a thermostat acts on, for the sensor of the thermostat
+      if (field.widget === 'thermostat_sensor') {
+        const deviceType = ko.unwrap(item[field.device_type_field])
+        const deviceTypes = field.device_types_by_measurement_type
+        if (deviceTypes.humidity.indexOf(deviceType) >= 0) return self.settingsHumiditySensors()
+        return deviceTypes.temperature.indexOf(deviceType) >= 0 ? self.settingsTemperatureSensors() : []
+      }
+
+      // Give the PWM outputs, for the output of a PWM curve
+      if (field.widget === 'pwm_output') return self.settingsPwmOutputs()
+
+      // Give the items of the kind of the link, for any other link
+      return {
+        SensorInputId: self.settingsTemperatureSensors,
+        GpioInputId: self.settingsGpioInputs,
+        OutputId: self.pluginSettings().rpi_outputs,
+        ActionId: self.pluginSettings().actions
+      }[field.type]()
+    }
+
     self.outputType = function (outputId) {
       const output = self.findSettingsOutput(outputId)
       return output ? output.output_type() : ''
@@ -381,6 +436,97 @@ $(function () {
     self.thermostatDeviceType = function (outputId) {
       const output = self.findSettingsOutput(outputId)
       return output ? output.temp_ctr_type() : ''
+    }
+
+    // ##########
+    // ### Invalid settings
+    // ##########
+
+    self.isSettingsFieldUsed = function (field, item) {
+      const visibleIf = field.visible_if || {}
+      const visibleIfOutputType = field.visible_if_output_type || {}
+      return Object.keys(visibleIf).every(function (name) {
+        return visibleIf[name].indexOf(ko.unwrap(item[name])) >= 0
+      }) && Object.keys(visibleIfOutputType).every(function (name) {
+        return visibleIfOutputType[name].indexOf(self.outputType(ko.unwrap(item[name]))) >= 0
+      })
+    }
+
+    self.settingsFieldProblem = function (fieldPath, item) {
+      const field = self.findSettingsField(fieldPath)
+
+      // If the field is not used, there cannot be any problems
+      if (!self.isSettingsFieldUsed(field, item)) return ''
+
+      // Check that the field is set, unless it is optional
+      const value = ko.unwrap(item[field.name])
+      if (value === '' || value === null || value === undefined || (Array.isArray(value) && value.length === 0)) {
+        return field.optional ? '' : gettext('Cannot be empty.')
+      }
+
+      // Check the type, the linked item and the choices
+      const text = String(value).trim()
+      const number = field.type === 'HexInt' ? parseInt(text, 16) : Number(text)
+      const isNumberText = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(text)
+      const isNotOfType = {
+        int: !isNumberText || !Number.isInteger(number),
+        float: !isNumberText || !isFinite(number),
+        HexInt: !/^(0x)?[0-9a-f]+$/i.test(text),
+        Rgb: !/^#[0-9a-f]{6}$/i.test(text),
+        TimeOfDay: !/^([01]?\d|2[0-3]):[0-5]?\d$/.test(text)
+      }
+      const typeProblems = {
+        int: gettext('Must be a whole number.'),
+        float: gettext('Must be a number.'),
+        HexInt: gettext('Must be a hexadecimal number.'),
+        Rgb: gettext('Must be a color.'),
+        TimeOfDay: gettext('Must be a time of day.')
+      }
+      if (isNotOfType[field.type]) return typeProblems[field.type]
+      if (['SensorInputId', 'GpioInputId', 'OutputId', 'ActionId'].indexOf(field.type) >= 0) {
+        const isLinked = self.linkableSettingsItems(fieldPath, item).some(function (linkable) {
+          return self.isSameId(linkable.index_id(), value)
+        })
+        return isLinked ? '' : gettext('Must be one of the choices.')
+      }
+      if (field.choices && !field.choices.some(function (choice) { return String(choice[0]) === text })) {
+        return gettext('Must be one of the choices.')
+      }
+
+      // Check the limits
+      const isTemperature = ['temperature', 'temperature_interval'].indexOf(field.widget) >= 0
+      const shownLimit = function (limit) {
+        if (!isTemperature) return limit
+        return self.fromCelsius(limit, field.widget === 'temperature_interval') + ' ' + self.temperatureUnitSymbol()
+      }
+      if (field.min_value !== null && number < field.min_value) {
+        return _.sprintf(gettext('Must be at least %(limit)s.'), { limit: shownLimit(field.min_value) })
+      }
+      if (field.max_value !== null && number > field.max_value) {
+        return _.sprintf(gettext('Must be at most %(limit)s.'), { limit: shownLimit(field.max_value) })
+      }
+      return ''
+    }
+
+    self.isSettingsInvalid = function (formPath, item) {
+      // Check each field of the form, and the forms it contains
+      return self.settingsFormsByPath[formPath].some(function (field) {
+        const fieldPath = formPath + '.' + field.name
+
+        // Check the settings of each item of a list
+        if (field.list_item_form !== undefined) {
+          return item[field.name]().some(function (listItem) {
+            return self.isSettingsInvalid(fieldPath + '[]', listItem)
+          })
+        }
+
+        // Check any other field, and the form it shows for the value chosen, if it has choices
+        const variant = (field.variants || []).filter(function (variant) {
+          return String(variant.value) === String(ko.unwrap(item[field.name]))
+        })[0]
+        return self.settingsFieldProblem(fieldPath, item) !== '' ||
+          (variant !== undefined && self.isSettingsInvalid(fieldPath + '=' + variant.value, item))
+      })
     }
 
     // ##########
@@ -670,6 +816,7 @@ $(function () {
       const forms = JSON.parse($('#enclosure-settings-forms').text())
       Object.keys(forms).forEach(function (listName) {
         self.settingsFields[listName] = self.formFields(forms[listName])
+        self.registerSettingsForms(forms[listName], listName)
       })
 
       self.addMissingKeysToSettings()
