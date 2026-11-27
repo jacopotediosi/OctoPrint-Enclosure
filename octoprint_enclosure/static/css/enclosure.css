@@ -49,11 +49,56 @@
     text-decoration: none;
 }
 
-.ledstrip-div, .neopixel-div{
+.enclosure-color-picker {
     width: 25%;
 }
 
 /* Settings */
+
+.enclosure-item {
+    margin-bottom: 10px;
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.enclosure-item > .accordion-heading > .accordion-toggle:focus:not(:focus-visible) {
+    outline: 0;
+}
+
+.enclosure-item > .accordion-heading > .accordion-toggle {
+    display: flex;
+    align-items: center;
+    color: inherit;
+    text-decoration: none;
+}
+
+.enclosure-item > .accordion-heading > .accordion-toggle > .badge {
+    margin: 0 10px 0 4px;
+}
+
+.enclosure-item-label {
+    flex: 1;
+    min-width: 4em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.enclosure-item-summary {
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.enclosure-item-summary-part {
+    margin-left: 10px;
+}
+
+.enclosure-item > .accordion-heading > .accordion-toggle > .label {
+    min-width: 6em;
+    margin-left: 10px;
+    text-align: center;
+}
 
 .enclosure-required > .control-label::after {
     content: " *";

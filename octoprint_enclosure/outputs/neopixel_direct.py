@@ -26,7 +26,12 @@ SPI_PIN = 10
 class NeopixelDirectConfig(OutputConfig):
     """The configuration of NeoPixels connected directly to the Raspberry Pi."""
 
-    gpio_pin: int = config_field(label=N_("GPIO"), help_text=N_("GPIO the output is connected to."), min_value=0)
+    gpio_pin: int = config_field(
+        label=N_("GPIO"),
+        help_text=N_("GPIO the output is connected to."),
+        min_value=0,
+        in_summary=True,
+    )
     """The GPIO pin the NeoPixels are connected to."""
 
     neopixel_count: int = config_field(

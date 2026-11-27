@@ -39,7 +39,7 @@ class ActionConfig(BaseConfig):
     label: str = config_field(label=N_("Label"), compare=False)
     """The label of the action."""
 
-    action_type: ActionType = config_field(label=N_("Action Type"))
+    action_type: ActionType = config_field(label=N_("Action Type"), in_summary=True)
     """The type of the action."""
 
     hide_btn_ui: bool = config_field(default=False, label=N_("Hide in tab"), compare=False)

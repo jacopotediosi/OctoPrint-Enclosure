@@ -64,6 +64,9 @@ $(function () {
     // Whether the settings dialog is open
     self.isSettingsOpen = false
 
+    // Items of the settings lists whose card is open
+    self.openItems = ko.observableArray()
+
     // Runtime state of inputs and outputs, by id
     self.inputStates = {}
     self.outputStates = {}
@@ -224,12 +227,26 @@ $(function () {
       const item = self.newItem(self.settingsFields[listName])
       item.index_id(self.nextIndexId(items()))
       item.label(labelPrefix + ' ' + item.index_id())
+      self.openItems.push(item)
       items.push(item)
       return item
     }
 
     self.removeItem = function (listName, item) {
       self.pluginSettings()[listName].remove(item)
+      self.openItems.remove(item)
+    }
+
+    self.isItemOpen = function (item) {
+      return self.openItems.indexOf(item) >= 0
+    }
+
+    self.toggleItem = function (item) {
+      if (self.isItemOpen(item)) {
+        self.openItems.remove(item)
+      } else {
+        self.openItems.push(item)
+      }
     }
 
     self.addAutomation = function () {
@@ -603,6 +620,7 @@ $(function () {
 
     self.onSettingsShown = function () {
       self.isSettingsOpen = true
+      self.openItems.removeAll()
     }
 
     self.onSettingsHidden = function () {

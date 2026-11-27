@@ -37,7 +37,7 @@ class ThermostatDeviceType(LabeledEnum):
 class ThermostatConfig(SwitchConfig):
     """The configuration of a thermostat."""
 
-    temp_ctr_type: ThermostatDeviceType = config_field(label=N_("Device Type"))
+    temp_ctr_type: ThermostatDeviceType = config_field(label=N_("Device Type"), in_summary=True)
     """The type of the device that the output switch turns on and off."""
 
     linked_temp_sensor: SensorInputId = config_field(

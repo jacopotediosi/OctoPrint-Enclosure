@@ -52,7 +52,7 @@ class AutomationConfig(BaseConfig):
     )
     """Whether the automation is enabled."""
 
-    automation_type: AutomationType = config_field(label=N_("Automation Type"))
+    automation_type: AutomationType = config_field(label=N_("Automation Type"), in_summary=True)
     """The type of the automation."""
 
     show_in_tab: bool = config_field(

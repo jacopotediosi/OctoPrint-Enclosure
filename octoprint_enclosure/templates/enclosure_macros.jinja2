@@ -285,3 +285,62 @@
         {% endif %}
     {% endfor %}
 {% endmacro %}
+{# GENERATED FORMS: ITEMS #}
+{% macro item_summary_part(field) %}
+    {% if field.choices is not none %}
+        {# The label of each choice without the part in parentheses #}
+        {% set labels = {} %}
+        {% for value, label in field.choices %}
+            {% do labels.update({(value|string): _(label).split(" (")[0]}) %}
+        {% endfor %}
+        {% set text = labels|tojson|forceescape ~ "[" ~ field.name ~ "()]" %}
+        {% set is_set = text %}
+    {% else %}
+        {% set text = (_(field.label) ~ " ")|tojson|forceescape ~ " + " ~ field.name ~ "()" %}
+        {% set is_set = "[null, ''].indexOf(" ~ field.name ~ "()) < 0" %}
+    {% endif %}
+    {% set visible = visible_binding(field) %}
+    <span class="enclosure-item-summary-part"
+          data-bind="visible: {% if visible %}{{ visible }} && {% endif %}{{ is_set }}, text: {{ text }}"></span>
+{% endmacro %}
+{% macro item_summary(form) %}
+    {% for field in form %}
+        {% if field.in_summary %}{{ item_summary_part(field) }}{% endif %}
+        {% for variant in field.variants|default([]) %}
+            {% set parts = item_summary(variant.form) %}
+            {% if parts|trim %}
+                <span data-bind="if: {{ field.name }}() == {{ variant.value|tojson|forceescape }}">{{ parts }}</span>
+            {% endif %}
+        {% endfor %}
+    {% endfor %}
+{% endmacro %}
+{% macro item_card(list_name) %}
+    {% set form = plugin_enclosure_settings_forms[list_name] %}
+    <div class="accordion-group enclosure-item">
+        <div class="accordion-heading">
+            <a href="#" class="accordion-toggle" data-bind="click: $root.toggleItem">
+                <i class="icon-fixed-width text-info"
+                   data-bind="css: $root.isItemOpen($data) ? 'icon-chevron-down' : 'icon-chevron-right'"></i>
+                <span class="badge badge-info" data-bind="text: index_id"></span>
+                <span class="enclosure-item-label" data-bind="text: label"></span>
+                <span class="muted enclosure-item-summary">{{ item_summary(form) }}</span>
+                {% if "enabled" in form|map(attribute="name")|list %}
+                    <span class="label"
+                          data-bind="css: {'label-success': enabled(), 'label-important': !enabled()}, text: enabled() ? '{{ _('Enabled')|esq }}' : '{{ _('Disabled')|esq }}'"></span>
+                {% endif %}
+            </a>
+        </div>
+        <!-- ko if: $root.isItemOpen($data) -->
+        <div class="accordion-inner">
+            {{ form_fields(form) }}
+            <div class="control-group">
+                <a title="{{ _('Remove') }}"
+                   class="btn btn-danger pull-right"
+                   data-bind="click: function() { $root.removeItem('{{ list_name }}', $data) }">
+                    <i class="icon-trash"></i>
+                </a>
+            </div>
+        </div>
+        <!-- /ko -->
+    </div>
+{% endmacro %}

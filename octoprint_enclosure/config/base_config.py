@@ -34,6 +34,7 @@ def config_field(
     max_value: float | None = None,
     visible_if: Mapping[str, Sequence[Any]] | None = None,
     widget: str = "",
+    in_summary: bool = False,
     compare: bool = True,
 ) -> _DefaultT:
     """Declare a field of a configuration.
@@ -53,6 +54,7 @@ def config_field(
             must have one of the values listed for it. None if the field is always used.
         widget (str): The widget of the field, e.g. "temperature", "textarea", etc. Empty for the default one of the
             type of the field.
+        in_summary (bool): Whether the value of the field is part of the summary of the config item, e.g. its type.
         compare (bool): Whether the field counts when two configurations are compared.
 
     Returns:
@@ -80,6 +82,7 @@ def config_field(
         "max_value": max_value,
         "visible_if": visible_if,
         "widget": widget,
+        "in_summary": in_summary,
     }
     return dataclass_field(default=default, compare=compare, metadata=metadata)
 
@@ -124,6 +127,7 @@ class BaseConfig:
                 - "visible_if" (Mapping[str, Sequence[Any]] | None): When the field is used: each field it names must
                   have one of the values listed for it. None if not declared.
                 - "widget" (str): The widget, empty if not declared.
+                - "in_summary" (bool): Whether the value is part of the summary of the config item.
 
         """
         type_hints = get_type_hints(cls)
@@ -154,6 +158,7 @@ class BaseConfig:
                     "max_value": field.metadata.get("max_value"),
                     "visible_if": field.metadata.get("visible_if"),
                     "widget": field.metadata.get("widget", ""),
+                    "in_summary": field.metadata.get("in_summary", False),
                 },
             )
 

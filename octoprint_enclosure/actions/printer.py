@@ -25,7 +25,7 @@ class PrinterCommand(LabeledEnum):
 class PrinterConfig(ActionConfig):
     """The configuration of an action that controls the printer."""
 
-    printer_action: PrinterCommand = config_field(label=N_("Printer Action"))
+    printer_action: PrinterCommand = config_field(label=N_("Printer Action"), in_summary=True)
     """The command to send to the printer."""
 
 

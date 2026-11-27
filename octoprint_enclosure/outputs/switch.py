@@ -30,6 +30,7 @@ class SwitchConfig(OutputConfig):
         help_text=N_("GPIO the output is connected to."),
         min_value=0,
         visible_if={"gpio_i2c_enabled": [False]},
+        in_summary=True,
     )
     """The GPIO pin of the output switch, or None if it is driven through I2C."""
 
@@ -55,6 +56,7 @@ class SwitchConfig(OutputConfig):
         min_value=0,
         max_value=127,
         visible_if={"gpio_i2c_enabled": [True]},
+        in_summary=True,
     )
     """The I2C address of the device, or None if the output switch is on a GPIO pin."""
 

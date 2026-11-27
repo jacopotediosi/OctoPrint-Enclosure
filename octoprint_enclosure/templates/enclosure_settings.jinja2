@@ -1,4 +1,4 @@
-{% from "enclosure_macros.jinja2" import checkbox_control_group, form_fields, gpio_alert, select_control_group, text_control_group with context %}
+{% from "enclosure_macros.jinja2" import checkbox_control_group, gpio_alert, item_card, select_control_group, text_control_group with context %}
 <!-- ALERT (COMMON TO ALL TABS) -->
 {{ gpio_alert(plugin_enclosure_development_mode, plugin_enclosure_gpio_import_error, plugin_enclosure_gpio_numbering_is_board) }}
 <!-- SETTINGS FORMS (READ BY THE JAVASCRIPT) -->
@@ -38,17 +38,7 @@
             </p>
             <hr />
             <form class="form-horizontal">
-                <div data-bind="foreach: pluginSettings().rpi_inputs">
-                    {{ form_fields(plugin_enclosure_settings_forms.rpi_inputs) }}
-                    <div class="control-group">
-                        <a title="{{ _('Delete input') }}"
-                           class="btn btn-danger pull-right"
-                           data-bind="click: function() { $parent.removeItem('rpi_inputs', $data) }">
-                            <i class="icon-trash"></i>
-                        </a>
-                    </div>
-                    <hr />
-                </div>
+                <div data-bind="foreach: pluginSettings().rpi_inputs">{{ item_card("rpi_inputs") }}</div>
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
@@ -63,17 +53,7 @@
             </p>
             <hr />
             <form class="form-horizontal">
-                <div data-bind="foreach: pluginSettings().rpi_outputs">
-                    {{ form_fields(plugin_enclosure_settings_forms.rpi_outputs) }}
-                    <div class="control-group">
-                        <a title="{{ _('Delete output') }}"
-                           class="btn btn-danger pull-right"
-                           data-bind="click: function() { $parent.removeItem('rpi_outputs', $data) }">
-                            <i class="icon-trash"></i>
-                        </a>
-                    </div>
-                    <hr />
-                </div>
+                <div data-bind="foreach: pluginSettings().rpi_outputs">{{ item_card("rpi_outputs") }}</div>
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
@@ -88,17 +68,7 @@
             </p>
             <hr />
             <form class="form-horizontal">
-                <div data-bind="foreach: pluginSettings().actions">
-                    {{ form_fields(plugin_enclosure_settings_forms.actions) }}
-                    <div class="control-group">
-                        <a title="{{ _('Delete action') }}"
-                           class="btn btn-danger pull-right"
-                           data-bind="click: function() { $parent.removeItem('actions', $data) }">
-                            <i class="icon-trash"></i>
-                        </a>
-                    </div>
-                    <hr />
-                </div>
+                <div data-bind="foreach: pluginSettings().actions">{{ item_card("actions") }}</div>
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"
@@ -113,17 +83,7 @@
             </p>
             <hr />
             <form class="form-horizontal">
-                <div data-bind="foreach: pluginSettings().automations">
-                    {{ form_fields(plugin_enclosure_settings_forms.automations) }}
-                    <div class="control-group">
-                        <a title="{{ _('Delete automation') }}"
-                           class="btn btn-danger pull-right"
-                           data-bind="click: function() { $parent.removeItem('automations', $data) }">
-                            <i class="icon-trash"></i>
-                        </a>
-                    </div>
-                    <hr />
-                </div>
+                <div data-bind="foreach: pluginSettings().automations">{{ item_card("automations") }}</div>
                 <div class="control-group">
                     <button type="button"
                             class="btn pull-right"

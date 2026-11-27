@@ -22,7 +22,7 @@ class GpioInputError(Exception):
 class GpioConfig(InputConfig):
     """The configuration of a GPIO input."""
 
-    gpio_pin: int = config_field(label=N_("GPIO"), min_value=0)
+    gpio_pin: int = config_field(label=N_("GPIO"), min_value=0, in_summary=True)
     """The GPIO pin of the input."""
 
     input_pull_resistor: PullResistor = config_field(

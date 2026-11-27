@@ -30,7 +30,7 @@ class OutputConfig(BaseConfig):
     label: str = config_field(label=N_("Label"), compare=False)
     """The name of the output."""
 
-    output_type: OutputType = config_field(label=N_("Output Type"))
+    output_type: OutputType = config_field(label=N_("Output Type"), in_summary=True)
     """The type of the output."""
 
     hide_btn_ui: bool = config_field(default=False, label=N_("Hide in tab"), compare=False)

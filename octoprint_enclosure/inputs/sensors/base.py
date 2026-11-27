@@ -74,7 +74,7 @@ class SensorInputConfig(InputConfig):
 
     type_field_name = "temp_sensor_type"
 
-    temp_sensor_type: SensorType = config_field(label=N_("Sensor Type"))
+    temp_sensor_type: SensorType = config_field(label=N_("Sensor Type"), in_summary=True)
     """The type of the sensor."""
 
     temp_sensor_navbar: bool = config_field(default=True, label=N_("Show temperature in navbar"), compare=False)

@@ -45,7 +45,7 @@ class RuleConfig(AutomationConfig):
 
     type_field_name = "trigger_type"
 
-    trigger_type: TriggerType = config_field(label=N_("Trigger"))
+    trigger_type: TriggerType = config_field(label=N_("Trigger"), in_summary=True)
     """The type of the trigger of the rule."""
 
     timing: RuleTiming = config_field(

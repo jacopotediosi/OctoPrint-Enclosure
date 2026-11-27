@@ -21,7 +21,12 @@ if TYPE_CHECKING:
 class PwmConfig(OutputConfig):
     """The configuration of a PWM output."""
 
-    gpio_pin: int = config_field(label=N_("GPIO"), help_text=N_("GPIO the output is connected to."), min_value=0)
+    gpio_pin: int = config_field(
+        label=N_("GPIO"),
+        help_text=N_("GPIO the output is connected to."),
+        min_value=0,
+        in_summary=True,
+    )
     """The GPIO pin of the PWM."""
 
     pwm_frequency: int = config_field(default=50, label=N_("PWM Frequency"), unit="Hz", min_value=1)
