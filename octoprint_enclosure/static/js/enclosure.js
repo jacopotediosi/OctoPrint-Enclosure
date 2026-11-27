@@ -38,6 +38,73 @@ $(function () {
     }
   }
 
+  /**
+   * Selects several of `choices` into `selected`, with a text field that suggests the choices not selected yet.
+   */
+  ko.bindingHandlers.multiselect = {
+    init: function (element, valueAccessor) {
+      // Get selected, unselected, and all choices
+      const selected = valueAccessor().selected
+      const choices = valueAccessor().choices
+      const unselectedChoices = function () {
+        return choices.filter(function (choice) {
+          return selected.indexOf(choice) < 0
+        })
+      }
+
+      // Create Bootstrap's typeahead: it suggests the unselected choices that contain what is typed, and selects the one picked
+      $(element).typeahead({
+        source: unselectedChoices,
+        items: choices.length,
+        matcher: function (choice) {
+          return choice.toLowerCase().indexOf(this.query.toLowerCase()) >= 0
+        },
+        highlighter: function (choice) {
+          return this.query ? $.fn.typeahead.Constructor.prototype.highlighter.call(this, choice) : choice
+        },
+        updater: function (choice) {
+          selected.push(choice)
+          return ''
+        }
+      })
+      const typeahead = $(element).data('typeahead')
+
+      // Bootstrap's typeahead shows nothing for an empty field: give it every unselected choice, filtered by what is
+      // typed
+      $(element).on('click', function () {
+        typeahead.query = element.value
+        typeahead.process(unselectedChoices())
+      })
+
+      // Bootstrap's typeahead opens below the field: scroll the box that scrolls the field, if needed, so that the whole
+      // menu is visible
+      const show = typeahead.show
+      typeahead.show = function () {
+        show.call(this)
+        let box = element.parentElement
+        while (box && !/auto|scroll/.test(window.getComputedStyle(box).overflowY)) {
+          box = box.parentElement
+        }
+        if (box) {
+          const hiddenHeight = this.$menu[0].getBoundingClientRect().bottom - box.getBoundingClientRect().bottom
+          box.scrollTop += Math.max(hiddenHeight, 0)
+        }
+        return this
+      }
+
+      // Close the menu when the field leaves the visible part of the page
+      const observer = new window.IntersectionObserver(function (entries) {
+        if (!entries[0].isIntersecting) {
+          typeahead.hide()
+        }
+      })
+      observer.observe(element)
+      ko.utils.domNodeDisposal.addDisposeCallback(element, function () {
+        observer.disconnect()
+      })
+    }
+  }
+
   // ##########
   // ### View model
   // ##########

@@ -21,7 +21,7 @@ class OctoprintEventTriggerConfig(BaseConfig):
 
     octoprint_events: FrozenSet[str] = config_field(  # noqa: UP006 - BaseConfig.from_settings evaluates, and frozenset[str] fails on Python < 3.9
         label=N_("Events"),
-        help_text=N_("OctoPrint events that run the automation. Hold Ctrl to select more than one."),
+        help_text=N_("OctoPrint events that run the automation."),
         widget="octoprint_events",
     )
     """The names of the OctoPrint events that start the automation."""

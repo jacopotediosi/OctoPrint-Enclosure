@@ -155,12 +155,22 @@
            disabled>
 {% endmacro %}
 {% macro octoprint_events_widget(field) %}
-    <select multiple
-            size="10"
-            class="input-block-level"
-            data-bind="selectedOptions: {{ field.name }}">
-        {% for event in plugin_enclosure_octoprint_events %}<option value="{{ event }}">{{ event }}</option>{% endfor %}
-    </select>
+    <div class="enclosure-multiselect-values"
+         data-bind="foreach: {{ field.name }}">
+        <span class="label">
+            <span data-bind="text: $data"></span>
+            <a href="#"
+               title="{{ _('Remove') }}"
+               data-bind="click: function() { $parent.{{ field.name }}.remove($data) }">×</a>
+        </span>
+    </div>
+    <div class="enclosure-multiselect">
+        <input type="text"
+               class="input-block-level"
+               autocomplete="off"
+               placeholder="{{ _('Add an event') }}"
+               data-bind="multiselect: {selected: {{ field.name }}, choices: {{ plugin_enclosure_octoprint_events|tojson|forceescape }}}">
+    </div>
 {% endmacro %}
 {% macro output_setpoint_widget(field) %}
     {% if field.device_types_by_measurement_type %}
